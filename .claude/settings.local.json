@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/anupam.kumar/OneDrive - D''''''''DECOR HOME FABRICS PVT LTD/Documents/Claude/DdecorMonday/**)",
+      "Bash(npm install:*)",
+      "Read(//c/Program Files/PostgreSQL/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Bash(\"/c/Program Files/PostgreSQL/16/bin/pg_isready\" -U postgres 2>&1)",
+      "Bash(find:*)",
+      "Bash(node:*)",
+      "Bash(grep -v \"^$\")",
+      "Bash(grep -E \"\\\\.\\(jsx?|tsx?\\)$\")",
+      "Bash(grep -E \"\\\\.\\(js|ts\\)$\")"
+    ]
+  }
+}

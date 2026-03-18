@@ -1,0 +1,53 @@
+-- Workboard DB Schema
+
+CREATE TABLE IF NOT EXISTS boards (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS groups (
+  id SERIAL PRIMARY KEY,
+  board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  color VARCHAR(20) DEFAULT '#0073ea',
+  position INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS columns (
+  id SERIAL PRIMARY KEY,
+  board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  type VARCHAR(50) NOT NULL DEFAULT 'text',
+  settings JSONB DEFAULT '{}',
+  position INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS items (
+  id SERIAL PRIMARY KEY,
+  group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  position INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS column_values (
+  id SERIAL PRIMARY KEY,
+  item_id INTEGER REFERENCES items(id) ON DELETE CASCADE,
+  column_id INTEGER REFERENCES columns(id) ON DELETE CASCADE,
+  value TEXT DEFAULT '',
+  UNIQUE(item_id, column_id)
+);
+
+CREATE TABLE IF NOT EXISTS automations (
+  id SERIAL PRIMARY KEY,
+  board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL DEFAULT 'Automation',
+  trigger_type VARCHAR(50) NOT NULL,
+  trigger_config JSONB DEFAULT '{}',
+  action_type VARCHAR(50) NOT NULL,
+  action_config JSONB DEFAULT '{}',
+  enabled BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);

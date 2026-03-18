@@ -1,0 +1,1301 @@
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'; // lazy/Suspense kept for ActivityLogPanel
+import ColumnCell from './ColumnCell';
+import AddColumnModal from './AddColumnModal';
+import StatusOptionsEditor from './StatusOptionsEditor';
+import TrashPanel from './TrashPanel';
+import BoardMembersPanel from './BoardMembersPanel';
+import DefaultValueEditor from './DefaultValueEditor';
+import ItemDetailPanel from './ItemDetailPanel';
+import {
+  createGroup, updateGroup, deleteGroup,
+  createItem, updateItem, deleteItem, moveItem,
+  createColumn, updateColumn, deleteColumn, reorderColumns,
+  upsertColumnValue, updateBoard,
+  getTrashItems, getAutomations,
+} from '../api';
+import { useToast } from './Toast';
+import { useAuth } from '../context/AuthContext';
+
+const ActivityLogPanel = lazy(() => import('./ActivityLogPanel'));
+
+const GROUP_COLORS = ['#0073ea','#00c875','#fdab3d','#e2445c','#a25ddc','#037f4c','#ff5ac4','#784bd1'];
+
+function fireAutomations(triggered, toast) {
+  for (const auto of triggered) {
+    const acfg = typeof auto.action_config === 'string'
+      ? JSON.parse(auto.action_config)
+      : (auto.action_config || {});
+    if (auto.action_type === 'send_email') {
+      const { to, subject, body } = acfg;
+      window.open(`mailto:${encodeURIComponent(to||'')}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(body||'')}`, '_blank');
+      toast(`Email automation fired: "${auto.name}"`, 'success');
+    } else if (auto.action_type === 'notify') {
+      toast(acfg.message || `Automation: ${auto.name}`, 'info');
+    }
+  }
+}
+
+// ── Inline text edit ──────────────────────────────────────────────────────────
+function InlineEdit({ value, onSave, style, placeholder, singleClick = false }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) onSave(trimmed);
+    else setDraft(value);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
+        style={{ border: '1.5px solid #0073ea', borderRadius: 4, padding: '2px 6px', outline: 'none', background: '#fff', fontWeight: 'inherit', fontSize: 'inherit', width: '100%', boxSizing: 'border-box' }}
+      />
+    );
+  }
+
+  const trigger = singleClick
+    ? { onClick: () => { setDraft(value); setEditing(true); } }
+    : { onDoubleClick: () => { setDraft(value); setEditing(true); } };
+
+  return (
+    <span {...trigger} style={{ cursor: 'text', userSelect: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...style }}
+      title={singleClick ? 'Click to rename' : 'Double-click to rename'}>
+      {value || <span style={{ color: '#c5c7d0' }}>{placeholder}</span>}
+    </span>
+  );
+}
+
+// ── Column header ─────────────────────────────────────────────────────────────
+const NO_DEFAULT_TYPES = ['formula', 'creation_log'];
+
+function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onToggleVisibility, isManager }) {
+  const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const btnRef = useRef(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target) &&
+          btnRef.current && !btnRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
+  const openMenu = (e) => {
+    e.stopPropagation();
+    setMenuOpen(o => !o);
+  };
+
+  const handleSetDefault = (e) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    if (btnRef.current) {
+      onSetDefault(col, btnRef.current.closest('th').getBoundingClientRect());
+    }
+  };
+
+  const handleEditStatus = (e) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    onEditStatus(col);
+  };
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    onDelete(col.id);
+  };
+
+  const handleToggleVisibility = (e) => {
+    e.stopPropagation();
+    setMenuOpen(false);
+    onToggleVisibility(col.id);
+  };
+
+  const showMenu = isManager || col.type === 'status';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, position: 'relative' }}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <InlineEdit
+        value={col.title} onSave={title => onRename(col.id, title)} singleClick
+        style={{ fontSize: 12, fontWeight: 700, color: '#676879', flex: 1 }}
+      />
+      {col.type === 'person' && col.settings?.isOwnerColumn && (
+        <span title="Visibility Control active — only assigned members see restricted items" style={{ fontSize: 10, color: '#0073ea' }}>🔒</span>
+      )}
+      {showMenu && (
+        <button
+          ref={btnRef}
+          onClick={openMenu}
+          title="Column options"
+          style={{
+            fontSize: 10, color: hovered || menuOpen ? '#676879' : 'transparent',
+            transition: 'color 0.15s', padding: '1px 3px', flexShrink: 0,
+            lineHeight: 1, borderRadius: 3,
+            background: menuOpen ? '#e6e9ef' : 'transparent',
+          }}
+        >▾</button>
+      )}
+
+      {/* Dropdown menu */}
+      {menuOpen && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'absolute', top: '100%', right: 0, marginTop: 2, zIndex: 200,
+            background: '#fff', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.14)',
+            border: '1px solid #e6e9ef', minWidth: 170, overflow: 'hidden',
+          }}
+        >
+          {col.type === 'status' && (
+            <div
+              onClick={handleEditStatus}
+              style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#323338', display: 'flex', alignItems: 'center', gap: 8 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+              onMouseLeave={e => e.currentTarget.style.background = ''}
+            >🏷️ Edit Labels</div>
+          )}
+          {col.type === 'person' && isManager && (
+            <div
+              onClick={handleToggleVisibility}
+              style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                color: col.settings?.isOwnerColumn ? '#0073ea' : '#323338' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+              onMouseLeave={e => e.currentTarget.style.background = ''}
+              title="When ON: only people listed in this column can see that item"
+            >
+              {col.settings?.isOwnerColumn ? '🔒 Visibility Control: ON' : '🔓 Visibility Control: OFF'}
+            </div>
+          )}
+          {!NO_DEFAULT_TYPES.includes(col.type) && isManager && (
+            <div
+              onClick={handleSetDefault}
+              style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#323338', display: 'flex', alignItems: 'center', gap: 8 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+              onMouseLeave={e => e.currentTarget.style.background = ''}
+            >⚡ Default Value{(col.settings?.defaultValue !== undefined && col.settings?.defaultValue !== null && String(col.settings.defaultValue) !== '') ? ' ✓' : ''}</div>
+          )}
+          {isManager && (
+            <>
+              <div style={{ height: 1, background: '#f0f0f0', margin: '2px 0' }} />
+              <div
+                onClick={handleDelete}
+                style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#e2445c', display: 'flex', alignItems: 'center', gap: 8 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#fff5f7'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}
+              >× Delete Column</div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Column resize handle ──────────────────────────────────────────────────────
+function ResizeHandle({ onMouseDown }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0, width: 6,
+        cursor: 'col-resize', zIndex: 5,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <div style={{
+        width: 2, height: '60%', borderRadius: 2,
+        background: hovered ? '#0073ea' : 'transparent',
+        transition: 'background 0.15s',
+      }} />
+    </div>
+  );
+}
+
+// ── Column width helper ───────────────────────────────────────────────────────
+function colWidth(col) {
+  switch (col.type) {
+    case 'progress': case 'timeline': return 210;
+    case 'long_text': return 180;
+    case 'date': return 130;
+    case 'status': return 140;
+    case 'checkbox': return 80;
+    case 'rating': return 120;
+    case 'color_picker': return 110;
+    case 'tags': return 160;
+    default: return 140;
+  }
+}
+
+// ── Item row ──────────────────────────────────────────────────────────────────
+function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChange,
+                   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <tr
+      draggable
+      onDragStart={e => onDragStart(e, item, group.id)}
+      onDragEnd={onDragEnd}
+      onDragOver={e => onDragOver(e, group.id, item.id)}
+      onDrop={e => onDrop(e, group.id, item.id)}
+      style={{ borderBottom: '1px solid #e6e9ef', background: hovered ? '#f5f6f8' : '#fff', height: 40, cursor: 'grab' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Color stripe */}
+      <td style={{ width: 6, padding: 0, background: group.color }} />
+      {/* Drag handle / checkbox */}
+      <td style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid #e6e9ef' }}>
+        {hovered
+          ? <span style={{ color: '#c5c7d0', fontSize: 16, cursor: 'grab', userSelect: 'none', display: 'block', textAlign: 'center' }} title="Drag to reorder">⠿</span>
+          : <input type="checkbox" style={{ cursor: 'pointer', accentColor: group.color }} onClick={e => e.stopPropagation()} />
+        }
+      </td>
+      {/* Item name */}
+      <td style={{ padding: '4px 8px 4px 12px', borderRight: '1px solid #e6e9ef' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {hovered && (
+            <button
+              onClick={e => { e.stopPropagation(); onOpenDetail(item.id); }}
+              title="Open detail panel"
+              style={{
+                flexShrink: 0, width: 20, height: 20, borderRadius: 4,
+                background: '#0073ea', color: '#fff', fontSize: 11,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: 'none', cursor: 'pointer',
+              }}
+            >⊡</button>
+          )}
+          {canEdit
+            ? <InlineEdit value={item.name} onSave={name => onItemUpdate(item.id, name)} singleClick
+                style={{ fontSize: 13, fontWeight: 500, color: '#323338' }} />
+            : <span style={{ fontSize: 13, fontWeight: 500, color: '#323338', padding: '0 4px' }}>{item.name}</span>
+          }
+        </div>
+      </td>
+      {/* Data columns */}
+      {columns.map(col => (
+        <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef' }}>
+          <ColumnCell
+            column={col}
+            value={item.values?.[col.id] || ''}
+            onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager)) ? undefined : val => onValueChange(item.id, col.id, val, col.title)}
+            onEditSettings={onEditSettings}
+            item={item}
+          />
+        </td>
+      ))}
+      {/* Delete */}
+      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid #e6e9ef' }}>
+        {canEdit && (
+          <button onClick={() => onItemDelete(item.id)}
+            style={{ color: hovered ? '#e2445c' : '#c5c7d0', fontSize: 18, lineHeight: 1, transition: 'color 0.15s' }}
+            title="Delete item">×</button>
+        )}
+      </td>
+      <td />
+    </tr>
+  );
+}
+
+// ── Thin drop-indicator row ───────────────────────────────────────────────────
+function DropLine({ colSpan }) {
+  return (
+    <tr style={{ height: 3, pointerEvents: 'none' }}>
+      <td colSpan={colSpan} style={{
+        padding: 0, height: 3,
+        background: 'linear-gradient(90deg,#0073ea,#40a9ff)',
+        boxShadow: '0 0 6px #0073ea80',
+      }} />
+    </tr>
+  );
+}
+
+// ── Group rows (returns a fragment for tbody) ─────────────────────────────────
+function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupDelete,
+                     onItemCreate, onItemUpdate, onItemDelete, onValueChange,
+                     onEditSettings, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, onOpenDetail }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [addingItem, setAddingItem] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const toast = useToast();
+
+  const spanAll = columns.length + 5;
+
+  const handleAddItem = async () => {
+    if (!newItemName.trim()) return;
+    try {
+      await onItemCreate(group.id, newItemName.trim());
+      setNewItemName('');
+      setAddingItem(false);
+    } catch { toast('Failed to add item', 'error'); }
+  };
+
+  const isDropTarget = dropTarget?.groupId === group.id;
+
+  return (
+    <>
+      {/* ── Group header row ── */}
+      <tr style={{ background: '#fff', borderTop: '6px solid #f5f6f8' }}>
+        <td style={{ width: 6, padding: 0, background: group.color, borderRadius: '3px 0 0 0' }} />
+        <td colSpan={spanAll - 1} style={{ padding: '0', borderBottom: '1px solid #e6e9ef' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px 7px 6px' }}>
+            <button
+              onClick={() => setCollapsed(c => !c)}
+              style={{ color: group.color, fontSize: 10, width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'transform 0.15s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+            >▼</button>
+            <InlineEdit
+              value={group.name}
+              onSave={name => onGroupUpdate(group.id, { name, color: group.color })}
+              singleClick={isManager}
+              style={{ fontWeight: 700, fontSize: 14, color: group.color }}
+              placeholder="Group name"
+            />
+            <span style={{ background: `${group.color}22`, color: group.color, borderRadius: 12, padding: '1px 9px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+              {group.items?.length || 0}
+            </span>
+            {isManager && (
+              <button
+                onClick={() => onGroupDelete(group.id)}
+                style={{ marginLeft: 'auto', color: '#c5c7d0', fontSize: 12, padding: '2px 8px', borderRadius: 4, border: '1px solid #e6e9ef', background: '#fff' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#e2445c'; e.currentTarget.style.borderColor = '#e2445c'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#c5c7d0'; e.currentTarget.style.borderColor = '#e6e9ef'; }}
+              >Delete group</button>
+            )}
+          </div>
+        </td>
+      </tr>
+
+      {/* ── Item rows with drop indicators ── */}
+      {!collapsed && group.items?.map(item => (
+        <React.Fragment key={item.id}>
+          {/* Drop line BEFORE this item */}
+          {isDropTarget && dropTarget.beforeItemId === item.id && <DropLine colSpan={spanAll} />}
+          <ItemRow
+            item={item}
+            group={group}
+            columns={columns}
+            canEdit={canEdit}
+            isManager={isManager}
+            onItemUpdate={onItemUpdate}
+            onItemDelete={onItemDelete}
+            onValueChange={onValueChange}
+            onEditSettings={onEditSettings}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            onOpenDetail={onOpenDetail}
+          />
+        </React.Fragment>
+      ))}
+
+      {/* ── Add Item row — also acts as "drop at end" zone ── */}
+      {!collapsed && (
+        <>
+          {/* Drop line at end of group */}
+          {isDropTarget && dropTarget.beforeItemId === null && <DropLine colSpan={spanAll} />}
+          {canEdit && (
+            <tr
+              style={{ borderBottom: '2px solid #e6e9ef', background: '#fff' }}
+              onDragOver={e => onDragOver(e, group.id, null)}
+              onDrop={e => onDrop(e, group.id, null)}
+            >
+              <td style={{ width: 6, padding: 0, background: group.color, opacity: 0.3 }} />
+              <td style={{ width: 36 }} />
+              <td colSpan={columns.length + 3} style={{ padding: '5px 12px' }}>
+                {addingItem ? (
+                  <input
+                    autoFocus value={newItemName}
+                    onChange={e => setNewItemName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleAddItem();
+                      if (e.key === 'Escape') { setAddingItem(false); setNewItemName(''); }
+                    }}
+                    onBlur={() => { if (!newItemName.trim()) setAddingItem(false); }}
+                    placeholder="Item name — press Enter to save"
+                    style={{ width: 320, border: '1.5px solid #0073ea', borderRadius: 6, padding: '5px 10px', outline: 'none', fontSize: 13 }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => setAddingItem(true)}
+                    style={{ color: '#676879', fontSize: 13, fontWeight: 600, padding: '3px 0' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#676879'}
+                  >+ Add Item</button>
+                )}
+              </td>
+            </tr>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+// ── Filter bar ────────────────────────────────────────────────────────────────
+function FilterBar({ cols, filters, onFiltersChange }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const nameFilter = filters.find(f => f.colId === '_name');
+  const colFilters = filters.filter(f => f.colId !== '_name');
+
+  const setNameFilter = (val) => {
+    const rest = filters.filter(f => f.colId !== '_name');
+    onFiltersChange(val ? [{ colId: '_name', value: val }, ...rest] : rest);
+  };
+
+  const addColFilter = (col) => {
+    setPickerOpen(false);
+    if (filters.find(f => f.colId === col.id)) return;
+    onFiltersChange([...filters, { colId: col.id, value: '', colTitle: col.title, colType: col.type, options: col.settings?.options || [] }]);
+  };
+
+  const updateColFilter = (idx, value) => {
+    const updated = colFilters.map((f, i) => i === idx ? { ...f, value } : f);
+    onFiltersChange(nameFilter ? [nameFilter, ...updated] : updated);
+  };
+
+  const removeColFilter = (idx) => {
+    const updated = colFilters.filter((_, i) => i !== idx);
+    onFiltersChange(nameFilter ? [nameFilter, ...updated] : updated);
+  };
+
+  const filterableCols = cols.filter(c =>
+    ['status', 'dropdown', 'person', 'text', 'number', 'email'].includes(c.type) &&
+    !colFilters.find(f => f.colId === c.id)
+  );
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      padding: '7px 20px', background: '#fafbfc', borderBottom: '1px solid #e6e9ef',
+    }}>
+      {/* Name search */}
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <input
+          type="text" placeholder="🔍  Search items…"
+          value={nameFilter?.value || ''}
+          onChange={e => setNameFilter(e.target.value)}
+          style={{ border: '1.5px solid #ddd', borderRadius: 20, padding: '5px 12px', fontSize: 12, outline: 'none', width: 180, background: nameFilter ? '#fff8e1' : '#fff' }}
+          onFocus={e => e.target.style.borderColor = '#0073ea'}
+          onBlur={e => e.target.style.borderColor = nameFilter ? '#fdab3d' : '#ddd'}
+        />
+      </div>
+
+      {/* Column filters */}
+      {colFilters.map((f, idx) => (
+        <div key={f.colId} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#e8f0fe', borderRadius: 20, padding: '3px 4px 3px 10px', fontSize: 12 }}>
+          <span style={{ fontWeight: 600, color: '#0073ea', flexShrink: 0 }}>{f.colTitle}:</span>
+          {['status', 'dropdown', 'person'].includes(f.colType) && f.options?.length ? (
+            <select value={f.value} onChange={e => updateColFilter(idx, e.target.value)}
+              style={{ border: 'none', background: 'transparent', fontSize: 12, color: '#323338', outline: 'none', cursor: 'pointer' }}>
+              <option value="">Any</option>
+              {f.options.map(o => (
+                <option key={typeof o === 'string' ? o : o.label} value={typeof o === 'string' ? o : o.label}>
+                  {typeof o === 'string' ? o : o.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input value={f.value} onChange={e => updateColFilter(idx, e.target.value)}
+              placeholder="contains…"
+              style={{ border: 'none', background: 'transparent', fontSize: 12, outline: 'none', width: 90, color: '#323338' }}
+            />
+          )}
+          <button onClick={() => removeColFilter(idx)} style={{ color: '#999', fontSize: 14, padding: '0 4px', lineHeight: 1 }}
+            onMouseEnter={e => e.currentTarget.style.color = '#e2445c'}
+            onMouseLeave={e => e.currentTarget.style.color = '#999'}>×</button>
+        </div>
+      ))}
+
+      {/* Add filter */}
+      {filterableCols.length > 0 && (
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setPickerOpen(o => !o)}
+            style={{ fontSize: 12, color: '#676879', border: '1.5px dashed #ddd', borderRadius: 20, padding: '4px 12px', background: '#fff' }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#0073ea'; e.currentTarget.style.borderColor = '#0073ea'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#676879'; e.currentTarget.style.borderColor = '#ddd'; }}>
+            + Add Filter
+          </button>
+          {pickerOpen && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.13)', border: '1px solid #e6e9ef', zIndex: 100, minWidth: 160, overflow: 'hidden' }}>
+              {filterableCols.map(col => (
+                <div key={col.id} onClick={() => addColFilter(col)}
+                  style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#323338' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  {col.title}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Clear all */}
+      {filters.length > 0 && (
+        <button onClick={() => onFiltersChange([])}
+          style={{ fontSize: 12, color: '#e2445c', marginLeft: 4, fontWeight: 600 }}>
+          Clear all
+        </button>
+      )}
+
+      {/* Active count badge */}
+      {filters.length > 0 && (
+        <span style={{ fontSize: 11, background: '#0073ea', color: '#fff', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>
+          {filters.length} active
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Visibility badge ──────────────────────────────────────────────────────────
+function VisibilityBadge({ visibility, onChange, isManager }) {
+  const isPrivate = visibility === 'private';
+  return (
+    <button
+      onClick={() => isManager && onChange(isPrivate ? 'org_wide' : 'private')}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+        border: `1.5px solid ${isPrivate ? '#a25ddc' : '#00c875'}`,
+        color: isPrivate ? '#a25ddc' : '#037f4c',
+        background: isPrivate ? '#f5eeff' : '#e8f7ee',
+        cursor: isManager ? 'pointer' : 'default',
+      }}
+      title={isManager ? `Click to make ${isPrivate ? 'Org-wide' : 'Private'}` : undefined}
+    >
+      {isPrivate ? '🔒 Private' : '🌐 Org-wide'}
+    </button>
+  );
+}
+
+// ── Main Board ────────────────────────────────────────────────────────────────
+export default function Board({ board, onBoardChange, openItemId, onOpenItemDone }) {
+  const [showAddColumn, setShowAddColumn] = useState(false);
+  const [showAutomations, setShowAutomations] = useState(false);
+  const [activeAutoCount, setActiveAutoCount] = useState(0);
+  const [showForms, setShowForms] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const [trashCount, setTrashCount] = useState(0);
+  const [editingStatusCol, setEditingStatusCol] = useState(null);
+  const [defaultEditor, setDefaultEditor] = useState(null); // { col, anchorRect }
+  const toast = useToast();
+  const { isManager, canEdit } = useAuth();
+  const [filters, setFilters] = useState([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [detailItemId, setDetailItemId] = useState(null);
+  const [detailDefaultTab, setDetailDefaultTab] = useState('fields');
+
+  // Open item panel when triggered from a notification click
+  useEffect(() => {
+    if (!openItemId) return;
+    const exists = board.groups?.flatMap(g => g.items || []).some(i => i.id === openItemId);
+    if (exists) {
+      setDetailItemId(openItemId);
+      setDetailDefaultTab('updates');
+      onOpenItemDone?.();
+    }
+  }, [openItemId, board.groups]);
+
+  // ── Column resizing ───────────────────────────────────────────────────────
+  const [colWidths, setColWidths] = useState({});
+  const resizingRef = useRef(null);
+
+  const getColWidth = (col) => colWidths[col.id] ?? colWidth(col);
+  const getNameWidth = () => colWidths['_name'] ?? 240;
+
+  const startResize = useCallback((e, key, currentWidth) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = { key, startX: e.clientX, startWidth: currentWidth };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (ev) => {
+      const delta = ev.clientX - resizingRef.current.startX;
+      const newWidth = Math.max(60, resizingRef.current.startWidth + delta);
+      setColWidths(prev => ({ ...prev, [resizingRef.current.key]: newWidth }));
+    };
+
+    const onMouseUp = () => {
+      resizingRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
+
+  const updateLocalBoard = useCallback((updater) => {
+    onBoardChange(prev => ({ ...prev, ...updater(prev) }));
+  }, [onBoardChange]);
+
+  // Load trash count + active automation count when board changes
+  useEffect(() => {
+    getTrashItems(board.id).then(r => setTrashCount(r.data.length)).catch(() => {});
+    getAutomations(board.id).then(r => setActiveAutoCount(r.data.filter(a => a.enabled).length)).catch(() => {});
+  }, [board.id]);
+
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+  const dragRef = useRef(null); // { itemId, sourceGroupId }
+  const [dropTarget, setDropTarget] = useState(null); // { groupId, beforeItemId }
+
+  const handleDragStart = useCallback((e, item, groupId) => {
+    dragRef.current = { itemId: item.id, sourceGroupId: groupId };
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(item.id)); // required for Firefox
+    // Fade the row being dragged
+    setTimeout(() => { if (e.target) e.target.style.opacity = '0.4'; }, 0);
+  }, []);
+
+  const handleDragEnd = useCallback((e) => {
+    if (e.target) e.target.style.opacity = '';
+    dragRef.current = null;
+    setDropTarget(null);
+  }, []);
+
+  const handleDragOver = useCallback((e, groupId, beforeItemId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropTarget(prev =>
+      prev?.groupId === groupId && prev?.beforeItemId === beforeItemId
+        ? prev
+        : { groupId, beforeItemId }
+    );
+  }, []);
+
+  const handleDrop = useCallback(async (e, groupId, beforeItemId) => {
+    e.preventDefault();
+    const drag = dragRef.current;
+    if (!drag) return;
+    dragRef.current = null;
+    setDropTarget(null);
+
+    const { itemId, sourceGroupId } = drag;
+
+    // Compute numeric insert position (ignoring the dragged item itself)
+    const targetGroup = board.groups.find(g => g.id === groupId);
+    const targetItems = (targetGroup?.items || []).filter(i => i.id !== itemId);
+    const position = beforeItemId == null
+      ? targetItems.length
+      : Math.max(0, targetItems.findIndex(i => i.id === beforeItemId));
+
+    // Optimistic local update
+    updateLocalBoard(b => {
+      const srcGroup = b.groups.find(g => g.id === sourceGroupId);
+      const movingItem = srcGroup?.items.find(i => i.id === itemId);
+      if (!movingItem) return {};
+
+      let newGroups = b.groups.map(g => ({
+        ...g,
+        items: g.id === sourceGroupId ? g.items.filter(i => i.id !== itemId) : g.items,
+      }));
+      newGroups = newGroups.map(g => {
+        if (g.id !== groupId) return g;
+        const items = g.items.filter(i => i.id !== itemId); // also strip if same group
+        const idx = beforeItemId == null ? items.length : items.findIndex(i => i.id === beforeItemId);
+        const newItems = [...items];
+        newItems.splice(idx === -1 ? items.length : idx, 0, movingItem);
+        return { ...g, items: newItems };
+      });
+      return { groups: newGroups };
+    });
+
+    try {
+      await moveItem(itemId, { group_id: groupId, position });
+    } catch {
+      toast('Failed to move item', 'error');
+    }
+  }, [board.groups, updateLocalBoard, toast]);
+
+  // ── Groups ────────────────────────────────────────────────────────────────
+  const handleGroupUpdate = async (id, data) => {
+    try {
+      const r = await updateGroup(id, data);
+      updateLocalBoard(b => ({ groups: b.groups.map(g => g.id === id ? { ...g, ...r.data } : g) }));
+    } catch { toast('Failed to update group', 'error'); }
+  };
+
+  const handleGroupCreate = async () => {
+    try {
+      const r = await createGroup({ board_id: board.id, name: 'New Group', color: GROUP_COLORS[board.groups.length % GROUP_COLORS.length] });
+      updateLocalBoard(b => ({ groups: [...b.groups, { ...r.data, items: [] }] }));
+      toast('Group added', 'success');
+    } catch { toast('Failed to create group', 'error'); }
+  };
+
+  const handleGroupDelete = async (id) => {
+    if (!confirm('Delete this group and all its items?')) return;
+    try {
+      await deleteGroup(id);
+      updateLocalBoard(b => ({ groups: b.groups.filter(g => g.id !== id) }));
+      toast('Group deleted');
+    } catch { toast('Failed to delete group', 'error'); }
+  };
+
+  // ── Items ─────────────────────────────────────────────────────────────────
+  const handleItemCreate = async (groupId, name) => {
+    const r = await createItem({ group_id: groupId, name });
+    updateLocalBoard(b => ({ groups: b.groups.map(g => g.id === groupId ? { ...g, items: [...(g.items || []), r.data] } : g) }));
+    if (r.data.triggeredAutomations?.length) fireAutomations(r.data.triggeredAutomations, toast);
+    return r.data;
+  };
+
+  const handleItemUpdate = async (id, name) => {
+    try {
+      await updateItem(id, { name });
+      updateLocalBoard(b => ({ groups: b.groups.map(g => ({ ...g, items: g.items.map(i => i.id === id ? { ...i, name } : i) })) }));
+    } catch { toast('Failed to rename item', 'error'); }
+  };
+
+  const handleItemDelete = async (id) => {
+    try {
+      await deleteItem(id);
+      updateLocalBoard(b => ({ groups: b.groups.map(g => ({ ...g, items: g.items.filter(i => i.id !== id) })) }));
+      setTrashCount(c => c + 1);
+      toast('Item moved to Trash — restore it within 15 days');
+    } catch { toast('Failed to delete item', 'error'); }
+  };
+
+  const handleTrashRestore = ({ item, group_id }) => {
+    updateLocalBoard(b => ({
+      groups: b.groups.map(g =>
+        g.id === group_id ? { ...g, items: [...(g.items || []), item] } : g
+      ),
+    }));
+    toast('Item restored', 'success');
+  };
+
+  // ── Column values ─────────────────────────────────────────────────────────
+  const handleValueChange = async (itemId, columnId, value) => {
+    try {
+      const r = await upsertColumnValue({ item_id: itemId, column_id: columnId, value });
+      updateLocalBoard(b => {
+        let groups = b.groups.map(g => ({
+          ...g,
+          items: g.items.map(i => i.id === itemId ? { ...i, values: { ...i.values, [columnId]: value } } : i)
+        }));
+        if (r.data.movedItem) {
+          const { id, old_group_id, group_id: newGid } = r.data.movedItem;
+          const fromGroup = groups.find(g => g.id === old_group_id);
+          const movingItem = fromGroup?.items.find(i => i.id === id);
+          if (movingItem) {
+            groups = groups.map(g => {
+              if (g.id === old_group_id) return { ...g, items: g.items.filter(i => i.id !== id) };
+              if (g.id === newGid) return { ...g, items: [...g.items, movingItem] };
+              return g;
+            });
+          }
+        }
+        if (r.data.setValues?.length) {
+          groups = groups.map(g => ({
+            ...g,
+            items: g.items.map(i => {
+              if (i.id !== itemId) return i;
+              const extra = {};
+              r.data.setValues.forEach(sv => { extra[sv.column_id] = sv.value; });
+              return { ...i, values: { ...i.values, ...extra } };
+            })
+          }));
+        }
+        return { groups };
+      });
+      if (r.data.triggeredAutomations?.length) fireAutomations(r.data.triggeredAutomations, toast);
+      if (r.data.movedItem) toast('Item moved by automation', 'success');
+    } catch { toast('Failed to save value', 'error'); }
+  };
+
+  // ── Columns ───────────────────────────────────────────────────────────────
+  const handleColumnAdd = async ({ title, type }) => {
+    let finalType = type;
+    let settings = {};
+    if (type === 'person') {
+      const memberNames = (board.members || []).map(m => m.name);
+      if (board.visibility === 'private') {
+        finalType = 'dropdown';
+        settings = { options: memberNames };
+      } else {
+        settings = { options: memberNames };
+      }
+    }
+    try {
+      const r = await createColumn({ board_id: board.id, title, type: finalType, settings });
+      const newCol = r.data;
+      updateLocalBoard(b => ({
+        columns: [...b.columns, newCol],
+        groups: b.groups.map(g => ({
+          ...g,
+          items: g.items.map(item => ({ ...item, values: { ...item.values, [newCol.id]: '' } })),
+        })),
+      }));
+      setShowAddColumn(false);
+      toast(`Column "${title}" added`, 'success');
+    } catch (err) { toast(err.response?.data?.error || 'Failed to add column', 'error'); }
+  };
+
+  const handleColumnRename = async (id, title) => {
+    try {
+      const col = board.columns.find(c => c.id === id);
+      const r = await updateColumn(id, { title, settings: col?.settings || {} });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === id ? r.data : c) }));
+    } catch { toast('Failed to rename column', 'error'); }
+  };
+
+  const handleColumnDelete = async (id) => {
+    if (!confirm('Delete this column?')) return;
+    try {
+      await deleteColumn(id);
+      updateLocalBoard(b => ({ columns: b.columns.filter(c => c.id !== id) }));
+      toast('Column deleted');
+    } catch { toast('Failed to delete column', 'error'); }
+  };
+
+  const handleStatusOptionsSave = async (options) => {
+    if (!editingStatusCol) return;
+    try {
+      const r = await updateColumn(editingStatusCol.id, {
+        title: editingStatusCol.title,
+        settings: { ...editingStatusCol.settings, options },
+      });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === editingStatusCol.id ? r.data : c) }));
+      setEditingStatusCol(null);
+      toast('Status options saved', 'success');
+    } catch { toast('Failed to save options', 'error'); }
+  };
+
+  // Called by StatusCell inline editor after a successful PUT /api/columns/:id
+  const handleColumnSettingsSave = useCallback((updatedCol) => {
+    updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === updatedCol.id ? updatedCol : c) }));
+  }, [updateLocalBoard]);
+
+  const handleColumnToggleVisibility = async (colId) => {
+    const col = board.columns.find(c => c.id === colId);
+    if (!col) return;
+    const nowOn = !col.settings?.isOwnerColumn;
+    try {
+      const r = await updateColumn(colId, {
+        title: col.title,
+        settings: { ...(col.settings || {}), isOwnerColumn: nowOn },
+      });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === colId ? r.data : c) }));
+      toast(nowOn ? '🔒 Visibility control ON — only assigned members will see restricted items' : '🔓 Visibility control OFF', nowOn ? 'success' : 'success');
+    } catch { toast('Failed to update column', 'error'); }
+  };
+
+  // ── Column drag-to-reorder ────────────────────────────────────────────────
+  const [colDragSrc, setColDragSrc] = useState(null);
+  const [colDragOver, setColDragOver] = useState(null);
+
+  const handleColDragStart = (e, colId) => {
+    setColDragSrc(colId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleColDragOver = (e, colId) => {
+    if (colDragSrc === null || colDragSrc === colId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (colDragOver !== colId) setColDragOver(colId);
+  };
+
+  const handleColDrop = async (e, targetColId) => {
+    e.preventDefault();
+    const srcId = colDragSrc;
+    setColDragSrc(null);
+    setColDragOver(null);
+    if (!srcId || srcId === targetColId) return;
+
+    const currentCols = board.columns || [];
+    const srcIdx = currentCols.findIndex(c => c.id === srcId);
+    const tgtIdx = currentCols.findIndex(c => c.id === targetColId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+
+    const reordered = [...currentCols];
+    const [moved] = reordered.splice(srcIdx, 1);
+    reordered.splice(tgtIdx, 0, moved);
+
+    updateLocalBoard(b => ({ columns: reordered }));
+    try {
+      await reorderColumns(board.id, reordered.map(c => c.id));
+    } catch {
+      toast('Failed to reorder columns', 'error');
+      updateLocalBoard(b => ({ columns: currentCols }));
+    }
+  };
+
+  const handleColDragEnd = () => {
+    setColDragSrc(null);
+    setColDragOver(null);
+  };
+
+  const handleDefaultValueSave = async (colId, defaultValue) => {
+    try {
+      const col = board.columns.find(c => c.id === colId);
+      if (!col) return;
+      const r = await updateColumn(colId, {
+        title: col.title,
+        settings: { ...(col.settings || {}), defaultValue },
+      });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === colId ? r.data : c) }));
+      setDefaultEditor(null);
+      toast(defaultValue !== '' ? 'Default value saved' : 'Default value cleared', 'success');
+    } catch { toast('Failed to save default value', 'error'); }
+  };
+
+  // ── Visibility ────────────────────────────────────────────────────────────
+  const handleVisibilityChange = async (visibility) => {
+    try {
+      const r = await updateBoard(board.id, { name: board.name, description: board.description, visibility });
+      updateLocalBoard(() => ({ visibility: r.data.visibility }));
+      toast(`Board is now ${visibility === 'private' ? '🔒 Private' : '🌐 Org-wide'}`, 'success');
+    } catch { toast('Failed to update visibility', 'error'); }
+  };
+
+  // ── Members ───────────────────────────────────────────────────────────────
+  const handleMembersChange = (members, updatedColumns) => {
+    updateLocalBoard(b => {
+      const update = { members };
+      if (updatedColumns?.length) {
+        update.columns = b.columns.map(c => {
+          const synced = updatedColumns.find(uc => uc.id === c.id);
+          return synced ? { ...c, settings: synced.settings } : c;
+        });
+      }
+      return update;
+    });
+  };
+
+  // Apply filters to groups
+  const applyFilters = (grps) => {
+    if (!filters.length) return grps;
+    return grps.map(g => ({
+      ...g,
+      items: (g.items || []).filter(item => filters.every(f => {
+        if (f.colId === '_name') return item.name.toLowerCase().includes(f.value.toLowerCase());
+        if (!f.value) return true;
+        const val = (item.values?.[f.colId] || '').toLowerCase();
+        return val === f.value.toLowerCase() || val.includes(f.value.toLowerCase());
+      }))
+    }));
+  };
+
+  const cols = board.columns || [];
+  const groups = board.groups || [];
+  const filteredGroups = applyFilters(groups);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff', fontFamily: 'Figtree, Roboto, -apple-system, sans-serif' }}>
+
+      {/* ── Toolbar ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 20px', background: '#fff',
+        borderBottom: showFilters ? 'none' : '1px solid #e6e9ef', flexShrink: 0, flexWrap: 'wrap',
+      }}>
+        {isManager && (
+          <>
+            <button onClick={handleGroupCreate} style={{
+              padding: '6px 14px', background: '#0073ea', color: '#fff',
+              borderRadius: 6, fontWeight: 600, fontSize: 13,
+            }}>+ Add Group</button>
+            <button onClick={() => setShowAutomations(true)} style={{
+              padding: '5px 12px', border: '1.5px solid #a25ddc', color: '#a25ddc',
+              borderRadius: 6, fontWeight: 600, fontSize: 12,
+              display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+              ⚡ Automations
+              {activeAutoCount > 0 && (
+                <span style={{
+                  background: '#a25ddc', color: '#fff', borderRadius: 10,
+                  padding: '0px 6px', fontSize: 11, fontWeight: 700,
+                }}>{activeAutoCount}</span>
+              )}
+            </button>
+            <button onClick={() => setShowForms(true)} style={{
+              padding: '5px 12px', border: '1.5px solid #0073ea', color: '#0073ea',
+              borderRadius: 6, fontWeight: 600, fontSize: 12,
+            }}>
+              📋 Forms
+            </button>
+          </>
+        )}
+
+        {/* Filter button */}
+        <button onClick={() => setShowFilters(f => !f)} style={{
+          padding: '5px 12px', border: `1.5px solid ${showFilters || filters.length ? '#0073ea' : '#e6e9ef'}`,
+          borderRadius: 6, fontSize: 12, fontWeight: 600,
+          color: showFilters || filters.length ? '#0073ea' : '#676879',
+          background: showFilters || filters.length ? '#e8f0fe' : '#fff',
+          display: 'flex', alignItems: 'center', gap: 5,
+        }}>
+          🔽 Filter{filters.length > 0 ? ` (${filters.length})` : ''}
+        </button>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
+          <button onClick={() => setShowMembers(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+            fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+          }}>👥 {board.members?.length || 0} Members</button>
+          <button onClick={() => setShowActivityLog(true)} style={{
+            padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+            fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+          }}>📋 Activity</button>
+          <button
+            onClick={() => setShowTrash(true)}
+            style={{
+              padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+              border: `1.5px solid ${trashCount > 0 ? '#e2445c' : '#e6e9ef'}`,
+              color: trashCount > 0 ? '#e2445c' : '#676879',
+              background: trashCount > 0 ? '#fff5f7' : '#fff',
+              display: 'flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            🗑️ Trash
+            {trashCount > 0 && (
+              <span style={{
+                background: '#e2445c', color: '#fff', borderRadius: 10,
+                padding: '0px 6px', fontSize: 11, fontWeight: 700,
+              }}>{trashCount}</span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Filter bar ── */}
+      {showFilters && (
+        <FilterBar cols={cols} filters={filters} onFiltersChange={setFilters} />
+      )}
+
+      {/* ── Board Content ── */}
+      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {groups.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 80, color: '#676879' }}>
+            <div style={{ fontSize: 52, marginBottom: 14 }}>📋</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No groups yet</div>
+            {isManager && <div style={{ fontSize: 13 }}>Click "+ Add Group" to get started</div>}
+          </div>
+        ) : (
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <colgroup>
+              <col style={{ width: 6 }} />
+              <col style={{ width: 36 }} />
+              <col style={{ width: getNameWidth() }} />
+              {cols.map(c => <col key={c.id} style={{ width: getColWidth(c) }} />)}
+              <col style={{ width: 36 }} />
+              <col style={{ width: isManager ? 48 : 0 }} />
+            </colgroup>
+
+            {/* ── Sticky header ── */}
+            <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+              <tr style={{ background: '#f5f6f8', borderBottom: '2px solid #e6e9ef' }}>
+                <th style={{ padding: 0, background: '#f5f6f8', width: 6 }} />
+                <th style={{ padding: '0 8px', textAlign: 'center', background: '#f5f6f8', borderRight: '1px solid #e6e9ef' }}>
+                  <input type="checkbox" title="Select all" style={{ cursor: 'pointer' }} />
+                </th>
+                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#676879', background: '#f5f6f8', borderRight: '1px solid #e6e9ef', letterSpacing: '0.3px', position: 'relative' }}>
+                  Item
+                  <ResizeHandle onMouseDown={e => startResize(e, '_name', getNameWidth())} />
+                </th>
+                {cols.map(col => (
+                  <th
+                    key={col.id}
+                    draggable={isManager}
+                    onDragStart={isManager ? e => handleColDragStart(e, col.id) : undefined}
+                    onDragOver={isManager ? e => handleColDragOver(e, col.id) : undefined}
+                    onDrop={isManager ? e => handleColDrop(e, col.id) : undefined}
+                    onDragEnd={isManager ? handleColDragEnd : undefined}
+                    style={{
+                      padding: '6px 8px',
+                      background: colDragOver === col.id ? '#e8f0fe' : colDragSrc === col.id ? '#f0f4ff' : '#f5f6f8',
+                      borderRight: colDragOver === col.id ? '2px solid #0073ea' : '1px solid #e6e9ef',
+                      borderLeft: colDragOver === col.id ? '2px solid #0073ea' : undefined,
+                      textAlign: 'left',
+                      position: 'relative',
+                      cursor: isManager ? (colDragSrc === col.id ? 'grabbing' : 'grab') : 'default',
+                      opacity: colDragSrc === col.id ? 0.45 : 1,
+                      transition: 'background 0.1s, opacity 0.1s',
+                    }}
+                  >
+                    <ColumnHeader
+                      col={col}
+                      onRename={handleColumnRename}
+                      onDelete={handleColumnDelete}
+                      onEditStatus={setEditingStatusCol}
+                      onSetDefault={(c, anchorRect) => setDefaultEditor({ col: c, anchorRect })}
+                      onToggleVisibility={handleColumnToggleVisibility}
+                      isManager={isManager}
+                    />
+                    <ResizeHandle onMouseDown={e => startResize(e, col.id, getColWidth(col))} />
+                  </th>
+                ))}
+                <th style={{ background: '#f5f6f8', borderRight: '1px solid #e6e9ef' }} />
+                {isManager && (
+                  <th style={{ background: '#f5f6f8', textAlign: 'center', padding: '0 4px' }}>
+                    <button
+                      onClick={() => setShowAddColumn(true)}
+                      title="Add column"
+                      style={{
+                        width: 30, height: 30, borderRadius: '50%', background: '#e6e9ef',
+                        color: '#676879', fontSize: 20, lineHeight: '28px', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', margin: '0 auto',
+                        transition: 'background 0.15s, color 0.15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#0073ea'; e.currentTarget.style.color = '#fff'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#e6e9ef'; e.currentTarget.style.color = '#676879'; }}
+                    >+</button>
+                  </th>
+                )}
+              </tr>
+            </thead>
+
+            {/* ── Groups ── */}
+            <tbody>
+              {filteredGroups.map(group => (
+                <GroupRows
+                  key={group.id}
+                  group={group}
+                  columns={cols}
+                  isManager={isManager}
+                  canEdit={canEdit}
+                  onGroupUpdate={handleGroupUpdate}
+                  onGroupDelete={handleGroupDelete}
+                  onItemCreate={handleItemCreate}
+                  onItemUpdate={handleItemUpdate}
+                  onItemDelete={handleItemDelete}
+                  onValueChange={handleValueChange}
+                  onEditSettings={handleColumnSettingsSave}
+                  dropTarget={dropTarget}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onOpenDetail={setDetailItemId}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* ── Modals & panels ── */}
+      {detailItemId && (() => {
+        const detailItem = board.groups.flatMap(g => g.items).find(i => i.id === detailItemId);
+        const detailGroup = board.groups.find(g => g.items.some(i => i.id === detailItemId));
+        if (!detailItem || !detailGroup) return null;
+        return (
+          <ItemDetailPanel
+            item={detailItem}
+            group={detailGroup}
+            columns={cols}
+            boardId={board.id}
+            canEdit={canEdit}
+            isManager={isManager}
+            defaultTab={detailDefaultTab}
+            onClose={() => { setDetailItemId(null); setDetailDefaultTab('fields'); }}
+            onItemUpdate={handleItemUpdate}
+            onValueChange={(colId, val) => handleValueChange(detailItemId, colId, val)}
+          />
+        );
+      })()}
+
+      {showAddColumn && <AddColumnModal onAdd={handleColumnAdd} onClose={() => setShowAddColumn(false)} />}
+
+      {showTrash && (
+        <TrashPanel
+          boardId={board.id}
+          onClose={() => setShowTrash(false)}
+          onRestore={handleTrashRestore}
+          onCountChange={setTrashCount}
+        />
+      )}
+
+      {editingStatusCol && (
+        <StatusOptionsEditor
+          column={editingStatusCol}
+          onSave={handleStatusOptionsSave}
+          onClose={() => setEditingStatusCol(null)}
+        />
+      )}
+
+      {showAutomations && (
+        <AutomationsLazy boardId={board.id} columns={cols} groups={groups} onClose={() => setShowAutomations(false)} onCountChange={setActiveAutoCount} />
+      )}
+
+      {showMembers && (
+        <BoardMembersPanel
+          board={board}
+          onClose={() => setShowMembers(false)}
+          onMembersChange={handleMembersChange}
+        />
+      )}
+
+      {showActivityLog && (
+        <Suspense fallback={null}>
+          <ActivityLogPanel boardId={board.id} onClose={() => setShowActivityLog(false)} />
+        </Suspense>
+      )}
+
+      {defaultEditor && (
+        <DefaultValueEditor
+          col={defaultEditor.col}
+          anchorRect={defaultEditor.anchorRect}
+          onSave={(val) => handleDefaultValueSave(defaultEditor.col.id, val)}
+          onClose={() => setDefaultEditor(null)}
+        />
+      )}
+
+      {showForms && (
+        <FormsLazy
+          boardId={board.id}
+          groups={groups}
+          columns={cols}
+          onClose={() => setShowForms(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FormsLazy(props) {
+  const FormsPanel = lazy(() => import('./FormsPanel'));
+  return (
+    <Suspense fallback={null}>
+      <FormsPanel {...props} />
+    </Suspense>
+  );
+}
+
+function AutomationsLazy(props) {
+  const AutomationsPanel = lazy(() => import('./AutomationsPanel'));
+  return (
+    <Suspense fallback={null}>
+      <AutomationsPanel {...props} />
+    </Suspense>
+  );
+}

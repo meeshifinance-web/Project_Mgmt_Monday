@@ -1,0 +1,291 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { addBoardMember, removeBoardMember, searchUsers } from '../api';
+import { useToast } from './Toast';
+import { useAuth } from '../context/AuthContext';
+
+const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', user: '#0073ea' };
+
+function Avatar({ name, url, size = 36 }) {
+  const initials = (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />;
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', background: '#0073ea',
+      color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontWeight: 700, fontSize: size * 0.38, flexShrink: 0,
+    }}>{initials}</div>
+  );
+}
+
+// ── User search typeahead ─────────────────────────────────────────────────────
+function UserSearchInput({ members, onSelect }) {
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const debounceRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Search after 3 chars with 250ms debounce
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    if (query.trim().length < 3) {
+      setSuggestions([]);
+      setOpen(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const r = await searchUsers(query.trim());
+        // Filter out users already on the board
+        const memberIds = new Set(members.map(m => m.id));
+        setSuggestions(r.data.filter(u => !memberIds.has(u.id)));
+        setOpen(true);
+        setActiveIdx(-1);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(debounceRef.current);
+  }, [query, members]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (!containerRef.current?.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectUser = (user) => {
+    onSelect(user);
+    setQuery('');
+    setSuggestions([]);
+    setOpen(false);
+    setActiveIdx(-1);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!open || !suggestions.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
+    if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); selectUser(suggestions[activeIdx]); }
+    if (e.key === 'Escape') setOpen(false);
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onFocus={() => suggestions.length && setOpen(true)}
+            placeholder="Type name or email (min 3 chars)…"
+            style={{
+              width: '100%', border: '1.5px solid #ddd', borderRadius: 8,
+              padding: '8px 32px 8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+            }}
+            onFocusCapture={e => e.target.style.borderColor = '#0073ea'}
+            onBlur={e => e.target.style.borderColor = '#ddd'}
+            autoComplete="off"
+          />
+          {/* Search / spinner icon */}
+          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#aaa', pointerEvents: 'none' }}>
+            {loading ? '⏳' : '🔍'}
+          </span>
+        </div>
+      </div>
+
+      {/* Hints */}
+      {query.length > 0 && query.length < 3 && (
+        <p style={{ fontSize: 11, color: '#aaa', margin: '5px 0 0' }}>
+          Type {3 - query.length} more character{3 - query.length !== 1 ? 's' : ''} to search…
+        </p>
+      )}
+
+      {/* Suggestions dropdown */}
+      {open && suggestions.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: '#fff', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.13)',
+          border: '1px solid #e6e9ef', zIndex: 200, overflow: 'hidden',
+        }}>
+          {suggestions.map((u, idx) => (
+            <div
+              key={u.id}
+              onMouseDown={() => selectUser(u)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 14px', cursor: 'pointer',
+                background: idx === activeIdx ? '#f0f6ff' : '#fff',
+                borderBottom: idx < suggestions.length - 1 ? '1px solid #f5f5f5' : 'none',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={() => setActiveIdx(idx)}
+            >
+              <Avatar name={u.name} url={u.avatar_url} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: '#323338' }}>{u.name}</div>
+                <div style={{ fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10, flexShrink: 0,
+                background: `${ROLE_COLORS[u.role] || '#0073ea'}20`,
+                color: ROLE_COLORS[u.role] || '#0073ea',
+                textTransform: 'capitalize',
+              }}>{u.role}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* No results */}
+      {open && !loading && query.trim().length >= 3 && suggestions.length === 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: '#fff', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.13)',
+          border: '1px solid #e6e9ef', zIndex: 200, padding: '14px', textAlign: 'center', color: '#888', fontSize: 13,
+        }}>
+          No users found — check the spelling or ask admin to create an account.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main panel ────────────────────────────────────────────────────────────────
+export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
+  const [members, setMembers] = useState(board.members || []);
+  const [adding, setAdding] = useState(false);
+  const toast = useToast();
+  const { user: currentUser, isManager } = useAuth();
+
+  const applyMemberChange = (updatedMembers, ownerColumn) => {
+    setMembers(updatedMembers);
+    onMembersChange(updatedMembers, ownerColumn);
+  };
+
+  const handleSelect = async (user) => {
+    if (members.find(m => m.id === user.id)) {
+      toast(`${user.name} is already a member`, 'info');
+      return;
+    }
+    setAdding(true);
+    try {
+      const r = await addBoardMember(board.id, user.email);
+      const { member, updatedColumns } = r.data;
+      applyMemberChange(
+        [...members, { ...member, added_at: new Date().toISOString() }],
+        updatedColumns
+      );
+      toast(`${member.name} added to board`, 'success');
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to add member', 'error');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemove = async (member) => {
+    if (!confirm(`Remove ${member.name} from this board?`)) return;
+    try {
+      const r = await removeBoardMember(board.id, member.id);
+      const { updatedColumns } = r.data;
+      applyMemberChange(members.filter(m => m.id !== member.id), updatedColumns);
+      toast(`${member.name} removed`, 'success');
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to remove member', 'error');
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 400,
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#fff', width: 420, height: '100vh', overflowY: 'auto',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>👥 Board Members</h2>
+            <p style={{ fontSize: 12, color: '#888', margin: '2px 0 0' }}>
+              {board.name} · {members.length} member{members.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ fontSize: 20, color: '#888', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Search & invite */}
+        {isManager && (
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0' }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#323338', marginBottom: 10 }}>
+              Add member
+            </p>
+
+            {adding && (
+              <div style={{ fontSize: 12, color: '#0073ea', marginBottom: 8 }}>Adding…</div>
+            )}
+
+            <UserSearchInput members={members} onSelect={handleSelect} />
+
+            <p style={{ fontSize: 11, color: '#aaa', marginTop: 8 }}>
+              Search by name or email · user must be registered.
+              <span style={{ color: '#a25ddc' }}> Person & Owner columns update automatically.</span>
+            </p>
+          </div>
+        )}
+
+        {/* Member list */}
+        <div style={{ flex: 1, padding: '12px 20px' }}>
+          {members.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa' }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>👤</div>
+              <div style={{ fontSize: 13 }}>No members yet</div>
+            </div>
+          ) : (
+            members.map(m => (
+              <div key={m.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 0', borderBottom: '1px solid #f5f5f5',
+              }}>
+                <Avatar name={m.name} url={m.avatar_url} size={36} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#323338', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {m.name}
+                    {m.id === currentUser?.id && <span style={{ fontSize: 10, color: '#888' }}>(you)</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
+                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                  background: `${ROLE_COLORS[m.role]}20`, color: ROLE_COLORS[m.role],
+                  textTransform: 'capitalize', flexShrink: 0,
+                }}>{m.role}</span>
+                {isManager && m.id !== currentUser?.id && (
+                  <button
+                    onClick={() => handleRemove(m)}
+                    style={{ color: '#ccc', fontSize: 16, lineHeight: 1, flexShrink: 0, padding: '2px 4px' }}
+                    title="Remove from board"
+                    onMouseEnter={e => e.currentTarget.style.color = '#e2445c'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#ccc'}
+                  >×</button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
