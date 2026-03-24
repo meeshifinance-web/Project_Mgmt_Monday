@@ -29,6 +29,7 @@ export const getBoards = () => api.get('/boards');
 export const getBoard = (id) => api.get(`/boards/${id}`);
 export const createBoard = (data) => api.post('/boards', data);
 export const updateBoard = (id, data) => api.put(`/boards/${id}`, data);
+export const updateBoardEmailSettings = (id, emailFrom) => api.patch(`/boards/${id}/email-settings`, { email_from: emailFrom });
 export const deleteBoard = (id) => api.delete(`/boards/${id}`);
 
 // ── Board members ─────────────────────────────────────────────────────────────
@@ -85,7 +86,8 @@ export const getActivityLogs = (boardId) => api.get(`/activity-logs/board/${boar
 export const getItemActivityLogs = (itemId) => api.get(`/activity-logs/item/${itemId}`);
 
 // ── Comments ───────────────────────────────────────────────────────────────────
-export const getComments = (itemId) => api.get(`/comments/item/${itemId}`);
+export const getComments   = (itemId) => api.get(`/comments/item/${itemId}`);
+export const getItemEmails = (itemId) => api.get(`/items/${itemId}/emails`);
 export const createComment = (data) => api.post('/comments', data);
 export const deleteComment = (id) => api.delete(`/comments/${id}`);
 
@@ -98,6 +100,14 @@ export const markAllNotificationsRead = () => api.patch('/notifications/read-all
 // ── Email Poller (admin) ───────────────────────────────────────────────────────
 export const getEmailStatus  = ()  => api.get('/email/status');
 export const triggerEmailPoll = () => api.post('/email/trigger');
+
+// ── Global Trash (boards + folders) ───────────────────────────────────────────
+export const getGlobalTrash            = ()        => api.get('/global-trash');
+export const restoreTrashedBoard       = (id)      => api.post(`/global-trash/boards/${id}/restore`);
+export const restoreTrashedFolder      = (id)      => api.post(`/global-trash/folders/${id}/restore`);
+export const permanentDeleteBoard      = (id)      => api.delete(`/global-trash/boards/${id}`);
+export const permanentDeleteFolder     = (id)      => api.delete(`/global-trash/folders/${id}`);
+export const emptyGlobalTrash          = ()        => api.delete('/global-trash/empty');
 
 // ── Trash / Recycle Bin ────────────────────────────────────────────────────────
 export const getTrashItems    = (boardId)  => api.get(`/trash/board/${boardId}`);
@@ -112,6 +122,17 @@ export const getForm        = (id)             => api.get(`/forms/${id}`);
 export const updateForm     = (id, data)       => api.put(`/forms/${id}`, data);
 export const deleteForm     = (id)             => api.delete(`/forms/${id}`);
 export const saveFormFields = (id, fields)     => api.put(`/forms/${id}/fields`, { fields });
+
+// ── Export / Import ────────────────────────────────────────────────────────────
+export const exportBoard = (boardId) => api.get(`/boards/${boardId}/export`, { responseType: 'blob' });
+export const importBoardRows = (boardId, rows) => api.post(`/boards/${boardId}/import`, { rows });
+
+// ── Folders ────────────────────────────────────────────────────────────────────
+export const getFolders = () => api.get('/folders');
+export const createFolder = (name) => api.post('/folders', { name });
+export const updateFolder = (id, name) => api.put(`/folders/${id}`, { name });
+export const deleteFolder = (id) => api.delete(`/folders/${id}`);
+export const moveBoardToFolder = (boardId, folder_id) => api.patch(`/folders/board/${boardId}`, { folder_id });
 
 // Public form endpoints (no auth header needed — use plain fetch)
 export const getPublicForm    = (slug) => fetch(`/api/public/forms/${slug}`).then(r => r.json());

@@ -10,8 +10,9 @@ import {
   createGroup, updateGroup, deleteGroup,
   createItem, updateItem, deleteItem, moveItem,
   createColumn, updateColumn, deleteColumn, reorderColumns,
-  upsertColumnValue, updateBoard,
+  upsertColumnValue, updateBoard, updateBoardEmailSettings,
   getTrashItems, getAutomations,
+  exportBoard, importBoardRows,
 } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -20,16 +21,285 @@ const ActivityLogPanel = lazy(() => import('./ActivityLogPanel'));
 
 const GROUP_COLORS = ['#0073ea','#00c875','#fdab3d','#e2445c','#a25ddc','#037f4c','#ff5ac4','#784bd1'];
 
+// Simple CSV parser: returns array of objects keyed by header row
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const parseLine = (line) => {
+    const fields = [];
+    let cur = '', inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuote = !inQuote;
+      } else if (ch === ',' && !inQuote) {
+        fields.push(cur); cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    fields.push(cur);
+    return fields.map(f => f.trim());
+  };
+  const headers = parseLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = parseLine(line);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = vals[i] ?? ''; });
+    return obj;
+  });
+}
+
+// ── Import Preview Modal ───────────────────────────────────────────────────────
+function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onCancel }) {
+  const headers = csvRows.length > 0 ? Object.keys(csvRows[0]) : [];
+
+  // Count how many board columns share each lowercased title (detect duplicates)
+  const titleCount = {};
+  for (const c of boardColumns) {
+    const k = c.title.toLowerCase();
+    titleCount[k] = (titleCount[k] || 0) + 1;
+  }
+  // First-match map (same logic as the backend)
+  const colByTitle = {};
+  for (const c of boardColumns) {
+    const k = c.title.toLowerCase();
+    if (!colByTitle[k]) colByTitle[k] = c;
+  }
+
+  // Column types that the backend skips during import
+  const SKIP_TYPES = new Set(['person', 'formula', 'creation_log']);
+
+  // Classify every CSV header
+  const mapping = headers.map(h => {
+    const lh = h.toLowerCase();
+    if (lh === 'group')                          return { header: h, kind: 'special', label: 'Swimlane / Group' };
+    if (lh === 'item name' || lh === 'name')     return { header: h, kind: 'special', label: 'Item Name (required)' };
+    const col = colByTitle[lh];
+    const isDup = titleCount[lh] > 1;
+    const isSkipped = col && SKIP_TYPES.has(col.type);
+    return { header: h, kind: col ? (isSkipped ? 'skipped' : 'matched') : 'unmatched', col, isDup };
+  });
+
+  const unmatchedHeaders  = mapping.filter(m => m.kind === 'unmatched');
+  const dupHeaders        = mapping.filter(m => m.kind === 'matched' && m.isDup);
+  const hasItemName       = headers.some(h => ['item name', 'name'].includes(h.toLowerCase()));
+
+  // Board columns absent from the CSV
+  const missingBoardCols = boardColumns.filter(
+    c => !headers.some(h => h.toLowerCase() === c.title.toLowerCase())
+  );
+
+  // Board-level duplicate titles (independent of CSV)
+  const dupBoardTitles = [...new Set(
+    boardColumns.filter(c => titleCount[c.title.toLowerCase()] > 1).map(c => c.title)
+  )];
+
+  // Groups in CSV that don't yet exist on the board → will be auto-created
+  const existingGroupNames = new Set((boardGroups || []).map(g => g.name.toLowerCase()));
+  const newGroups = [...new Set(
+    csvRows
+      .map(r => (r['Group'] || r['group'] || '').trim())
+      .filter(g => g && !existingGroupNames.has(g.toLowerCase()))
+  )];
+
+  const hasBlocker = !hasItemName;
+  const preview = csvRows.slice(0, 4);
+
+  const S = {
+    overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center' },
+    modal:   { background:'#fff', borderRadius:10, width:720, maxWidth:'96vw', maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 8px 40px rgba(0,0,0,0.22)' },
+    header:  { padding:'18px 24px 14px', borderBottom:'1px solid #e6e9ef', display:'flex', alignItems:'center', justifyContent:'space-between' },
+    body:    { padding:'18px 24px', overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:18 },
+    footer:  { padding:'14px 24px', borderTop:'1px solid #e6e9ef', display:'flex', justifyContent:'flex-end', gap:10 },
+    section: { display:'flex', flexDirection:'column', gap:8 },
+    sectionTitle: { fontSize:12, fontWeight:700, color:'#676879', letterSpacing:'0.5px', textTransform:'uppercase' },
+    badge: (color, bg) => ({ display:'inline-block', padding:'2px 8px', borderRadius:12, fontSize:11, fontWeight:600, color, background:bg }),
+    table: { width:'100%', borderCollapse:'collapse', fontSize:12 },
+    th:   { padding:'6px 10px', background:'#f5f6f8', borderBottom:'1px solid #e6e9ef', textAlign:'left', fontWeight:700, color:'#676879', fontSize:11 },
+    td:   { padding:'6px 10px', borderBottom:'1px solid #f0f1f4', verticalAlign:'top' },
+    alertBox: (color, bg) => ({ padding:'10px 14px', borderRadius:7, background:bg, border:`1px solid ${color}`, display:'flex', gap:10, alignItems:'flex-start', fontSize:13 }),
+    btn: (primary) => ({
+      padding:'7px 20px', borderRadius:6, fontWeight:600, fontSize:13, cursor:'pointer',
+      border: primary ? 'none' : '1.5px solid #e6e9ef',
+      background: primary ? '#0073ea' : '#fff',
+      color: primary ? '#fff' : '#676879',
+    }),
+    btnDanger: { padding:'7px 20px', borderRadius:6, fontWeight:600, fontSize:13, cursor:'pointer', border:'none', background:'#e2445c', color:'#fff' },
+  };
+
+  return (
+    <div style={S.overlay} onClick={onCancel}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={S.header}>
+          <span style={{ fontWeight:700, fontSize:16 }}>Import Preview</span>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ fontSize:13, color:'#676879' }}>{csvRows.length} row{csvRows.length !== 1 ? 's' : ''} detected</span>
+            <button onClick={onCancel} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#676879', lineHeight:1 }}>×</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={S.body}>
+
+          {/* ── Blockers ── */}
+          {!hasItemName && (
+            <div style={S.alertBox('#c9372c', '#fff5f4')}>
+              <span style={{ fontSize:16 }}>🚫</span>
+              <div>
+                <strong>Blocked:</strong> The CSV has no <em>"Item Name"</em> column.
+                Please add a column header named exactly <code>Item Name</code> and re-upload.
+              </div>
+            </div>
+          )}
+
+          {/* ── Column mapping table ── */}
+          <div style={S.section}>
+            <div style={S.sectionTitle}>Column Mapping</div>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>CSV Header</th>
+                  <th style={S.th}>Board Column</th>
+                  <th style={S.th}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mapping.map((m, i) => (
+                  <tr key={i}>
+                    <td style={S.td}><code style={{ background:'#f5f6f8', padding:'1px 6px', borderRadius:4 }}>{m.header}</code></td>
+                    <td style={S.td}>
+                      {m.kind === 'special' ? <em style={{ color:'#676879' }}>{m.label}</em>
+                      : m.kind === 'matched' || m.kind === 'skipped' ? <span>{m.col.title} <span style={{ color:'#676879', fontSize:11 }}>({m.col.type})</span></span>
+                      : <span style={{ color:'#888' }}>—</span>}
+                    </td>
+                    <td style={S.td}>
+                      {m.kind === 'special' && (
+                        <span style={S.badge('#037f4c','#e8f7ee')}>✓ Required field</span>
+                      )}
+                      {m.kind === 'skipped' && (
+                        <span style={S.badge('#676879','#f0f1f4')}>⊘ Not imported ({m.col.type} columns are set manually)</span>
+                      )}
+                      {m.kind === 'matched' && !m.isDup && (
+                        <span style={S.badge('#037f4c','#e8f7ee')}>✓ Matched</span>
+                      )}
+                      {m.kind === 'matched' && m.isDup && (
+                        <span style={S.badge('#b05e00','#fff4e5')}>⚠ Matched (duplicate title on board)</span>
+                      )}
+                      {m.kind === 'unmatched' && (
+                        <span style={S.badge('#c9372c','#fff5f4')}>✗ No matching column — will be ignored</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── Board columns absent from CSV ── */}
+          {missingBoardCols.length > 0 && (
+            <div style={S.alertBox('#c9a227', '#fffbe6')}>
+              <span style={{ fontSize:16 }}>⚠️</span>
+              <div>
+                <strong>{missingBoardCols.length} board column{missingBoardCols.length > 1 ? 's' : ''} not in CSV</strong>
+                {' — '}these will be imported as <em>empty</em>:{' '}
+                {missingBoardCols.map(c => <code key={c.id} style={{ background:'#fff3cd', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{c.title}</code>)}
+              </div>
+            </div>
+          )}
+
+          {/* ── Duplicate board column titles ── */}
+          {dupBoardTitles.length > 0 && (
+            <div style={S.alertBox('#c9a227', '#fffbe6')}>
+              <span style={{ fontSize:16 }}>⚠️</span>
+              <div>
+                <strong>Duplicate column titles on this board:</strong>{' '}
+                {dupBoardTitles.map(t => <code key={t} style={{ background:'#fff3cd', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{t}</code>)}.
+                Only the first column with each title will receive imported values.
+              </div>
+            </div>
+          )}
+
+          {/* ── Unmatched CSV headers ── */}
+          {unmatchedHeaders.length > 0 && (
+            <div style={S.alertBox('#e6e9ef', '#f8f8fa')}>
+              <span style={{ fontSize:16 }}>ℹ️</span>
+              <div>
+                <strong>{unmatchedHeaders.length} CSV header{unmatchedHeaders.length > 1 ? 's' : ''} don't match any board column</strong>
+                {' — '}their data will be <em>skipped</em>:{' '}
+                {unmatchedHeaders.map(m => <code key={m.header} style={{ background:'#eee', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{m.header}</code>)}
+              </div>
+            </div>
+          )}
+
+          {/* ── New groups that will be auto-created ── */}
+          {newGroups.length > 0 && (
+            <div style={S.alertBox('#0073ea33', '#e8f0fe')}>
+              <span style={{ fontSize:16 }}>🆕</span>
+              <div>
+                <strong>{newGroups.length} new group{newGroups.length > 1 ? 's' : ''} will be created</strong>
+                {' (not found on board): '}
+                {newGroups.map(g => <code key={g} style={{ background:'#d0e4ff', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{g}</code>)}
+              </div>
+            </div>
+          )}
+
+          {/* ── Data preview ── */}
+          <div style={S.section}>
+            <div style={S.sectionTitle}>Data Preview (first {preview.length} rows)</div>
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ ...S.table, minWidth: 400 }}>
+                <thead>
+                  <tr>
+                    {headers.map(h => <th key={h} style={S.th}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((row, i) => (
+                    <tr key={i}>
+                      {headers.map(h => (
+                        <td key={h} style={{ ...S.td, maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {row[h] || <span style={{ color:'#c5c7d0' }}>—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {csvRows.length > 4 && (
+              <div style={{ fontSize:12, color:'#676879' }}>…and {csvRows.length - 4} more row{csvRows.length - 4 !== 1 ? 's' : ''}</div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <div style={S.footer}>
+          <button style={S.btn(false)} onClick={onCancel}>Cancel</button>
+          <button
+            style={{ ...S.btn(true), opacity: hasBlocker ? 0.5 : 1, cursor: hasBlocker ? 'not-allowed' : 'pointer' }}
+            disabled={hasBlocker}
+            onClick={() => !hasBlocker && onConfirm()}
+          >
+            Import {csvRows.length} Row{csvRows.length !== 1 ? 's' : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function fireAutomations(triggered, toast) {
   for (const auto of triggered) {
     const acfg = typeof auto.action_config === 'string'
       ? JSON.parse(auto.action_config)
       : (auto.action_config || {});
-    if (auto.action_type === 'send_email') {
-      const { to, subject, body } = acfg;
-      window.open(`mailto:${encodeURIComponent(to||'')}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(body||'')}`, '_blank');
-      toast(`Email automation fired: "${auto.name}"`, 'success');
-    } else if (auto.action_type === 'notify') {
+    // send_email is now handled server-side — no mailto: needed
+    if (auto.action_type === 'notify') {
       toast(acfg.message || `Automation: ${auto.name}`, 'info');
     }
   }
@@ -606,6 +876,9 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [detailItemId, setDetailItemId] = useState(null);
   const [detailDefaultTab, setDetailDefaultTab] = useState('fields');
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState(null); // { csvRows } or null
+  const importFileRef = React.useRef(null);
 
   // Open item panel when triggered from a notification click
   useEffect(() => {
@@ -831,16 +1104,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
   // ── Columns ───────────────────────────────────────────────────────────────
   const handleColumnAdd = async ({ title, type }) => {
-    let finalType = type;
+    const finalType = type;
     let settings = {};
     if (type === 'person') {
-      const memberNames = (board.members || []).map(m => m.name);
-      if (board.visibility === 'private') {
-        finalType = 'dropdown';
-        settings = { options: memberNames };
-      } else {
-        settings = { options: memberNames };
-      }
+      // Always keep as person type — multi-select avatars work for all board visibilities
+      settings = { options: (board.members || []).map(m => m.name) };
     }
     try {
       const r = await createColumn({ board_id: board.id, title, type: finalType, settings });
@@ -975,6 +1243,53 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     } catch { toast('Failed to update visibility', 'error'); }
   };
 
+  // ── Export ────────────────────────────────────────────────────────────────
+  const handleExport = async () => {
+    try {
+      const r = await exportBoard(board.id);
+      const cd = r.headers['content-disposition'] || '';
+      const match = cd.match(/filename="(.+?)"/);
+      const filename = match ? match[1] : `board_export.xlsx`;
+      const url = URL.createObjectURL(new Blob([r.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Board exported', 'success');
+    } catch { toast('Export failed', 'error'); }
+  };
+
+  // ── Import ────────────────────────────────────────────────────────────────
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const text = await file.text();
+    const rows = parseCSV(text);
+    if (!rows.length) { toast('CSV is empty or invalid', 'error'); return; }
+    // Show preview/validation modal instead of importing immediately
+    setImportPreview({ csvRows: rows });
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    const { csvRows } = importPreview;
+    setImportPreview(null);
+    setImporting(true);
+    try {
+      const r = await importBoardRows(board.id, csvRows);
+      const skipped = r.data.errors?.length || 0;
+      toast(`Imported ${r.data.created} item(s)${skipped ? ` · ${skipped} row(s) skipped` : ''}`, 'success');
+      if (skipped) console.warn('Import row errors:', r.data.errors);
+      window.location.reload();
+    } catch (err) {
+      toast(err.response?.data?.error || 'Import failed', 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // ── Members ───────────────────────────────────────────────────────────────
   const handleMembersChange = (members, updatedColumns) => {
     updateLocalBoard(b => {
@@ -1054,6 +1369,35 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         }}>
           🔽 Filter{filters.length > 0 ? ` (${filters.length})` : ''}
         </button>
+
+        {/* Export / Import */}
+        <button onClick={handleExport} style={{
+          padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+          fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+          display: 'flex', alignItems: 'center', gap: 5,
+        }}>⬇️ Export</button>
+
+        {canEdit && (
+          <>
+            <button
+              onClick={() => importFileRef.current?.click()}
+              disabled={importing}
+              style={{
+                padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+                fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+                display: 'flex', alignItems: 'center', gap: 5,
+                opacity: importing ? 0.6 : 1, cursor: importing ? 'not-allowed' : 'pointer',
+              }}
+            >{importing ? 'Importing…' : '⬆️ Import CSV'}</button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".csv"
+              style={{ display: 'none' }}
+              onChange={handleImportFile}
+            />
+          </>
+        )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
@@ -1244,7 +1588,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       )}
 
       {showAutomations && (
-        <AutomationsLazy boardId={board.id} columns={cols} groups={groups} onClose={() => setShowAutomations(false)} onCountChange={setActiveAutoCount} />
+        <AutomationsLazy
+          boardId={board.id}
+          columns={cols}
+          groups={groups}
+          boardEmailFrom={board.email_from || ''}
+          onBoardEmailFromChange={async (val) => {
+            await updateBoardEmailSettings(board.id, val);
+            updateLocalBoard(() => ({ email_from: val }));
+          }}
+          onClose={() => setShowAutomations(false)}
+          onCountChange={setActiveAutoCount}
+        />
       )}
 
       {showMembers && (
@@ -1276,6 +1631,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           groups={groups}
           columns={cols}
           onClose={() => setShowForms(false)}
+        />
+      )}
+
+      {importPreview && (
+        <ImportPreviewModal
+          csvRows={importPreview.csvRows}
+          boardColumns={cols}
+          boardGroups={groups}
+          onConfirm={handleConfirmImport}
+          onCancel={() => setImportPreview(null)}
         />
       )}
     </div>

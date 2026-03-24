@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ColumnCell from './ColumnCell';
-import { getComments, createComment, deleteComment, getItemActivityLogs, getBoardMembers } from '../api';
+import { getComments, createComment, deleteComment, getItemActivityLogs, getBoardMembers, getItemEmails } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -373,6 +373,106 @@ function ReplyEntry({ reply, currentUserId, currentUserRole, onDelete }) {
   );
 }
 
+// ── Email entry (incoming / outgoing) ─────────────────────────────────────────
+function EmailEntry({ email }) {
+  const [expanded, setExpanded] = useState(false);
+  const isIncoming = email.direction === 'incoming';
+
+  const bodyLines  = (email.body_text || '').split('\n').filter(l => l.trim());
+  const previewLines = bodyLines.slice(0, 3);
+  const hasMore    = bodyLines.length > 3;
+
+  return (
+    <div style={{
+      borderBottom: '1px solid #f0f2f5',
+      padding: '14px 24px',
+    }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+
+        {/* Direction icon bubble */}
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+          background: isIncoming ? '#e3f0ff' : '#e8f7ee',
+          color:      isIncoming ? '#0073ea' : '#037f4c',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16,
+        }}>
+          {isIncoming ? '📨' : '📤'}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Header row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px',
+                background: isIncoming ? '#e3f0ff' : '#e8f7ee',
+                color:      isIncoming ? '#0073ea' : '#037f4c',
+                letterSpacing: 0.5, textTransform: 'uppercase',
+              }}>
+                {isIncoming ? 'Inbox' : 'Sent'}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#323338', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>
+                {email.subject || '(No subject)'}
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: '#aaa', flexShrink: 0 }}>{timeAgo(email.created_at)}</span>
+          </div>
+
+          {/* From / To row */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8, fontSize: 12, color: '#676879' }}>
+            {isIncoming ? (
+              <>
+                <span style={{ color: '#aaa' }}>From:</span>
+                <span style={{ background: '#f0f2f5', borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>
+                  {email.from_name ? `${email.from_name} <${email.from_address}>` : (email.from_address || '—')}
+                </span>
+              </>
+            ) : (
+              <>
+                <span style={{ color: '#aaa' }}>To:</span>
+                <span style={{ background: '#f0f2f5', borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>
+                  {email.to_address || '—'}
+                </span>
+              </>
+            )}
+            {isIncoming && email.to_address && (
+              <>
+                <span style={{ color: '#aaa', marginLeft: 4 }}>To:</span>
+                <span style={{ background: '#f0f2f5', borderRadius: 4, padding: '1px 7px' }}>
+                  {email.to_address}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Body */}
+          {bodyLines.length > 0 && (
+            <div style={{
+              background: '#f7f8fc', border: '1px solid #e6e9ef', borderRadius: 8,
+              padding: '10px 14px', fontSize: 13, color: '#323338',
+              lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            }}>
+              {expanded ? bodyLines.join('\n') : previewLines.join('\n')}
+              {hasMore && (
+                <button
+                  onClick={() => setExpanded(s => !s)}
+                  style={{
+                    display: 'block', marginTop: 6,
+                    fontSize: 12, color: '#0073ea', fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  {expanded ? '▲ Show less' : `▼ Show more (${bodyLines.length - 3} more line${bodyLines.length - 3 > 1 ? 's' : ''})`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Column type icons ─────────────────────────────────────────────────────────
 function colTypeIcon(type) {
   const MAP = {
@@ -392,7 +492,8 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
   useEffect(() => { setTab(defaultTab); }, [defaultTab]);
   const [comments, setComments] = useState([]);
   const [activity, setActivity] = useState([]);
-  const [members, setMembers] = useState([]);
+  const [emails,   setEmails]   = useState([]);
+  const [members,  setMembers]  = useState([]);
   const [loadingUpdates, setLoadingUpdates] = useState(false);
 
   // Load board members once for @mention
@@ -409,8 +510,9 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
     Promise.all([
       getComments(item.id).then(r => r.data),
       getItemActivityLogs(item.id).then(r => r.data),
+      getItemEmails(item.id).then(r => r.data).catch(() => []),
     ])
-      .then(([c, a]) => { setComments(c); setActivity(a); })
+      .then(([c, a, e]) => { setComments(c); setActivity(a); setEmails(e); })
       .catch(() => {})
       .finally(() => setLoadingUpdates(false));
   }, [tab, item.id]);
@@ -434,10 +536,11 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
     repliesMap[r.parent_id].push(r);
   });
 
-  // Merge root comments + activity into timeline, sorted by date
+  // Merge root comments + activity + emails into timeline, sorted by date
   const timeline = [
     ...rootComments.map(c => ({ ...c, _type: 'comment' })),
-    ...activity.map(a => ({ ...a, _type: 'activity' })),
+    ...activity.map(a =>    ({ ...a, _type: 'activity' })),
+    ...emails.map(e =>      ({ ...e, _type: 'email' })),
   ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
   const fieldColumns = columns.filter(c => c.type !== 'creation_log');
@@ -483,7 +586,7 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 0, marginTop: 16 }}>
-            {[['fields', 'Fields'], ['updates', `Updates${comments.length ? ` (${comments.length})` : ''}`]].map(([key, label]) => (
+            {[['fields', 'Fields'], ['updates', `Updates${(comments.length + emails.length) ? ` (${comments.length + emails.length})` : ''}`]].map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '7px 20px', fontSize: 13, fontWeight: 600,
                 color: tab === key ? '#0073ea' : '#676879',
@@ -537,12 +640,12 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
                 <div style={{ textAlign: 'center', padding: 60, color: '#aaa' }}>
                   <div style={{ fontSize: 40, marginBottom: 10 }}>💬</div>
                   <div style={{ fontSize: 14 }}>No updates yet</div>
-                  <div style={{ fontSize: 12, marginTop: 4 }}>Be the first to write something · type @ to mention someone</div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>Write a comment · type @ to mention someone · emails appear here automatically</div>
                 </div>
               ) : (
-                timeline.map(entry =>
-                  entry._type === 'comment'
-                    ? (
+                timeline.map(entry => {
+                  if (entry._type === 'comment') {
+                    return (
                       <CommentEntry
                         key={`c-${entry.id}`}
                         comment={entry}
@@ -555,9 +658,13 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
                         item={item}
                         boardId={boardId}
                       />
-                    )
-                    : <ActivityEntry key={`a-${entry.id}`} log={entry} />
-                )
+                    );
+                  }
+                  if (entry._type === 'email') {
+                    return <EmailEntry key={`e-${entry.id}`} email={entry} />;
+                  }
+                  return <ActivityEntry key={`a-${entry.id}`} log={entry} />;
+                })
               )}
             </div>
           </div>

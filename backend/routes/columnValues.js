@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { sendAutomationEmail } = require('../services/automationEmail');
 
 async function logActivity(client, data) {
   try {
@@ -91,6 +92,15 @@ router.post('/upsert', requireAuth, async (req, res) => {
           );
           setValues.push({ column_id: parseInt(targetColId), value: targetVal });
         }
+      } else if (auto.action_type === 'send_email') {
+        // Execute server-side — resolve item placeholders and send via SMTP
+        sendAutomationEmail({
+          boardId: board_id,
+          itemId:  parseInt(item_id),
+          to:      acfg.to || '',
+          subject: acfg.subject || '',
+          body:    acfg.body || '',
+        }).catch(err => console.error('[AutomationEmail] async error:', err.message));
       } else {
         triggeredAutomations.push(auto);
       }

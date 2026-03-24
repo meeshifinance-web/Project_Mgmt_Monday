@@ -61,7 +61,7 @@ export default function ProfilePage() {
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showCreateUser, setShowCreateUser] = useState(false);
-  const [resetPasswordFor, setResetPasswordFor] = useState(null); // userId
+  const [resetPasswordFor, setResetPasswordFor] = useState(null);
   const [resetPwd, setResetPwd] = useState('');
   const [resettingPwd, setResettingPwd] = useState(false);
   const [newUserName, setNewUserName] = useState('');
@@ -69,6 +69,13 @@ export default function ProfilePage() {
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState('user');
   const [creatingUser, setCreatingUser] = useState(false);
+  // Filter + sort state
+  const [userSearch, setUserSearch] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType] = useState('all');
+  const [sortCol, setSortCol] = useState('created_at');
+  const [sortDir, setSortDir] = useState('desc');
 
   useEffect(() => {
     if (tab === 'Admin' && isAdmin) {
@@ -364,159 +371,300 @@ export default function ProfilePage() {
           )}
 
           {/* ── Admin Tab ── */}
-          {tab === 'Admin' && isAdmin && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>User Management</h3>
-                <button
-                  onClick={() => setShowCreateUser(v => !v)}
-                  style={{ padding: '7px 16px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 13 }}
-                >
-                  {showCreateUser ? '✕ Cancel' : '+ Create User'}
-                </button>
-              </div>
+          {tab === 'Admin' && isAdmin && (() => {
+            // ── Helpers ──────────────────────────────────────────────────────
+            const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+            const fmtDateFull = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : null;
 
-              {showCreateUser && (
-                <form onSubmit={handleCreateUser} style={{
-                  background: '#f7f8fc', borderRadius: 10, padding: 20, marginBottom: 20,
-                  border: '1.5px solid #e0e0e0',
-                }}>
-                  <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#323338' }}>New User Details</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                    <div>
-                      <label style={labelStyle}>Full Name</label>
-                      <input value={newUserName} onChange={e => setNewUserName(e.target.value)} style={inputStyle} placeholder="e.g. Priya Sharma" required />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Email</label>
-                      <input type="email" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} style={inputStyle} placeholder="priya@ddecor.com" required />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Password (min 8 chars)</label>
-                      <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} style={inputStyle} placeholder="••••••••" required />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Role</label>
-                      <select value={newUserRole} onChange={e => setNewUserRole(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                        {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <button type="submit" disabled={creatingUser} style={{ ...btnPrimary, fontSize: 13, padding: '8px 20px' }}>
-                    {creatingUser ? 'Creating…' : 'Create User'}
+            const toggleSort = (col) => {
+              if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+              else { setSortCol(col); setSortDir('asc'); }
+            };
+            const SortIcon = ({ col }) => {
+              if (sortCol !== col) return <span style={{ color: '#ccc', marginLeft: 4 }}>⇅</span>;
+              return <span style={{ color: '#0073ea', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+            };
+
+            // ── Filter + sort ─────────────────────────────────────────────────
+            const q = userSearch.toLowerCase();
+            const visible = users
+              .filter(u => {
+                if (q && !u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
+                if (filterRole !== 'all' && u.role !== filterRole) return false;
+                if (filterStatus === 'active' && !u.is_active) return false;
+                if (filterStatus === 'inactive' && u.is_active) return false;
+                if (filterType === 'sso' && !u.is_sso) return false;
+                if (filterType === 'email' && u.is_sso) return false;
+                return true;
+              })
+              .sort((a, b) => {
+                let va, vb;
+                if (sortCol === 'name')       { va = a.name.toLowerCase(); vb = b.name.toLowerCase(); }
+                else if (sortCol === 'role')  { va = a.role; vb = b.role; }
+                else if (sortCol === 'type')  { va = a.is_sso ? 1 : 0; vb = b.is_sso ? 1 : 0; }
+                else if (sortCol === 'last_login') { va = a.last_login ? new Date(a.last_login) : new Date(0); vb = b.last_login ? new Date(b.last_login) : new Date(0); }
+                else if (sortCol === 'status') { va = a.is_active ? 1 : 0; vb = b.is_active ? 1 : 0; }
+                else { va = a.created_at ? new Date(a.created_at) : new Date(0); vb = b.created_at ? new Date(b.created_at) : new Date(0); }
+                if (va < vb) return sortDir === 'asc' ? -1 : 1;
+                if (va > vb) return sortDir === 'asc' ? 1 : -1;
+                return 0;
+              });
+
+            // ── Role counts ───────────────────────────────────────────────────
+            const counts = { admin: 0, manager: 0, member: 0, user: 0, active: 0, inactive: 0 };
+            users.forEach(u => {
+              if (counts[u.role] !== undefined) counts[u.role]++;
+              if (u.is_active) counts.active++; else counts.inactive++;
+            });
+
+            const countCards = [
+              { label: 'Total', value: users.length, color: '#323338', bg: '#f5f6f8' },
+              { label: 'Admin', value: counts.admin, color: ROLE_COLORS.admin, bg: '#fff0f2' },
+              { label: 'Manager', value: counts.manager, color: ROLE_COLORS.manager, bg: '#fff8ed' },
+              { label: 'Member', value: counts.member, color: ROLE_COLORS.member, bg: '#e8f0fe' },
+              { label: 'Read-only', value: counts.user, color: '#888', bg: '#f5f6f8' },
+              { label: 'Active', value: counts.active, color: '#037f4c', bg: '#e8f7ee' },
+              { label: 'Inactive', value: counts.inactive, color: '#e2445c', bg: '#fff5f7' },
+            ];
+
+            const thStyle = {
+              padding: '9px 10px', textAlign: 'left', fontWeight: 700,
+              color: '#555', fontSize: 11, cursor: 'pointer', userSelect: 'none',
+              whiteSpace: 'nowrap', letterSpacing: '0.3px',
+            };
+            const tdStyle = { padding: '9px 10px', verticalAlign: 'middle' };
+
+            return (
+              <div>
+                {/* Header row */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>User Management</h3>
+                  <button
+                    onClick={() => setShowCreateUser(v => !v)}
+                    style={{ padding: '7px 16px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 13 }}
+                  >
+                    {showCreateUser ? '✕ Cancel' : '+ Create User'}
                   </button>
-                </form>
-              )}
-
-              {loadingUsers ? (
-                <p style={{ color: '#888' }}>Loading…</p>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ background: '#f7f8fc', borderBottom: '2px solid #e0e0e0' }}>
-                        {['User', 'Role', 'Type', 'Last Login', 'Status', 'Actions'].map(h => (
-                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#555', fontSize: 12 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map(u => (
-                        <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                          <td style={{ padding: '10px 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <Avatar name={u.name} url={u.avatar_url} size={32} />
-                              <div>
-                                <div style={{ fontWeight: 600 }}>{u.name}</div>
-                                <div style={{ color: '#888', fontSize: 11 }}>{u.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            {u.id === user?.id ? (
-                              <RoleBadge role={u.role} />
-                            ) : (
-                              <select
-                                value={u.role}
-                                onChange={e => handleRoleChange(u.id, e.target.value)}
-                                style={{ border: '1px solid #ddd', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
-                              >
-                                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                              </select>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            <span style={{ fontSize: 11, color: '#555', background: '#f0f0f0', borderRadius: 10, padding: '2px 8px' }}>
-                              {u.is_sso ? '🟦 Microsoft' : '📧 Email'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '10px 12px', color: '#888', fontSize: 12 }}>
-                            {u.last_login ? new Date(u.last_login).toLocaleDateString('en-IN') : 'Never'}
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            {u.id !== user?.id ? (
-                              <button
-                                onClick={() => handleToggleActive(u)}
-                                style={{
-                                  fontSize: 11, fontWeight: 600, borderRadius: 10, padding: '3px 10px', cursor: 'pointer',
-                                  background: u.is_active ? '#e8f7ee' : '#fde8e8',
-                                  color: u.is_active ? '#037f4c' : '#e2445c',
-                                  border: 'none',
-                                }}
-                              >
-                                {u.is_active ? '● Active' : '○ Inactive'}
-                              </button>
-                            ) : (
-                              <span style={{ fontSize: 11, color: '#888' }}>You</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '10px 12px' }}>
-                            {u.id !== user?.id && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                  <button
-                                    onClick={() => { setResetPasswordFor(resetPasswordFor === u.id ? null : u.id); setResetPwd(''); }}
-                                    style={{ color: '#0073ea', fontSize: 12, fontWeight: 600 }}
-                                    title="Reset password"
-                                  >
-                                    {resetPasswordFor === u.id ? 'Cancel' : '🔑 Reset Pwd'}
-                                  </button>
-                                  <button onClick={() => handleDeleteUser(u)} style={{ color: '#e2445c', fontSize: 12, fontWeight: 600 }}>
-                                    Delete
-                                  </button>
-                                </div>
-                                {resetPasswordFor === u.id && (
-                                  <form onSubmit={e => handleAdminResetPassword(e, u.id)} style={{ display: 'flex', gap: 4, marginTop: 2 }}>
-                                    <input
-                                      type="password"
-                                      value={resetPwd}
-                                      onChange={e => setResetPwd(e.target.value)}
-                                      placeholder="New password"
-                                      minLength={8}
-                                      required
-                                      autoFocus
-                                      style={{ border: '1.5px solid #0073ea', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', width: 130 }}
-                                    />
-                                    <button
-                                      type="submit"
-                                      disabled={resettingPwd || resetPwd.length < 8}
-                                      style={{ background: '#0073ea', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, opacity: resettingPwd ? 0.7 : 1 }}
-                                    >
-                                      {resettingPwd ? '…' : 'Set'}
-                                    </button>
-                                  </form>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* ── Summary cards ── */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+                  {countCards.map(c => (
+                    <div key={c.label} style={{
+                      background: c.bg, borderRadius: 8, padding: '10px 16px',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 72,
+                      border: `1px solid ${c.color}22`,
+                    }}>
+                      <span style={{ fontSize: 22, fontWeight: 800, color: c.color, lineHeight: 1 }}>{c.value}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: c.color, marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{c.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Create user form ── */}
+                {showCreateUser && (
+                  <form onSubmit={handleCreateUser} style={{
+                    background: '#f7f8fc', borderRadius: 10, padding: 20, marginBottom: 20,
+                    border: '1.5px solid #e0e0e0',
+                  }}>
+                    <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#323338' }}>New User Details</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <label style={labelStyle}>Full Name</label>
+                        <input value={newUserName} onChange={e => setNewUserName(e.target.value)} style={inputStyle} placeholder="e.g. Priya Sharma" required />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Email</label>
+                        <input type="email" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} style={inputStyle} placeholder="priya@ddecor.com" required />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Password (min 8 chars)</label>
+                        <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} style={inputStyle} placeholder="••••••••" required />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Role</label>
+                        <select value={newUserRole} onChange={e => setNewUserRole(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                          {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <button type="submit" disabled={creatingUser} style={{ ...btnPrimary, fontSize: 13, padding: '8px 20px' }}>
+                      {creatingUser ? 'Creating…' : 'Create User'}
+                    </button>
+                  </form>
+                )}
+
+                {/* ── Filter bar ── */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+                  <input
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    placeholder="🔍  Search name or email…"
+                    style={{ flex: 1, minWidth: 180, border: '1.5px solid #ddd', borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }}
+                    onFocus={e => e.target.style.borderColor = '#0073ea'}
+                    onBlur={e => e.target.style.borderColor = '#ddd'}
+                  />
+                  {[
+                    { label: 'Role', value: filterRole, set: setFilterRole, options: [['all','All Roles'],['admin','Admin'],['manager','Manager'],['member','Member'],['user','Read-only']] },
+                    { label: 'Status', value: filterStatus, set: setFilterStatus, options: [['all','All Status'],['active','Active'],['inactive','Inactive']] },
+                    { label: 'Type', value: filterType, set: setFilterType, options: [['all','All Types'],['email','Email'],['sso','Microsoft SSO']] },
+                  ].map(f => (
+                    <select
+                      key={f.label}
+                      value={f.value}
+                      onChange={e => f.set(e.target.value)}
+                      style={{ border: '1.5px solid #ddd', borderRadius: 7, padding: '6px 10px', fontSize: 13, cursor: 'pointer', background: f.value !== 'all' ? '#e8f0fe' : '#fff', color: f.value !== 'all' ? '#0073ea' : '#555', fontWeight: f.value !== 'all' ? 600 : 400 }}
+                    >
+                      {f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  ))}
+                  {(userSearch || filterRole !== 'all' || filterStatus !== 'all' || filterType !== 'all') && (
+                    <button
+                      onClick={() => { setUserSearch(''); setFilterRole('all'); setFilterStatus('all'); setFilterType('all'); }}
+                      style={{ fontSize: 12, color: '#e2445c', fontWeight: 600, border: '1px solid #e2445c', borderRadius: 6, padding: '5px 10px' }}
+                    >✕ Clear</button>
+                  )}
+                  <span style={{ fontSize: 12, color: '#888', marginLeft: 'auto' }}>
+                    {visible.length} of {users.length} user{users.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* ── User table ── */}
+                {loadingUsers ? (
+                  <p style={{ color: '#888' }}>Loading…</p>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#f7f8fc', borderBottom: '2px solid #e0e0e0' }}>
+                          <th style={thStyle} onClick={() => toggleSort('name')}>User <SortIcon col="name" /></th>
+                          <th style={thStyle} onClick={() => toggleSort('role')}>Role <SortIcon col="role" /></th>
+                          <th style={thStyle} onClick={() => toggleSort('type')}>Type <SortIcon col="type" /></th>
+                          <th style={thStyle} onClick={() => toggleSort('created_at')}>Created <SortIcon col="created_at" /></th>
+                          <th style={thStyle} onClick={() => toggleSort('last_login')}>Last Login <SortIcon col="last_login" /></th>
+                          <th style={thStyle} onClick={() => toggleSort('status')}>Status <SortIcon col="status" /></th>
+                          <th style={{ ...thStyle, cursor: 'default' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visible.length === 0 && (
+                          <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No users match the current filters</td></tr>
+                        )}
+                        {visible.map(u => (
+                          <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#fafbff'}
+                            onMouseLeave={e => e.currentTarget.style.background = ''}
+                          >
+                            {/* User */}
+                            <td style={tdStyle}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Avatar name={u.name} url={u.avatar_url} size={32} />
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name}{u.id === user?.id && <span style={{ fontSize: 10, color: '#888', marginLeft: 5 }}>(you)</span>}</div>
+                                  <div style={{ color: '#888', fontSize: 11 }}>{u.email}</div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Role */}
+                            <td style={tdStyle}>
+                              {u.id === user?.id ? (
+                                <RoleBadge role={u.role} />
+                              ) : (
+                                <select
+                                  value={u.role}
+                                  onChange={e => handleRoleChange(u.id, e.target.value)}
+                                  style={{ border: '1px solid #ddd', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
+                                >
+                                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                                </select>
+                              )}
+                            </td>
+
+                            {/* Type */}
+                            <td style={tdStyle}>
+                              <span style={{ fontSize: 11, color: '#555', background: '#f0f0f0', borderRadius: 10, padding: '2px 8px' }}>
+                                {u.is_sso ? '🟦 Microsoft' : '📧 Email'}
+                              </span>
+                            </td>
+
+                            {/* Created */}
+                            <td style={{ ...tdStyle, color: '#666', fontSize: 12, whiteSpace: 'nowrap' }}>
+                              {fmtDate(u.created_at)}
+                            </td>
+
+                            {/* Last Login */}
+                            <td style={{ ...tdStyle, fontSize: 12, whiteSpace: 'nowrap' }}>
+                              {u.last_login ? (
+                                <div>
+                                  <div style={{ color: '#323338', fontWeight: 500 }}>{fmtDate(u.last_login)}</div>
+                                  <div style={{ color: '#888', fontSize: 11 }}>{new Date(u.last_login).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
+                                </div>
+                              ) : (
+                                <span style={{ color: '#ccc' }}>Never</span>
+                              )}
+                            </td>
+
+                            {/* Status */}
+                            <td style={tdStyle}>
+                              {u.id !== user?.id ? (
+                                <button
+                                  onClick={() => handleToggleActive(u)}
+                                  style={{
+                                    fontSize: 11, fontWeight: 600, borderRadius: 10, padding: '3px 10px', cursor: 'pointer',
+                                    background: u.is_active ? '#e8f7ee' : '#fde8e8',
+                                    color: u.is_active ? '#037f4c' : '#e2445c',
+                                    border: 'none',
+                                  }}
+                                >
+                                  {u.is_active ? '● Active' : '○ Inactive'}
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: 11, color: '#888' }}>Active (you)</span>
+                              )}
+                            </td>
+
+                            {/* Actions */}
+                            <td style={tdStyle}>
+                              {u.id !== user?.id && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <button
+                                      onClick={() => { setResetPasswordFor(resetPasswordFor === u.id ? null : u.id); setResetPwd(''); }}
+                                      style={{ color: '#0073ea', fontSize: 12, fontWeight: 600 }}
+                                    >
+                                      {resetPasswordFor === u.id ? 'Cancel' : '🔑 Reset Pwd'}
+                                    </button>
+                                    <button onClick={() => handleDeleteUser(u)} style={{ color: '#e2445c', fontSize: 12, fontWeight: 600 }}>
+                                      Delete
+                                    </button>
+                                  </div>
+                                  {resetPasswordFor === u.id && (
+                                    <form onSubmit={e => handleAdminResetPassword(e, u.id)} style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                                      <input
+                                        type="password" value={resetPwd}
+                                        onChange={e => setResetPwd(e.target.value)}
+                                        placeholder="New password" minLength={8} required autoFocus
+                                        style={{ border: '1.5px solid #0073ea', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', width: 130 }}
+                                      />
+                                      <button
+                                        type="submit" disabled={resettingPwd || resetPwd.length < 8}
+                                        style={{ background: '#0073ea', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, opacity: resettingPwd ? 0.7 : 1 }}
+                                      >{resettingPwd ? '…' : 'Set'}</button>
+                                    </form>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

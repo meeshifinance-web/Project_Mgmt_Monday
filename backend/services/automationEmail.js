@@ -1,0 +1,132 @@
+/**
+ * automationEmail.js
+ *
+ * Resolves board-item placeholder variables and sends emails for
+ * "send_email" automation actions via server-side SMTP (nodemailer).
+ *
+ * Supported variables in subject / body:
+ *   {Item Name}   — the item's name
+ *   {Group Name}  — the group the item belongs to
+ *   {Board Name}  — the board name
+ *   {<ColTitle>}  — value of any column (e.g. {Status}, {Owner}, {Due Date})
+ *
+ * From address priority:
+ *   1. board.email_from  (per-board setting)
+ *   2. EMAIL_FROM env var (system-wide display name / address)
+ *   3. EMAIL_USER env var (SMTP login, fallback)
+ */
+
+const nodemailer = require('nodemailer');
+const pool = require('../db');
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Replace all {Placeholder} tokens in a template string.
+ * @param {string} template
+ * @param {{ itemName, groupName, boardName, columns: Array<{id,title}>, values: Record<id,string> }} ctx
+ */
+function resolvePlaceholders(template, ctx) {
+  let result = template || '';
+  const { itemName = '', groupName = '', boardName = '', columns = [], values = {} } = ctx;
+
+  result = result.replace(/\{item\s*name\}/gi, itemName);
+  result = result.replace(/\{group\s*name\}/gi, groupName);
+  result = result.replace(/\{board\s*name\}/gi, boardName);
+
+  for (const col of columns) {
+    const pattern = new RegExp(`\\{${escapeRegex(col.title)}\\}`, 'gi');
+    result = result.replace(pattern, values[col.id] || '');
+  }
+  return result;
+}
+
+/**
+ * Send an automation email for a specific board item.
+ * Fetches item context from DB, resolves placeholders, then sends via SMTP.
+ *
+ * @param {object} opts
+ * @param {number} opts.boardId
+ * @param {number} opts.itemId
+ * @param {string} opts.to        — recipient address(es), comma-separated
+ * @param {string} opts.subject   — template with optional {tokens}
+ * @param {string} opts.body      — template with optional {tokens}
+ */
+async function sendAutomationEmail({ boardId, itemId, to, subject, body }) {
+  if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER) {
+    console.log(`[AutomationEmail] SMTP not configured — skipping send_email to <${to}>`);
+    return;
+  }
+  if (!to) {
+    console.log('[AutomationEmail] No recipient — skipping');
+    return;
+  }
+
+  try {
+    // 1. Board name + per-board email_from
+    const boardRes = await pool.query('SELECT name, email_from FROM boards WHERE id=$1', [boardId]);
+    const board = boardRes.rows[0] || {};
+
+    // 2. Item name + group name
+    const itemRes = await pool.query(
+      `SELECT i.name AS item_name, g.name AS group_name
+       FROM items i JOIN groups g ON g.id = i.group_id
+       WHERE i.id = $1`,
+      [itemId]
+    );
+    const item = itemRes.rows[0] || { item_name: '', group_name: '' };
+
+    // 3. Column definitions + column values for this item
+    const colRes = await pool.query('SELECT id, title FROM columns WHERE board_id=$1', [boardId]);
+    const valRes = await pool.query('SELECT column_id, value FROM column_values WHERE item_id=$1', [itemId]);
+    const values = {};
+    for (const v of valRes.rows) values[v.column_id] = v.value;
+
+    const ctx = {
+      itemName:  item.item_name,
+      groupName: item.group_name,
+      boardName: board.name || '',
+      columns:   colRes.rows,
+      values,
+    };
+
+    const resolvedSubject = resolvePlaceholders(subject, ctx);
+    const resolvedBody    = resolvePlaceholders(body, ctx);
+
+    // 4. Determine "from" address
+    const from = board.email_from || process.env.EMAIL_FROM || process.env.EMAIL_USER;
+
+    // 5. Send
+    const transporter = nodemailer.createTransport({
+      host:   process.env.EMAIL_HOST,
+      port:   parseInt(process.env.EMAIL_PORT) || 587,
+      secure: false,
+      auth:   { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      tls:    { rejectUnauthorized: false },
+    });
+
+    await transporter.sendMail({
+      from,
+      to,
+      subject: resolvedSubject || '(No subject)',
+      text:    resolvedBody,
+      html:    `<div style="font-family:sans-serif;white-space:pre-wrap">${resolvedBody.replace(/\n/g, '<br>')}</div>`,
+    });
+
+    // Store the outgoing email so it appears in the item's Updates tab
+    await pool.query(
+      `INSERT INTO item_emails
+         (item_id, board_id, direction, from_address, to_address, subject, body_text)
+       VALUES ($1,$2,'outgoing',$3,$4,$5,$6)`,
+      [itemId, boardId, from, to, resolvedSubject || '', resolvedBody || '']
+    );
+
+    console.log(`[AutomationEmail] ✅ Sent to <${to}> | subject: "${resolvedSubject}"`);
+  } catch (err) {
+    console.error('[AutomationEmail] Send error:', err.message);
+  }
+}
+
+module.exports = { sendAutomationEmail, resolvePlaceholders };

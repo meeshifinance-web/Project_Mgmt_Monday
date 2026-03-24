@@ -7,6 +7,30 @@ const SKIP_TYPES = ['formula', 'creation_log', 'time_tracking'];
 
 const BASE_URL = window.location.origin;
 
+// Works in both HTTP (localhost) and HTTPS environments
+function copyTextToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  // Fallback: create a temporary textarea, select, and execCommand
+  return new Promise((resolve, reject) => {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    try {
+      const ok = document.execCommand('copy');
+      document.body.removeChild(el);
+      ok ? resolve() : reject(new Error('execCommand failed'));
+    } catch (err) {
+      document.body.removeChild(el);
+      reject(err);
+    }
+  });
+}
+
 // ── Live preview of a single field ───────────────────────────────────────────
 function PreviewField({ field, color }) {
   const label = field.label || field.column_title;
@@ -313,7 +337,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
     : '';
 
   const copyToClipboard = (text, label) => {
-    navigator.clipboard.writeText(text).then(() => toast(`${label} copied!`, 'success')).catch(() => toast('Copy failed', 'error'));
+    copyTextToClipboard(text).then(() => toast(`${label} copied!`, 'success')).catch(() => toast('Copy failed', 'error'));
   };
 
   const previewFields = fields.filter(f => f.is_visible);
@@ -553,12 +577,12 @@ function FormsList({ boardId, onOpenBuilder }) {
 
   const copyLink = (slug) => {
     const url = `${BASE_URL}/form/${slug}`;
-    navigator.clipboard.writeText(url).then(() => toast('Link copied!', 'success')).catch(() => toast('Copy failed', 'error'));
+    copyTextToClipboard(url).then(() => toast('Link copied!', 'success')).catch(() => toast('Copy failed', 'error'));
   };
 
   const copyEmbed = (slug) => {
     const code = `<iframe src="${BASE_URL}/form/${slug}" width="100%" height="600" frameborder="0" style="border-radius:8px"></iframe>`;
-    navigator.clipboard.writeText(code).then(() => toast('Embed code copied!', 'success')).catch(() => toast('Copy failed', 'error'));
+    copyTextToClipboard(code).then(() => toast('Embed code copied!', 'success')).catch(() => toast('Copy failed', 'error'));
   };
 
   return (

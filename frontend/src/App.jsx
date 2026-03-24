@@ -13,7 +13,8 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import PublicForm from './pages/PublicForm';
-import { getBoards, getBoard, createBoard, deleteBoard, updateBoard } from './api';
+import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder } from './api';
+import GlobalTrashPanel from './components/GlobalTrashPanel';
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 
@@ -99,16 +100,22 @@ function MainApp() {
   const [boards, setBoards] = useState([]);
   const [activeBoard, setActiveBoard] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [openItemId, setOpenItemId] = useState(null); // from notification click
+  const [openItemId, setOpenItemId] = useState(null);
   const [newBoardName, setNewBoardName] = useState('');
-  const [newBoardVisibility, setNewBoardVisibility] = useState('org_wide');
+  const [newBoardVisibility, setNewBoardVisibility] = useState('private');
   const [showNewBoard, setShowNewBoard] = useState(false);
+  const [folders, setFolders] = useState([]);
+  const [collapsedFolders, setCollapsedFolders] = useState(new Set());
+  const [renamingFolderId, setRenamingFolderId] = useState(null);
+  const [renameFolderDraft, setRenameFolderDraft] = useState('');
+  const [showGlobalTrash, setShowGlobalTrash] = useState(false);
+  const [boardMenuId, setBoardMenuId] = useState(null);
   const newBoardFormRef = useRef(null);
-  const { isManager } = useAuth();
+  const { user: currentUser, isManager, isAdmin } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
-  const closeNewBoard = () => { setShowNewBoard(false); setNewBoardName(''); setNewBoardVisibility('org_wide'); };
+  const closeNewBoard = () => { setShowNewBoard(false); setNewBoardName(''); setNewBoardVisibility('private'); };
 
   useEffect(() => {
     if (!showNewBoard) return;
@@ -119,11 +126,20 @@ function MainApp() {
     return () => { document.removeEventListener('mousedown', onMouseDown); document.removeEventListener('keydown', onKeyDown); };
   }, [showNewBoard]);
 
+  // Close board ⋯ menu on outside click
   useEffect(() => {
-    getBoards()
-      .then(r => {
-        setBoards(r.data);
-        if (r.data.length > 0) loadBoard(r.data[0].id);
+    if (!boardMenuId) return;
+    const close = () => setBoardMenuId(null);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [boardMenuId]);
+
+  useEffect(() => {
+    Promise.all([getBoards(), getFolders()])
+      .then(([boardsRes, foldersRes]) => {
+        setBoards(boardsRes.data);
+        setFolders(foldersRes.data);
+        if (boardsRes.data.length > 0) loadBoard(boardsRes.data[0].id);
         else setLoading(false);
       })
       .catch(() => { toast('Failed to load boards', 'error'); setLoading(false); });
@@ -141,12 +157,9 @@ function MainApp() {
     }
   };
 
-  // Called when user clicks a notification — load the board then open the item panel
   const handleOpenItem = useCallback(({ board_id, item_id }) => {
     setOpenItemId(item_id);
-    if (activeBoard?.id !== board_id) {
-      loadBoard(board_id);
-    }
+    if (activeBoard?.id !== board_id) loadBoard(board_id);
   }, [activeBoard?.id]);
 
   const handleCreateBoard = async (e) => {
@@ -156,7 +169,7 @@ function MainApp() {
       const r = await createBoard({ name: newBoardName.trim(), visibility: newBoardVisibility });
       setBoards(b => [...b, r.data]);
       setNewBoardName('');
-      setNewBoardVisibility('org_wide');
+      setNewBoardVisibility('private');
       setShowNewBoard(false);
       loadBoard(r.data.id);
       toast('Board created', 'success');
@@ -166,7 +179,6 @@ function MainApp() {
   };
 
   const handleDeleteBoard = async (id) => {
-    if (!confirm('Delete this board?')) return;
     try {
       await deleteBoard(id);
       const remaining = boards.filter(b => b.id !== id);
@@ -175,7 +187,7 @@ function MainApp() {
         if (remaining.length) loadBoard(remaining[0].id);
         else setActiveBoard(null);
       }
-      toast('Board deleted');
+      toast('Board moved to trash · restores within 15 days');
     } catch (err) {
       toast(err.response?.data?.error || 'Failed to delete board', 'error');
     }
@@ -185,7 +197,7 @@ function MainApp() {
     if (!newName.trim()) return;
     try {
       const board = boards.find(b => b.id === id) || activeBoard;
-      const r = await updateBoard(id, { name: newName.trim(), description: board?.description, visibility: board?.visibility || 'org_wide' });
+      const r = await updateBoard(id, { name: newName.trim(), description: board?.description, visibility: board?.visibility || 'private' });
       setBoards(bs => bs.map(b => b.id === id ? { ...b, name: r.data.name } : b));
       if (activeBoard?.id === id) setActiveBoard(prev => ({ ...prev, name: r.data.name }));
       toast('Board renamed', 'success');
@@ -195,7 +207,6 @@ function MainApp() {
   const handleBoardChange = useCallback((updater) => {
     setActiveBoard(prev => {
       const next = updater(prev);
-      // Keep sidebar board list in sync with visibility/name changes
       if (next.visibility !== prev?.visibility || next.name !== prev?.name) {
         setBoards(bs => bs.map(b => b.id === next.id ? { ...b, visibility: next.visibility, name: next.name } : b));
       }
@@ -203,10 +214,153 @@ function MainApp() {
     });
   }, []);
 
+  // ── Folder handlers ──────────────────────────────────────────────────────────
+  const handleCreateFolder = async () => {
+    const name = prompt('Folder name:');
+    if (!name?.trim()) return;
+    try {
+      const r = await createFolder(name.trim());
+      setFolders(f => [...f, r.data]);
+      toast('Folder created', 'success');
+    } catch { toast('Failed to create folder', 'error'); }
+  };
+
+  const handleRenameFolder = async (id) => {
+    const trimmed = renameFolderDraft.trim();
+    setRenamingFolderId(null);
+    if (!trimmed) return;
+    try {
+      const r = await updateFolder(id, trimmed);
+      setFolders(f => f.map(x => x.id === id ? r.data : x));
+    } catch { toast('Failed to rename folder', 'error'); }
+  };
+
+  const handleDeleteFolder = async (id) => {
+    try {
+      const r = await deleteFolder(id);
+      setFolders(f => f.filter(x => x.id !== id));
+      // Unfile boards that were in this folder
+      if (r.data.unfiledBoardIds?.length) {
+        setBoards(bs => bs.map(b => r.data.unfiledBoardIds.includes(b.id) ? { ...b, folder_id: null } : b));
+      }
+      toast('Folder moved to trash · restores within 15 days');
+    } catch { toast('Failed to delete folder', 'error'); }
+  };
+
+  const handleMoveBoard = async (boardId, folderId) => {
+    try {
+      const r = await moveBoardToFolder(boardId, folderId);
+      setBoards(bs => bs.map(b => b.id === boardId ? { ...b, folder_id: r.data.folder_id } : b));
+      setBoardMenuId(null);
+      toast('Board moved', 'success');
+    } catch { toast('Failed to move board', 'error'); }
+  };
+
+  // ── Sidebar board row renderer ────────────────────────────────────────────────
+  const renderBoardRow = (b, indent = false) => {
+    const isActive = activeBoard?.id === b.id;
+    const menuOpen = boardMenuId === b.id;
+    return (
+      <div key={b.id} style={{ position: 'relative' }}>
+        <div
+          onClick={() => loadBoard(b.id)}
+          style={{
+            display: 'flex', alignItems: 'center', cursor: 'pointer',
+            padding: indent ? '6px 16px 6px 28px' : '6px 16px',
+            background: isActive ? 'rgba(255,255,255,0.12)' : 'transparent',
+            borderLeft: isActive ? '3px solid #0073ea' : '3px solid transparent',
+          }}
+          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+          onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+        >
+          <span style={{ fontSize: 10, marginRight: 5, opacity: 0.5 }} title={b.visibility === 'private' ? 'Private' : 'Org-wide'}>
+            {b.visibility === 'private' ? '🔒' : '🌐'}
+          </span>
+          <span style={{
+            fontSize: 12, flex: 1, color: isActive ? '#fff' : 'rgba(255,255,255,0.75)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {b.name}
+          </span>
+          {isManager && (
+            <button
+              onClick={e => { e.stopPropagation(); setBoardMenuId(menuOpen ? null : b.id); }}
+              style={{ color: 'rgba(255,255,255,0.3)', fontSize: 16, flexShrink: 0, lineHeight: 1, padding: '0 2px' }}
+              title="Board options"
+            >⋯</button>
+          )}
+        </div>
+
+        {/* Board options menu */}
+        {menuOpen && (
+          <div
+            onMouseDown={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', left: 16, top: '100%', zIndex: 200,
+              background: '#fff', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+              padding: '6px 0', minWidth: 160, color: '#323338',
+            }}
+          >
+            <div style={{ fontSize: 10, color: '#888', padding: '4px 12px 2px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Move to</div>
+            {b.folder_id && (
+              <div
+                onClick={() => handleMoveBoard(b.id, null)}
+                style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f5f6f8'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ opacity: 0.5 }}>📂</span> No Folder
+              </div>
+            )}
+            {folders.map(f => f.id !== b.folder_id ? (
+              <div
+                key={f.id}
+                onClick={() => handleMoveBoard(b.id, f.id)}
+                style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f5f6f8'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <span>📁</span> {f.name}
+              </div>
+            ) : null)}
+            {folders.length === 0 && !b.folder_id && (
+              <div style={{ padding: '6px 12px', fontSize: 11, color: '#aaa', fontStyle: 'italic' }}>No folders yet</div>
+            )}
+            {isAdmin && (
+              <>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }} />
+                <div
+                  onClick={() => { setBoardMenuId(null); handleDeleteBoard(b.id); }}
+                  style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: '#e44' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#fff5f5'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  Delete board
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Group boards by folder
+  const boardsByFolder = {};
+  const unfiledBoards = [];
+  for (const b of boards) {
+    if (b.folder_id) {
+      if (!boardsByFolder[b.folder_id]) boardsByFolder[b.folder_id] = [];
+      boardsByFolder[b.folder_id].push(b);
+    } else {
+      unfiledBoards.push(b);
+    }
+  }
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar */}
-      <div style={{ width: 220, background: '#1c1f3b', color: '#fff', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+      <div style={{ width: 230, background: '#1c1f3b', color: '#fff', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: 0.5 }}>
             <span style={{ color: '#fdab3d' }}>D'Decor</span>
@@ -216,46 +370,112 @@ function MainApp() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          <div style={{ padding: '6px 16px', fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-            Boards
+          {/* Header row */}
+          <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1 }}>
+              {isAdmin ? 'All Boards' : 'Boards'}
+            </span>
+            {isAdmin && (
+              <span style={{ fontSize: 10, background: 'rgba(253,171,61,0.2)', color: '#fdab3d', borderRadius: 4, padding: '1px 5px', fontWeight: 700, letterSpacing: 0.3 }}>
+                ADMIN
+              </span>
+            )}
           </div>
-          {boards.map(b => (
-            <div
-              key={b.id}
-              onClick={() => loadBoard(b.id)}
-              style={{
-                display: 'flex', alignItems: 'center', padding: '7px 16px', cursor: 'pointer',
-                background: activeBoard?.id === b.id ? 'rgba(255,255,255,0.12)' : 'transparent',
-                borderLeft: activeBoard?.id === b.id ? '3px solid #0073ea' : '3px solid transparent',
-              }}
-              onMouseEnter={e => { if (activeBoard?.id !== b.id) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-              onMouseLeave={e => { if (activeBoard?.id !== b.id) e.currentTarget.style.background = 'transparent'; }}
-            >
-              <span style={{ fontSize: 11, marginRight: 5, opacity: 0.6 }} title={b.visibility === 'private' ? 'Private' : 'Org-wide'}>
-                {b.visibility === 'private' ? '🔒' : '🌐'}
-              </span>
-              <span style={{ fontSize: 13, flex: 1, color: activeBoard?.id === b.id ? '#fff' : 'rgba(255,255,255,0.7)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {b.name}
-              </span>
-              {boards.length > 1 && isManager && (
-                <button onClick={e => { e.stopPropagation(); handleDeleteBoard(b.id); }}
-                  style={{ color: 'rgba(255,255,255,0.25)', fontSize: 14, flexShrink: 0 }} title="Delete">×</button>
-              )}
-            </div>
-          ))}
 
+          {/* Folders with their boards */}
+          {folders.map(folder => {
+            const folderBoards = boardsByFolder[folder.id] || [];
+            const collapsed = collapsedFolders.has(folder.id);
+            const isRenaming = renamingFolderId === folder.id;
+            return (
+              <div key={folder.id}>
+                {/* Folder header */}
+                <div
+                  style={{ display: 'flex', alignItems: 'center', padding: '5px 16px', cursor: 'pointer', gap: 4 }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span
+                    onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
+                    style={{ fontSize: 10, opacity: 0.5, marginRight: 2, userSelect: 'none', flexShrink: 0 }}
+                  >
+                    {collapsed ? '▶' : '▼'}
+                  </span>
+                  <span style={{ fontSize: 12, opacity: 0.6, flexShrink: 0 }}>📁</span>
+                  {isRenaming ? (
+                    <input
+                      autoFocus
+                      value={renameFolderDraft}
+                      onChange={e => setRenameFolderDraft(e.target.value)}
+                      onBlur={() => handleRenameFolder(folder.id)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setRenamingFolderId(null); }}
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.3)',
+                        color: '#fff', borderRadius: 4, padding: '1px 6px', fontSize: 12, outline: 'none',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      onDoubleClick={isManager ? () => { setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); } : undefined}
+                      onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
+                      style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      title={isManager ? 'Double-click to rename' : undefined}
+                    >
+                      {folder.name}
+                      {folderBoards.length > 0 && (
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginLeft: 4, fontWeight: 400 }}>
+                          ({folderBoards.length})
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {isManager && !isRenaming && (
+                    <>
+                      <button
+                        onClick={e => { e.stopPropagation(); setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); }}
+                        style={{ color: 'rgba(255,255,255,0.2)', fontSize: 12, flexShrink: 0, padding: '0 2px', lineHeight: 1 }}
+                        title="Rename folder"
+                      >✏️</button>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
+                        style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14, flexShrink: 0, padding: '0 2px' }}
+                        title="Delete folder"
+                      >×</button>
+                    </>
+                  )}
+                </div>
+
+                {/* Boards inside this folder */}
+                {!collapsed && folderBoards.map(b => renderBoardRow(b, true))}
+              </div>
+            );
+          })}
+
+          {/* Unfiled boards */}
+          {unfiledBoards.length > 0 && (
+            <>
+              {folders.length > 0 && (
+                <div style={{ padding: '8px 16px 2px', fontSize: 10, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  No Folder
+                </div>
+              )}
+              {unfiledBoards.map(b => renderBoardRow(b, false))}
+            </>
+          )}
+
+          {/* New board form / button */}
           {showNewBoard ? (
-            <form ref={newBoardFormRef} onSubmit={handleCreateBoard} style={{ padding: '8px 12px' }}>
+            <form ref={newBoardFormRef} onSubmit={handleCreateBoard} style={{ padding: '8px 12px', marginTop: 4 }}>
               <input
                 autoFocus value={newBoardName} onChange={e => setNewBoardName(e.target.value)}
                 placeholder="Board name…"
                 style={{
                   width: '100%', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)',
                   color: '#fff', borderRadius: 6, padding: '6px 8px', outline: 'none', fontSize: 13,
-                  marginBottom: 6,
+                  marginBottom: 6, boxSizing: 'border-box',
                 }}
               />
-              {/* Visibility selector */}
               <div style={{ display: 'flex', gap: 6 }}>
                 {['org_wide', 'private'].map(v => (
                   <button
@@ -278,14 +498,40 @@ function MainApp() {
               }}>Create Board</button>
             </form>
           ) : isManager ? (
-            <button onClick={() => setShowNewBoard(true)}
-              style={{ width: '100%', padding: '8px 16px', textAlign: 'left', color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
-              + New Board
-            </button>
+            <div style={{ padding: '4px 0' }}>
+              <button
+                onClick={() => setShowNewBoard(true)}
+                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'rgba(255,255,255,0.45)', fontSize: 12 }}
+              >
+                + New Board
+              </button>
+              <button
+                onClick={handleCreateFolder}
+                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'rgba(255,255,255,0.45)', fontSize: 12 }}
+              >
+                + New Folder
+              </button>
+            </div>
           ) : null}
         </div>
 
-        <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+        {isAdmin && (
+          <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <button
+              onClick={() => setShowGlobalTrash(true)}
+              style={{
+                width: '100%', textAlign: 'left', padding: '7px 4px',
+                fontSize: 12, color: 'rgba(255,255,255,0.35)',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}
+            >
+              🗑️ Trash
+            </button>
+          </div>
+        )}
+        <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
           D'Decor Home Fabrics
         </div>
       </div>
@@ -295,12 +541,21 @@ function MainApp() {
         {/* Top bar */}
         <div style={{
           background: '#fff', borderBottom: '1px solid #e0e0e0',
-          padding: '0 20px', height: 52, display: 'flex', alignItems: 'center',
+          padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', gap: 10,
         }}>
           {activeBoard && isManager
             ? <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
             : <h1 style={{ fontSize: 18, fontWeight: 700, color: '#323338', flex: 1 }}>{activeBoard?.name || 'Select a Board'}</h1>
           }
+          {isAdmin && activeBoard && !activeBoard.members?.some(m => m.id === currentUser?.id) && (
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
+              background: '#fff4e0', color: '#b05e00', border: '1px solid #fdab3d',
+              whiteSpace: 'nowrap',
+            }} title="You are viewing this board as an administrator">
+              👁 Admin view
+            </span>
+          )}
           <NotificationBell onOpenItem={handleOpenItem} />
           <UserMenu />
         </div>
@@ -330,6 +585,32 @@ function MainApp() {
           </div>
         )}
       </div>
+
+      {/* Global trash panel — boards + folders */}
+      {showGlobalTrash && (
+        <GlobalTrashPanel
+          onClose={() => setShowGlobalTrash(false)}
+          onBoardRestored={(board) => {
+            setBoards(prev => {
+              if (prev.some(b => b.id === board.id)) return prev;
+              return [...prev, board];
+            });
+            toast(`Board "${board.name}" restored`, 'success');
+          }}
+          onFolderRestored={(folder, refiledBoardIds) => {
+            setFolders(prev => {
+              if (prev.some(f => f.id === folder.id)) return prev;
+              return [...prev, folder];
+            });
+            if (refiledBoardIds?.length) {
+              setBoards(prev => prev.map(b =>
+                refiledBoardIds.includes(b.id) ? { ...b, folder_id: folder.id } : b
+              ));
+            }
+            toast(`Folder "${folder.name}" restored`, 'success');
+          }}
+        />
+      )}
     </div>
   );
 }

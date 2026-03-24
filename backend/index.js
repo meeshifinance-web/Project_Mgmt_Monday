@@ -35,6 +35,10 @@ app.use('/api/email', require('./routes/emailAdmin'));
 app.use('/api/comments', require('./routes/comments'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api', require('./routes/forms'));
+app.use('/api/boards', require('./routes/exportImport'));
+app.use('/api/folders', require('./routes/folders'));
+app.use('/api/items',        require('./routes/itemEmails'));
+app.use('/api/global-trash', require('./routes/globalTrash'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -117,6 +121,52 @@ async function start() {
     await pool.query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS board_name TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_read ON notifications(user_id, is_read)`);
+
+    // Board folders
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS board_folders (
+        id         SERIAL PRIMARY KEY,
+        name       TEXT NOT NULL,
+        position   INT DEFAULT 0,
+        created_by INT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS folder_id INT REFERENCES board_folders(id) ON DELETE SET NULL`);
+    await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS email_from TEXT`);
+
+    // Soft-delete columns for boards and folders (trash with 15-day retention)
+    await pool.query(`ALTER TABLE boards       ADD COLUMN IF NOT EXISTS is_deleted           BOOLEAN      DEFAULT false`);
+    await pool.query(`ALTER TABLE boards       ADD COLUMN IF NOT EXISTS deleted_at           TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE boards       ADD COLUMN IF NOT EXISTS deleted_by_user_id   INT`);
+    await pool.query(`ALTER TABLE boards       ADD COLUMN IF NOT EXISTS deleted_by_user_name TEXT`);
+    await pool.query(`ALTER TABLE board_folders ADD COLUMN IF NOT EXISTS is_deleted           BOOLEAN      DEFAULT false`);
+    await pool.query(`ALTER TABLE board_folders ADD COLUMN IF NOT EXISTS deleted_at           TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE board_folders ADD COLUMN IF NOT EXISTS deleted_by_user_id   INT`);
+    await pool.query(`ALTER TABLE board_folders ADD COLUMN IF NOT EXISTS deleted_by_user_name TEXT`);
+    await pool.query(`ALTER TABLE board_folders ADD COLUMN IF NOT EXISTS board_ids_snapshot   JSONB        DEFAULT '[]'`);
+
+    // Purge boards & folders that have been in trash for > 15 days
+    await pool.query(`DELETE FROM boards        WHERE is_deleted = true AND deleted_at < NOW() - INTERVAL '15 days'`);
+    await pool.query(`DELETE FROM board_folders WHERE is_deleted = true AND deleted_at < NOW() - INTERVAL '15 days'`);
+    console.log('✅ Global trash columns ready; stale entries purged');
+
+    // Email thread log — incoming emails from poller, outgoing from automations
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS item_emails (
+        id           SERIAL PRIMARY KEY,
+        item_id      INT REFERENCES items(id) ON DELETE CASCADE,
+        board_id     INT REFERENCES boards(id) ON DELETE CASCADE,
+        direction    TEXT NOT NULL CHECK (direction IN ('incoming','outgoing')),
+        from_address TEXT,
+        from_name    TEXT,
+        to_address   TEXT,
+        subject      TEXT,
+        body_text    TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_item_emails_item ON item_emails(item_id)`);
 
     // Purge items older than 15 days on every startup
     await pool.query(`DELETE FROM trash_items WHERE deleted_at < NOW() - INTERVAL '15 days'`);

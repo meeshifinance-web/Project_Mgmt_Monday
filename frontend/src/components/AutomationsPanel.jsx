@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getAutomations, createAutomation, updateAutomation, deleteAutomation } from '../api';
 import { useToast } from './Toast';
 
@@ -16,33 +16,70 @@ const ACTIONS_FOR = {
     { value: 'move_to_group', label: 'Move item to group' },
     { value: 'set_status',    label: 'Set another status to…' },
     { value: 'notify',        label: 'Show notification' },
-    { value: 'send_email',    label: 'Send email (Outlook)' },
+    { value: 'send_email',    label: '✉️ Send email' },
   ],
   item_created: [
     { value: 'set_status', label: 'Set status to…' },
     { value: 'notify',     label: 'Show notification' },
-    { value: 'send_email', label: 'Send email (Outlook)' },
+    { value: 'send_email', label: '✉️ Send email' },
   ],
   date_arrives: [
     { value: 'notify',     label: 'Show notification' },
-    { value: 'send_email', label: 'Send email (Outlook)' },
+    { value: 'send_email', label: '✉️ Send email' },
   ],
   email_received: [
     { value: 'create_item_in_group', label: 'Create item in group' },
   ],
 };
 
-const sel = { width: '100%', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', fontSize: 13, background: '#fff' };
-const inp = { width: '100%', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', fontSize: 13, boxSizing: 'border-box' };
+const sel   = { width: '100%', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', fontSize: 13, background: '#fff' };
+const inp   = { width: '100%', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', fontSize: 13, boxSizing: 'border-box' };
 const label = { fontSize: 11, fontWeight: 700, color: '#888', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 };
+
+// ── Variable token chip ───────────────────────────────────────────────────────
+function TokenChip({ token, onInsert }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onInsert(token)}
+      title={`Insert ${token}`}
+      style={{
+        padding: '3px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
+        background: '#e3f0ff', color: '#0073ea', border: '1px solid #b3d4ff',
+        fontWeight: 600, whiteSpace: 'nowrap',
+      }}
+    >
+      {token}
+    </button>
+  );
+}
+
+// ── Variable token bar for subject / body ─────────────────────────────────────
+// Inserts the token at the current cursor position of the focused input/textarea.
+function VariableTokenBar({ columns, activeRef, onInsert }) {
+  const builtIn = ['{Item Name}', '{Group Name}', '{Board Name}'];
+  const colTokens = columns.map(c => `{${c.title}}`);
+  const all = [...builtIn, ...colTokens];
+
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <p style={{ ...label, marginBottom: 4 }}>Insert variable token</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {all.map(t => (
+          <TokenChip key={t} token={t} onInsert={onInsert} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ── Automation summary line ───────────────────────────────────────────────────
 function Summary({ auto, columns, groups }) {
   const trig = TRIGGERS.find(t => t.value === auto.trigger_type);
-  const cfg = auto.trigger_config || {};
-  const acfg = auto.action_config || {};
+  const cfg  = auto.trigger_config || {};
+  const acfg = auto.action_config  || {};
   const allActions = Object.values(ACTIONS_FOR).flat();
-  const act = allActions.find(a => a.value === auto.action_type);
+  const act  = allActions.find(a => a.value === auto.action_type);
 
   let trigText = trig?.label || auto.trigger_type;
   if (auto.trigger_type === 'status_change') {
@@ -67,8 +104,8 @@ function Summary({ auto, columns, groups }) {
     const col = columns.find(c => String(c.id) === String(acfg.column_id));
     actText = `Set "${col?.title || 'Status'}" → "${acfg.value || '?'}"`;
   }
-  if (auto.action_type === 'notify') actText = `Notify: "${acfg.message || '…'}"`;
-  if (auto.action_type === 'send_email') actText = `Email: ${acfg.to || '…'}`;
+  if (auto.action_type === 'notify')     actText = `Notify: "${acfg.message || '…'}"`;
+  if (auto.action_type === 'send_email') actText = `Email → ${acfg.to || '…'}`;
   if (auto.action_type === 'create_item_in_group') {
     const g = groups.find(g => String(g.id) === String(acfg.group_id));
     actText = `Create item in "${g?.name || 'first group'}"`;
@@ -88,11 +125,16 @@ function Summary({ auto, columns, groups }) {
 
 // ── Automation form ───────────────────────────────────────────────────────────
 function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial }) {
-  const [name, setName]               = useState(initial?.name || '');
-  const [triggerType, setTriggerType] = useState(initial?.trigger_type || 'status_change');
+  const [name,          setName]          = useState(initial?.name || '');
+  const [triggerType,   setTriggerType]   = useState(initial?.trigger_type || 'status_change');
   const [triggerConfig, setTriggerConfig] = useState(initial?.trigger_config || {});
-  const [actionType, setActionType]   = useState(initial?.action_type || 'move_to_group');
-  const [actionConfig, setActionConfig]   = useState(initial?.action_config || {});
+  const [actionType,    setActionType]    = useState(initial?.action_type || 'move_to_group');
+  const [actionConfig,  setActionConfig]  = useState(initial?.action_config || {});
+
+  // Track which field (subject or body) was last focused for token insertion
+  const subjectRef = useRef(null);
+  const bodyRef    = useRef(null);
+  const lastFocusedRef = useRef(null); // 'subject' | 'body'
 
   const statusCols = columns.filter(c => c.type === 'status');
   const dateCols   = columns.filter(c => c.type === 'date');
@@ -100,16 +142,11 @@ function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial })
   const setTC = (patch) => setTriggerConfig(c => ({ ...c, ...patch }));
   const setAC = (patch) => setActionConfig(c => ({ ...c, ...patch }));
 
-  // Selected status column for trigger
-  const trigStatusCol = statusCols.find(c => String(c.id) === String(triggerConfig.column_id));
+  const trigStatusCol     = statusCols.find(c => String(c.id) === String(triggerConfig.column_id));
   const trigStatusOptions = trigStatusCol?.settings?.options || [];
-
-  // Selected status column for set_status action
-  const actStatusCol = statusCols.find(c => String(c.id) === String(actionConfig.column_id));
-  const actStatusOptions = actStatusCol?.settings?.options || [];
-
-  // Available actions for current trigger
-  const availableActions = ACTIONS_FOR[triggerType] || [];
+  const actStatusCol      = statusCols.find(c => String(c.id) === String(actionConfig.column_id));
+  const actStatusOptions  = actStatusCol?.settings?.options || [];
+  const availableActions  = ACTIONS_FOR[triggerType] || [];
 
   const handleTriggerChange = (val) => {
     setTriggerType(val);
@@ -129,6 +166,35 @@ function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial })
     const t = TRIGGERS.find(t => t.value === triggerType);
     const a = availableActions.find(a => a.value === actionType);
     return `${t?.label} → ${a?.label}`;
+  };
+
+  // Insert token at the cursor position of the last-focused field (subject or body)
+  const handleInsertToken = (token) => {
+    const field = lastFocusedRef.current;
+    if (!field) return;
+
+    const el = field === 'subject' ? subjectRef.current : bodyRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? el.value.length;
+    const end   = el.selectionEnd   ?? el.value.length;
+    const before = el.value.slice(0, start);
+    const after  = el.value.slice(end);
+    const newVal = before + token + after;
+
+    if (field === 'subject') {
+      setAC({ subject: newVal });
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start + token.length, start + token.length);
+      }, 0);
+    } else {
+      setAC({ body: newVal });
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start + token.length, start + token.length);
+      }, 0);
+    }
   };
 
   return (
@@ -252,23 +318,72 @@ function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial })
           </div>
         )}
 
-        {/* send_email */}
+        {/* send_email — with variable tokens */}
         {actionType === 'send_email' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-            <div>
-              <p style={label}>To (email)</p>
-              <input value={actionConfig.to || ''} onChange={e => setAC({ to: e.target.value })} placeholder="someone@ddecor.com" style={inp} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            {/* Info banner */}
+            <div style={{ background: '#fff8e1', border: '1px solid #ffe58f', borderRadius: 6, padding: '7px 10px', fontSize: 11, color: '#7a5a00', lineHeight: 1.5 }}>
+              ✉️ Email is sent via the WorkBoard SMTP server. Use the <strong>From</strong> address set below for this board, or the system default.
+              <br/>Click a token below to insert it in the Subject or Body at the cursor position.
             </div>
+
+            {/* To */}
+            <div>
+              <p style={label}>To (recipient email)</p>
+              <input
+                value={actionConfig.to || ''}
+                onChange={e => setAC({ to: e.target.value })}
+                placeholder="someone@example.com"
+                style={inp}
+              />
+            </div>
+
+            {/* Variable tokens — click to insert at cursor */}
+            <div style={{ background: '#f0f4ff', borderRadius: 6, padding: '8px 10px' }}>
+              <VariableTokenBar
+                columns={columns}
+                onInsert={handleInsertToken}
+              />
+              <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>
+                Click Subject or Body first, then click a token to insert it at the cursor.
+              </p>
+            </div>
+
+            {/* Subject */}
             <div>
               <p style={label}>Subject</p>
-              <input value={actionConfig.subject || ''} onChange={e => setAC({ subject: e.target.value })} placeholder="Subject…" style={inp} />
+              <input
+                ref={subjectRef}
+                value={actionConfig.subject || ''}
+                onChange={e => setAC({ subject: e.target.value })}
+                onFocus={() => { lastFocusedRef.current = 'subject'; }}
+                placeholder="e.g. Item {Item Name} is now {Status}"
+                style={inp}
+              />
             </div>
+
+            {/* Body */}
             <div>
               <p style={label}>Body</p>
-              <textarea value={actionConfig.body || ''} onChange={e => setAC({ body: e.target.value })}
-                rows={3} placeholder="Email body…"
-                style={{ ...inp, resize: 'vertical' }} />
+              <textarea
+                ref={bodyRef}
+                value={actionConfig.body || ''}
+                onChange={e => setAC({ body: e.target.value })}
+                onFocus={() => { lastFocusedRef.current = 'body'; }}
+                rows={4}
+                placeholder={`Hi,\n\nItem "{Item Name}" has been updated.\nStatus: {Status}\nOwner: {Owner}\nDue Date: {Due Date}\n\nBoard: {Board Name}`}
+                style={{ ...inp, resize: 'vertical' }}
+              />
             </div>
+
+            {/* Live preview */}
+            {(actionConfig.subject || actionConfig.body) && (
+              <div style={{ background: '#f7f7f7', border: '1px solid #e0e0e0', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#555' }}>
+                <strong style={{ display: 'block', marginBottom: 4, color: '#323338' }}>Preview (tokens shown as-is — resolved at send time)</strong>
+                {actionConfig.subject && <div><strong>Subject:</strong> {actionConfig.subject}</div>}
+                {actionConfig.body    && <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}><strong>Body:</strong> {actionConfig.body}</div>}
+              </div>
+            )}
           </div>
         )}
 
@@ -298,11 +413,74 @@ function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial })
   );
 }
 
+// ── Board email settings section ──────────────────────────────────────────────
+function BoardEmailSettings({ emailFrom, onChange }) {
+  const [draft, setDraft]   = useState(emailFrom || '');
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onChange(draft.trim() || null);
+      toast('Board sender email saved', 'success');
+    } catch {
+      toast('Failed to save sender email', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ background: '#f7f8fc', border: '1.5px solid #e0e0e0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <span style={{ fontSize: 16 }}>✉️</span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#323338' }}>Board Sender Email</div>
+          <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>
+            Outbound automation emails for this board will be sent from this address.
+            Leave blank to use the system default.
+          </div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          placeholder="e.g. board-alerts@ddecor.com (leave blank for system default)"
+          style={{ ...inp, flex: 1 }}
+          type="email"
+        />
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            padding: '7px 16px', background: '#0073ea', color: '#fff',
+            borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            opacity: saving ? 0.6 : 1, whiteSpace: 'nowrap',
+          }}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      {draft.trim() && (
+        <div style={{ marginTop: 6, fontSize: 11, color: '#555' }}>
+          Outbound emails will use: <strong>{draft.trim()}</strong>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main panel ────────────────────────────────────────────────────────────────
-export default function AutomationsPanel({ boardId, columns, groups, onClose, onCountChange }) {
+export default function AutomationsPanel({
+  boardId, columns, groups,
+  boardEmailFrom, onBoardEmailFromChange,
+  onClose, onCountChange,
+}) {
   const [automations, setAutomations] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [showForm,    setShowForm]    = useState(false);
+  const [editingId,   setEditingId]   = useState(null);
   const toast = useToast();
 
   const updateList = (list) => {
@@ -348,7 +526,8 @@ export default function AutomationsPanel({ boardId, columns, groups, onClose, on
     } catch { toast('Failed to delete', 'error'); }
   };
 
-  const emailRules = automations.filter(a => a.trigger_type === 'email_received');
+  const emailRules      = automations.filter(a => a.trigger_type === 'email_received');
+  const sendEmailRules  = automations.filter(a => a.action_type  === 'send_email');
 
   return (
     <div style={{
@@ -356,7 +535,7 @@ export default function AutomationsPanel({ boardId, columns, groups, onClose, on
       display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: '#fff', width: 500, height: '100vh', overflowY: 'auto',
+        background: '#fff', width: 520, height: '100vh', overflowY: 'auto',
         boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
@@ -369,6 +548,14 @@ export default function AutomationsPanel({ boardId, columns, groups, onClose, on
         </div>
 
         <div style={{ flex: 1, padding: '16px 20px', overflowY: 'auto' }}>
+          {/* Per-board sender email */}
+          {onBoardEmailFromChange && (
+            <BoardEmailSettings
+              emailFrom={boardEmailFrom}
+              onChange={onBoardEmailFromChange}
+            />
+          )}
+
           <button
             onClick={() => { setShowForm(true); setEditingId(null); }}
             style={{ width: '100%', padding: 10, background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, marginBottom: 16, fontSize: 14, cursor: 'pointer' }}
@@ -376,11 +563,19 @@ export default function AutomationsPanel({ boardId, columns, groups, onClose, on
             + Add Automation
           </button>
 
-          {/* Email routing hint banner when rules exist */}
+          {/* Email routing hint */}
           {emailRules.length > 0 && (
-            <div style={{ background: '#fff8e1', border: '1px solid #ffe58f', borderRadius: 8, padding: '8px 12px', marginBottom: 14, fontSize: 11, color: '#7a5a00', lineHeight: 1.5 }}>
+            <div style={{ background: '#fff8e1', border: '1px solid #ffe58f', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 11, color: '#7a5a00', lineHeight: 1.5 }}>
               📧 <strong>{emailRules.length} email routing rule{emailRules.length > 1 ? 's' : ''}</strong> active on this board.
               Rules are checked in order — first match wins.
+            </div>
+          )}
+
+          {/* Outbound email hint */}
+          {sendEmailRules.length > 0 && (
+            <div style={{ background: '#e8f7ee', border: '1px solid #b7e4cd', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 11, color: '#037f4c', lineHeight: 1.5 }}>
+              ✉️ <strong>{sendEmailRules.length} send-email automation{sendEmailRules.length > 1 ? 's' : ''}</strong> active.
+              Emails are sent via the WorkBoard SMTP server — item variables are resolved at send time.
             </div>
           )}
 

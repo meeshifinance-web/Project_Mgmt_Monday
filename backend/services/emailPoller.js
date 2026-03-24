@@ -200,6 +200,14 @@ async function createItemFromEmail({ subject, body, fromAddress, fromName, toAdd
       [boardId, user?.id || null, user?.name || fromName,
        rows[0].id, itemName, `via email from ${fromAddress}`]
     );
+    // Store the incoming email so it appears in the item's Updates tab
+    await client.query(
+      `INSERT INTO item_emails
+         (item_id, board_id, direction, from_address, from_name, to_address, subject, body_text)
+       VALUES ($1,$2,'incoming',$3,$4,$5,$6,$7)`,
+      [rows[0].id, boardId, fromAddress || '', fromName || '',
+       (toAddresses || []).join(', '), subject || '', body || '']
+    );
     await client.query('COMMIT');
     console.log(`[EmailPoller] ✅ "${itemName}"  board=${boardId} group=${groupId}  from=<${fromAddress}>`);
   } catch (err) {
