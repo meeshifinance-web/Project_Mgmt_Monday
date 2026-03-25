@@ -105,7 +105,19 @@ function Summary({ auto, columns, groups }) {
     actText = `Set "${col?.title || 'Status'}" → "${acfg.value || '?'}"`;
   }
   if (auto.action_type === 'notify')     actText = `Notify: "${acfg.message || '…'}"`;
-  if (auto.action_type === 'send_email') actText = `Email → ${acfg.to || '…'}`;
+  if (auto.action_type === 'send_email') {
+    const toType = acfg.to_type || 'specific';
+    if (toType === 'board_members') actText = 'Email → All board members';
+    else if (toType === 'item_owner') {
+      const col = columns.find(c => String(c.id) === String(acfg.to_column_id));
+      actText = `Email → Item owner (${col?.title || 'person column'})`;
+    } else if (toType === 'email_column') {
+      const col = columns.find(c => String(c.id) === String(acfg.to_column_id));
+      actText = `Email → ${col?.title || 'email column'}`;
+    } else {
+      actText = `Email → ${acfg.to || '…'}`;
+    }
+  }
   if (auto.action_type === 'create_item_in_group') {
     const g = groups.find(g => String(g.id) === String(acfg.group_id));
     actText = `Create item in "${g?.name || 'first group'}"`;
@@ -327,16 +339,87 @@ function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial })
               <br/>Click a token below to insert it in the Subject or Body at the cursor position.
             </div>
 
-            {/* To */}
+            {/* Recipient type selector */}
             <div>
-              <p style={label}>To (recipient email)</p>
-              <input
-                value={actionConfig.to || ''}
-                onChange={e => setAC({ to: e.target.value })}
-                placeholder="someone@example.com"
-                style={inp}
-              />
+              <p style={label}>Send to</p>
+              <select
+                value={actionConfig.to_type || 'specific'}
+                onChange={e => setAC({ to_type: e.target.value, to: '', to_column_id: '' })}
+                style={sel}
+              >
+                <option value="specific">Specific email address</option>
+                <option value="item_owner">Item owner(s)</option>
+                <option value="email_column">Email column value</option>
+                <option value="board_members">All board members</option>
+              </select>
             </div>
+
+            {/* Specific email address input */}
+            {(!actionConfig.to_type || actionConfig.to_type === 'specific') && (
+              <div>
+                <p style={label}>Email address</p>
+                <input
+                  value={actionConfig.to || ''}
+                  onChange={e => setAC({ to: e.target.value })}
+                  placeholder="someone@example.com (comma-separate for multiple)"
+                  style={inp}
+                  type="email"
+                />
+              </div>
+            )}
+
+            {/* Item owner — pick which person column */}
+            {actionConfig.to_type === 'item_owner' && (
+              <div>
+                <p style={label}>Person column</p>
+                {columns.filter(c => c.type === 'person').length === 0 ? (
+                  <div style={{ fontSize: 11, color: '#e2445c', padding: '6px 10px', background: '#fff0f2', borderRadius: 6 }}>
+                    No person columns found on this board. Add a People/Owner column first.
+                  </div>
+                ) : (
+                  <select
+                    value={actionConfig.to_column_id || ''}
+                    onChange={e => setAC({ to_column_id: e.target.value })}
+                    style={sel}
+                  >
+                    <option value="">Select person column…</option>
+                    {columns.filter(c => c.type === 'person').map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                )}
+                <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>
+                  Email will be sent to the user(s) assigned in this column.
+                </p>
+              </div>
+            )}
+
+            {/* Email column — pick which column holds the email address */}
+            {actionConfig.to_type === 'email_column' && (
+              <div>
+                <p style={label}>Email column</p>
+                <select
+                  value={actionConfig.to_column_id || ''}
+                  onChange={e => setAC({ to_column_id: e.target.value })}
+                  style={sel}
+                >
+                  <option value="">Select column…</option>
+                  {columns.filter(c => c.type === 'email' || c.type === 'text').map(c => (
+                    <option key={c.id} value={c.id}>{c.title}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>
+                  The value of this column (email address) will be used as the recipient.
+                </p>
+              </div>
+            )}
+
+            {/* Board members — no extra config */}
+            {actionConfig.to_type === 'board_members' && (
+              <div style={{ background: '#e8f7ee', border: '1px solid #b7e4cd', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#037f4c' }}>
+                ✓ Email will be sent to all members of this board.
+              </div>
+            )}
 
             {/* Variable tokens — click to insert at cursor */}
             <div style={{ background: '#f0f4ff', borderRadius: 6, padding: '8px 10px' }}>

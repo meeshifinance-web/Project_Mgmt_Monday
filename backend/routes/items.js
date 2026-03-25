@@ -63,11 +63,13 @@ router.post('/', requireAuth, async (req, res) => {
         } else if (auto.action_type === 'send_email') {
           // Fire after commit so item exists in DB for placeholder resolution
           setImmediate(() => sendAutomationEmail({
-            boardId: board_id,
-            itemId:  item.id,
-            to:      acfg.to || '',
-            subject: acfg.subject || '',
-            body:    acfg.body || '',
+            boardId:    board_id,
+            itemId:     item.id,
+            to:         acfg.to || '',
+            toType:     acfg.to_type || 'specific',
+            toColumnId: acfg.to_column_id || null,
+            subject:    acfg.subject || '',
+            body:       acfg.body || '',
           }).catch(err => console.error('[AutomationEmail] async error:', err.message)));
         } else {
           triggeredAutomations.push(auto);
