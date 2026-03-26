@@ -755,7 +755,7 @@ function FilterBar({ cols, filters, onFiltersChange }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-      padding: '7px 20px', background: '#fafbfc', borderBottom: '1px solid #e6e9ef',
+      padding: '7px 20px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)',
     }}>
       {/* Name search */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -1323,13 +1323,13 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const filteredGroups = applyFilters(groups);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff', fontFamily: 'Figtree, Roboto, -apple-system, sans-serif' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'Figtree, Roboto, -apple-system, sans-serif' }}>
 
       {/* ── Toolbar ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 20px', background: '#fff',
-        borderBottom: showFilters ? 'none' : '1px solid #e6e9ef', flexShrink: 0, flexWrap: 'wrap',
+        padding: '8px 20px', background: 'var(--bg-primary)',
+        borderBottom: showFilters ? 'none' : '1px solid var(--border-color)', flexShrink: 0, flexWrap: 'wrap',
       }}>
         {isManager && (
           <>
@@ -1439,7 +1439,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       {/* ── Board Content ── */}
       <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {groups.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 80, color: '#676879' }}>
+          <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: 52, marginBottom: 14 }}>📋</div>
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No groups yet</div>
             {isManager && <div style={{ fontSize: 13 }}>Click "+ Add Group" to get started</div>}

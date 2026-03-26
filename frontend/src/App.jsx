@@ -34,7 +34,7 @@ function PublicRoute({ children }) {
 
 function LoadingScreen() {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f2f5' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
       <div style={{ textAlign: 'center', color: '#888' }}>
         <div style={{ fontSize: 40, marginBottom: 10 }}>📋</div>
         <div>Loading…</div>
@@ -67,9 +67,9 @@ function BoardNameEditor({ name, onSave }) {
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(name); setEditing(false); } }}
         style={{
-          flex: 1, fontSize: 18, fontWeight: 700, color: '#323338',
+          flex: 1, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)',
           border: '1.5px solid #0073ea', borderRadius: 6, padding: '2px 8px',
-          outline: 'none', background: '#f0f6ff', maxWidth: 400,
+          outline: 'none', background: 'var(--input-bg)', maxWidth: 400,
         }}
       />
     );
@@ -80,16 +80,16 @@ function BoardNameEditor({ name, onSave }) {
       onClick={() => { setDraft(name); setEditing(true); }}
       title="Click to rename board"
       style={{
-        fontSize: 18, fontWeight: 700, color: '#323338', flex: 1,
+        fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1,
         cursor: 'text', borderRadius: 6, padding: '2px 8px',
         border: '1.5px solid transparent',
         transition: 'border-color 0.15s, background 0.15s',
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = '#d0e4ff'; e.currentTarget.style.background = '#f5f9ff'; }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.background = 'var(--hover-bg)'; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent'; }}
     >
       {name}
-      <span style={{ fontSize: 12, color: '#c5c7d0', marginLeft: 6, fontWeight: 400 }}>✎</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 6, fontWeight: 400 }}>✎</span>
     </h1>
   );
 }
@@ -110,6 +110,13 @@ function MainApp() {
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const [showGlobalTrash, setShowGlobalTrash] = useState(false);
   const [boardMenuId, setBoardMenuId] = useState(null);
+  const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
+
+  const toggleNav = () => setIsNavCollapsed(v => {
+    const next = !v;
+    localStorage.setItem('workboard_nav_collapsed', String(next));
+    return next;
+  });
   const newBoardFormRef = useRef(null);
   const { user: currentUser, isManager, isAdmin } = useAuth();
   const toast = useToast();
@@ -260,6 +267,30 @@ function MainApp() {
   const renderBoardRow = (b, indent = false) => {
     const isActive = activeBoard?.id === b.id;
     const menuOpen = boardMenuId === b.id;
+
+    // Collapsed: icon-only with tooltip
+    if (isNavCollapsed) {
+      return (
+        <div
+          key={b.id}
+          onClick={() => loadBoard(b.id)}
+          title={b.name}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', height: 36,
+            background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
+            borderLeft: isActive ? '3px solid #0073ea' : '3px solid transparent',
+          }}
+          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = isActive ? 'var(--sidebar-active-bg)' : 'transparent'; }}
+        >
+          <span style={{ fontSize: 12 }}>
+            {b.visibility === 'private' ? '🔒' : '🌐'}
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div key={b.id} style={{ position: 'relative' }}>
         <div
@@ -267,17 +298,18 @@ function MainApp() {
           style={{
             display: 'flex', alignItems: 'center', cursor: 'pointer',
             padding: indent ? '6px 16px 6px 28px' : '6px 16px',
-            background: isActive ? 'rgba(255,255,255,0.12)' : 'transparent',
+            background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
             borderLeft: isActive ? '3px solid #0073ea' : '3px solid transparent',
           }}
-          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
           onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
         >
-          <span style={{ fontSize: 10, marginRight: 5, opacity: 0.5 }} title={b.visibility === 'private' ? 'Private' : 'Org-wide'}>
+          <span style={{ fontSize: 10, marginRight: 5, color: 'var(--sidebar-text-muted)' }} title={b.visibility === 'private' ? 'Private' : 'Org-wide'}>
             {b.visibility === 'private' ? '🔒' : '🌐'}
           </span>
           <span style={{
-            fontSize: 12, flex: 1, color: isActive ? '#fff' : 'rgba(255,255,255,0.75)',
+            fontSize: 12, flex: 1, color: isActive ? 'var(--primary-blue)' : 'var(--sidebar-text)',
+            fontWeight: isActive ? 600 : 400,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {b.name}
@@ -285,7 +317,7 @@ function MainApp() {
           {isManager && (
             <button
               onClick={e => { e.stopPropagation(); setBoardMenuId(menuOpen ? null : b.id); }}
-              style={{ color: 'rgba(255,255,255,0.3)', fontSize: 16, flexShrink: 0, lineHeight: 1, padding: '0 2px' }}
+              style={{ color: 'var(--sidebar-text-muted)', fontSize: 16, flexShrink: 0, lineHeight: 1, padding: '0 2px' }}
               title="Board options"
             >⋯</button>
           )}
@@ -360,27 +392,86 @@ function MainApp() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar */}
-      <div style={{ width: 230, background: '#1c1f3b', color: '#fff', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: 0.5 }}>
-            <span style={{ color: '#fdab3d' }}>D'Decor</span>
-            <span style={{ color: '#fff', marginLeft: 4 }}>Workboard</span>
-          </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>Project Management</div>
+      <div style={{
+        width: isNavCollapsed ? 48 : 230,
+        background: 'var(--bg-sidebar)',
+        color: 'var(--sidebar-text)',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+        transition: 'width 0.2s ease',
+        overflow: 'hidden',
+        borderRight: '1px solid var(--border-color)',
+      }}>
+        <div style={{
+          padding: isNavCollapsed ? '14px 0' : '14px 12px 14px 16px',
+          borderBottom: '1px solid var(--sidebar-border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isNavCollapsed ? 'center' : 'space-between',
+          flexShrink: 0,
+          minHeight: 56,
+        }}>
+          {!isNavCollapsed && (
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
+                <span style={{ color: '#fdab3d' }}>D'Decor</span>
+                <span style={{ color: 'var(--sidebar-text)', marginLeft: 4 }}>Workboard</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', marginTop: 2 }}>Project Management</div>
+            </div>
+          )}
+          {isNavCollapsed && (
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#fdab3d' }} title="D'Decor Workboard">D</span>
+          )}
+          {!isNavCollapsed && (
+            <button
+              onClick={toggleNav}
+              title="Collapse sidebar"
+              style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                background: 'var(--sidebar-btn-bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--sidebar-text)', fontSize: 14, transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-btn-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'var(--sidebar-btn-bg)'}
+            >‹</button>
+          )}
         </div>
+
+        {/* Expand button shown when collapsed */}
+        {isNavCollapsed && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 0', borderBottom: '1px solid var(--sidebar-border)' }}>
+            <button
+              onClick={toggleNav}
+              title="Expand sidebar"
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'var(--sidebar-btn-bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--sidebar-text)', fontSize: 14, transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-btn-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'var(--sidebar-btn-bg)'}
+            >›</button>
+          </div>
+        )}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
           {/* Header row */}
-          <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1 }}>
-              {isAdmin ? 'All Boards' : 'Boards'}
-            </span>
-            {isAdmin && (
-              <span style={{ fontSize: 10, background: 'rgba(253,171,61,0.2)', color: '#fdab3d', borderRadius: 4, padding: '1px 5px', fontWeight: 700, letterSpacing: 0.3 }}>
-                ADMIN
+          {!isNavCollapsed && (
+            <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                {isAdmin ? 'All Boards' : 'Boards'}
               </span>
-            )}
-          </div>
+              {isAdmin && (
+                <span style={{ fontSize: 10, background: 'rgba(253,171,61,0.15)', color: '#fdab3d', borderRadius: 4, padding: '1px 5px', fontWeight: 700, letterSpacing: 0.3 }}>
+                  ADMIN
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Folders with their boards */}
           {folders.map(folder => {
@@ -389,65 +480,77 @@ function MainApp() {
             const isRenaming = renamingFolderId === folder.id;
             return (
               <div key={folder.id}>
-                {/* Folder header */}
-                <div
-                  style={{ display: 'flex', alignItems: 'center', padding: '5px 16px', cursor: 'pointer', gap: 4 }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <span
+                {/* Folder header — collapsed nav: icon only */}
+                {isNavCollapsed ? (
+                  <div
                     onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
-                    style={{ fontSize: 10, opacity: 0.5, marginRight: 2, userSelect: 'none', flexShrink: 0 }}
+                    title={folder.name}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 36, cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    {collapsed ? '▶' : '▼'}
-                  </span>
-                  <span style={{ fontSize: 12, opacity: 0.6, flexShrink: 0 }}>📁</span>
-                  {isRenaming ? (
-                    <input
-                      autoFocus
-                      value={renameFolderDraft}
-                      onChange={e => setRenameFolderDraft(e.target.value)}
-                      onBlur={() => handleRenameFolder(folder.id)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setRenamingFolderId(null); }}
-                      onClick={e => e.stopPropagation()}
-                      style={{
-                        flex: 1, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.3)',
-                        color: '#fff', borderRadius: 4, padding: '1px 6px', fontSize: 12, outline: 'none',
-                      }}
-                    />
-                  ) : (
+                    <span style={{ fontSize: 14 }}>📁</span>
+                  </div>
+                ) : (
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', padding: '5px 16px', cursor: 'pointer', gap: 4 }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
                     <span
-                      onDoubleClick={isManager ? () => { setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); } : undefined}
                       onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
-                      style={{ flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      title={isManager ? 'Double-click to rename' : undefined}
+                      style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginRight: 2, userSelect: 'none', flexShrink: 0 }}
                     >
-                      {folder.name}
-                      {folderBoards.length > 0 && (
-                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginLeft: 4, fontWeight: 400 }}>
-                          ({folderBoards.length})
-                        </span>
-                      )}
+                      {collapsed ? '▶' : '▼'}
                     </span>
-                  )}
-                  {isManager && !isRenaming && (
-                    <>
-                      <button
-                        onClick={e => { e.stopPropagation(); setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); }}
-                        style={{ color: 'rgba(255,255,255,0.2)', fontSize: 12, flexShrink: 0, padding: '0 2px', lineHeight: 1 }}
-                        title="Rename folder"
-                      >✏️</button>
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
-                        style={{ color: 'rgba(255,255,255,0.2)', fontSize: 14, flexShrink: 0, padding: '0 2px' }}
-                        title="Delete folder"
-                      >×</button>
-                    </>
-                  )}
-                </div>
+                    <span style={{ fontSize: 12, color: 'var(--sidebar-text-muted)', flexShrink: 0 }}>📁</span>
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        value={renameFolderDraft}
+                        onChange={e => setRenameFolderDraft(e.target.value)}
+                        onBlur={() => handleRenameFolder(folder.id)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setRenamingFolderId(null); }}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          flex: 1, background: 'var(--sidebar-input-bg)', border: '1px solid var(--sidebar-input-border)',
+                          color: 'var(--sidebar-text)', borderRadius: 4, padding: '1px 6px', fontSize: 12, outline: 'none',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        onDoubleClick={isManager ? () => { setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); } : undefined}
+                        onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
+                        style={{ flex: 1, fontSize: 12, color: 'var(--sidebar-text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={isManager ? 'Double-click to rename' : undefined}
+                      >
+                        {folder.name}
+                        {folderBoards.length > 0 && (
+                          <span style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginLeft: 4, fontWeight: 400 }}>
+                            ({folderBoards.length})
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {isManager && !isRenaming && (
+                      <>
+                        <button
+                          onClick={e => { e.stopPropagation(); setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); }}
+                          style={{ color: 'var(--sidebar-text-muted)', fontSize: 12, flexShrink: 0, padding: '0 2px', lineHeight: 1 }}
+                          title="Rename folder"
+                        >✏️</button>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
+                          style={{ color: 'var(--sidebar-text-muted)', fontSize: 14, flexShrink: 0, padding: '0 2px' }}
+                          title="Delete folder"
+                        >×</button>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* Boards inside this folder */}
-                {!collapsed && folderBoards.map(b => renderBoardRow(b, true))}
+                {!collapsed && folderBoards.map(b => renderBoardRow(b, !isNavCollapsed))}
               </div>
             );
           })}
@@ -455,8 +558,8 @@ function MainApp() {
           {/* Unfiled boards */}
           {unfiledBoards.length > 0 && (
             <>
-              {folders.length > 0 && (
-                <div style={{ padding: '8px 16px 2px', fontSize: 10, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {folders.length > 0 && !isNavCollapsed && (
+                <div style={{ padding: '8px 16px 2px', fontSize: 10, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   No Folder
                 </div>
               )}
@@ -465,14 +568,31 @@ function MainApp() {
           )}
 
           {/* New board form / button */}
-          {showNewBoard ? (
+          {isNavCollapsed ? (
+            isManager && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0', gap: 4 }}>
+                <button
+                  onClick={() => { setIsNavCollapsed(false); localStorage.setItem('workboard_nav_collapsed', 'false'); setTimeout(() => setShowNewBoard(true), 220); }}
+                  title="New Board"
+                  style={{
+                    width: 30, height: 30, borderRadius: '50%', fontSize: 18, fontWeight: 300,
+                    background: 'var(--sidebar-btn-bg)', color: 'var(--sidebar-text)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-btn-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'var(--sidebar-btn-bg)'}
+                >+</button>
+              </div>
+            )
+          ) : showNewBoard ? (
             <form ref={newBoardFormRef} onSubmit={handleCreateBoard} style={{ padding: '8px 12px', marginTop: 4 }}>
               <input
                 autoFocus value={newBoardName} onChange={e => setNewBoardName(e.target.value)}
                 placeholder="Board name…"
                 style={{
-                  width: '100%', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)',
-                  color: '#fff', borderRadius: 6, padding: '6px 8px', outline: 'none', fontSize: 13,
+                  width: '100%', border: '1px solid var(--sidebar-input-border)', background: 'var(--sidebar-input-bg)',
+                  color: 'var(--sidebar-text)', borderRadius: 6, padding: '6px 8px', outline: 'none', fontSize: 13,
                   marginBottom: 6, boxSizing: 'border-box',
                 }}
               />
@@ -483,9 +603,9 @@ function MainApp() {
                     onClick={() => setNewBoardVisibility(v)}
                     style={{
                       flex: 1, padding: '4px 0', borderRadius: 5, fontSize: 11, fontWeight: 600,
-                      border: `1.5px solid ${newBoardVisibility === v ? '#0073ea' : 'rgba(255,255,255,0.2)'}`,
+                      border: `1.5px solid ${newBoardVisibility === v ? '#0073ea' : 'var(--sidebar-input-border)'}`,
                       background: newBoardVisibility === v ? '#0073ea' : 'transparent',
-                      color: newBoardVisibility === v ? '#fff' : 'rgba(255,255,255,0.5)',
+                      color: newBoardVisibility === v ? '#fff' : 'var(--sidebar-text-muted)',
                     }}
                   >
                     {v === 'org_wide' ? '🌐 Org' : '🔒 Private'}
@@ -501,13 +621,17 @@ function MainApp() {
             <div style={{ padding: '4px 0' }}>
               <button
                 onClick={() => setShowNewBoard(true)}
-                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'rgba(255,255,255,0.45)', fontSize: 12 }}
+                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'var(--sidebar-text-muted)', fontSize: 12 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 + New Board
               </button>
               <button
                 onClick={handleCreateFolder}
-                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'rgba(255,255,255,0.45)', fontSize: 12 }}
+                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'var(--sidebar-text-muted)', fontSize: 12 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 + New Folder
               </button>
@@ -516,36 +640,40 @@ function MainApp() {
         </div>
 
         {isAdmin && (
-          <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ padding: isNavCollapsed ? '8px 0' : '8px 16px', borderTop: '1px solid var(--sidebar-border)', display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-start' }}>
             <button
               onClick={() => setShowGlobalTrash(true)}
+              title="Trash"
               style={{
-                width: '100%', textAlign: 'left', padding: '7px 4px',
-                fontSize: 12, color: 'rgba(255,255,255,0.35)',
-                display: 'flex', alignItems: 'center', gap: 6,
+                textAlign: isNavCollapsed ? 'center' : 'left',
+                padding: isNavCollapsed ? '7px 0' : '7px 4px',
+                fontSize: 12, color: 'var(--sidebar-text-muted)',
+                display: 'flex', alignItems: 'center', gap: isNavCollapsed ? 0 : 6,
               }}
-              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text-muted)'}
             >
-              🗑️ Trash
+              🗑️{!isNavCollapsed && ' Trash'}
             </button>
           </div>
         )}
-        <div style={{ padding: '8px 16px', borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
-          D'Decor Home Fabrics
-        </div>
+        {!isNavCollapsed && (
+          <div style={{ padding: '8px 16px', borderTop: '1px solid var(--sidebar-border)', fontSize: 11, color: 'var(--sidebar-text-muted)', whiteSpace: 'nowrap' }}>
+            D'Decor Home Fabrics
+          </div>
+        )}
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f0f2f5' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
         {/* Top bar */}
         <div style={{
-          background: '#fff', borderBottom: '1px solid #e0e0e0',
+          background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)',
           padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', gap: 10,
         }}>
           {activeBoard && isManager
             ? <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
-            : <h1 style={{ fontSize: 18, fontWeight: 700, color: '#323338', flex: 1 }}>{activeBoard?.name || 'Select a Board'}</h1>
+            : <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{activeBoard?.name || 'Select a Board'}</h1>
           }
           {isAdmin && activeBoard && !activeBoard.members?.some(m => m.id === currentUser?.id) && (
             <span style={{
