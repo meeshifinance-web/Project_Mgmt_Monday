@@ -638,7 +638,7 @@ function PersonCell({ value, settings, onChange }) {
       {/* Pill display */}
       <div
         onClick={() => { if (!readOnly) setOpen(o => !o); }}
-        style={{ display: 'flex', flexWrap: 'wrap', gap: 4, cursor: readOnly ? 'default' : 'pointer', minHeight: 28, padding: '2px 2px', alignItems: 'center' }}
+        style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: 4, cursor: readOnly ? 'default' : 'pointer', minHeight: 28, padding: '2px 2px', alignItems: 'center', overflow: 'hidden' }}
       >
         {selected.map(name => (
           <div key={name} title={name} style={{
