@@ -137,14 +137,18 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
     <div style={{ position: 'relative', width: '100%' }}>
       <div
         onClick={() => { setOpen(o => !o); setEditMode(false); setOpenPickerIdx(null); }}
+        title={value || ''}
         style={{
           background: bg, color: '#fff', fontWeight: 600,
           padding: '4px 8px', borderRadius: 4, cursor: 'pointer',
           textAlign: 'center', fontSize: 12, userSelect: 'none',
           minHeight: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden',
         }}
       >
-        {iconMap && value && iconMap[value] ? `${iconMap[value]} ${value}` : (value || '—')}
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {iconMap && value && iconMap[value] ? `${iconMap[value]} ${value}` : (value || '—')}
+        </span>
       </div>
 
       {open && (
@@ -242,10 +246,12 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
                 <div
                   key={opt.label}
                   onClick={() => { onChange(opt.label); setOpen(false); }}
+                  title={opt.label}
                   style={{
                     background: opt.color, color: '#fff', fontWeight: 600,
                     padding: '6px 12px', borderRadius: 4, cursor: 'pointer',
                     marginBottom: 4, fontSize: 12, textAlign: 'center',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}
                 >
                   {opt.label}
