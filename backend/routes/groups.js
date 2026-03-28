@@ -57,6 +57,28 @@ router.put('/:id', ...canWrite, async (req, res) => {
   }
 });
 
+// ── PATCH /reorder — bulk update group positions ─────────────────────────────
+router.patch('/reorder', ...canWrite, async (req, res) => {
+  const { board_id, ordered_ids } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (let i = 0; i < ordered_ids.length; i++) {
+      await client.query(
+        'UPDATE groups SET position=$1 WHERE id=$2 AND board_id=$3',
+        [i, ordered_ids[i], board_id]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 router.delete('/:id', ...canWrite, async (req, res) => {
   const client = await pool.connect();
   try {

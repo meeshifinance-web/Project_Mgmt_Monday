@@ -246,11 +246,11 @@ router.post('/', ...canWrite, async (req, res) => {
 // ── PUT update board ──────────────────────────────────────────────────────────
 router.put('/:id', ...canWrite, async (req, res) => {
   const { id } = req.params;
-  const { name, description, visibility } = req.body;
+  const { name, description, visibility, item_name } = req.body;
   try {
     const { rows } = await pool.query(
-      'UPDATE boards SET name=$1, description=$2, visibility=$3 WHERE id=$4 RETURNING *',
-      [name, description ?? '', visibility ?? 'private', id]
+      'UPDATE boards SET name=$1, description=$2, visibility=$3, item_name=$4 WHERE id=$5 RETURNING *',
+      [name, description ?? '', visibility ?? 'private', item_name ?? 'Item', id]
     );
     res.json(rows[0]);
   } catch (err) {

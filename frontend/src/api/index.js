@@ -41,6 +41,7 @@ export const removeBoardMember = (boardId, userId) => api.delete(`/boards/${boar
 export const createGroup = (data) => api.post('/groups', data);
 export const updateGroup = (id, data) => api.put(`/groups/${id}`, data);
 export const deleteGroup = (id) => api.delete(`/groups/${id}`);
+export const reorderGroups = (boardId, orderedIds) => api.patch('/groups/reorder', { board_id: boardId, ordered_ids: orderedIds });
 
 // ── Items ─────────────────────────────────────────────────────────────────────
 export const createItem = (data) => api.post('/items', data);

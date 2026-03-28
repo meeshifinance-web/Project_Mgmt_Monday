@@ -134,6 +134,7 @@ async function start() {
     `);
     await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS folder_id INT REFERENCES board_folders(id) ON DELETE SET NULL`);
     await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS email_from TEXT`);
+    await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS item_name TEXT DEFAULT 'Item'`);
 
     // Soft-delete columns for boards and folders (trash with 15-day retention)
     await pool.query(`ALTER TABLE boards       ADD COLUMN IF NOT EXISTS is_deleted           BOOLEAN      DEFAULT false`);

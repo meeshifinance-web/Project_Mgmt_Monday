@@ -5,3 +5,4 @@
 "backup.sql" 
 "*.jpg" 
 "*.png" 
+"frontend/dist/" 

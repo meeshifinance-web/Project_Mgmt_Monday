@@ -7,7 +7,7 @@ import BoardMembersPanel from './BoardMembersPanel';
 import DefaultValueEditor from './DefaultValueEditor';
 import ItemDetailPanel from './ItemDetailPanel';
 import {
-  createGroup, updateGroup, deleteGroup,
+  createGroup, updateGroup, deleteGroup, reorderGroups,
   createItem, updateItem, deleteItem, moveItem,
   createColumn, updateColumn, deleteColumn, reorderColumns,
   upsertColumnValue, updateBoard, updateBoardEmailSettings,
@@ -345,8 +345,11 @@ function InlineEdit({ value, onSave, style, placeholder, singleClick = false }) 
 const NO_DEFAULT_TYPES = ['formula', 'creation_log'];
 
 function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onToggleVisibility, isManager }) {
-  const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [renamePos, setRenamePos] = useState({ top: 0, left: 0, width: 280 });
   const menuRef = useRef(null);
   const btnRef = useRef(null);
 
@@ -363,9 +366,40 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onT
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
 
+  // Open menu with viewport-aware fixed positioning (never clips off screen)
   const openMenu = (e) => {
     e.stopPropagation();
-    setMenuOpen(o => !o);
+    if (menuOpen) { setMenuOpen(false); return; }
+    const rect = (btnRef.current || e.currentTarget).getBoundingClientRect();
+    const menuW = 200;
+    let left = rect.right - menuW;
+    if (left < 8) left = rect.left;
+    if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+    const top = rect.bottom + 4;
+    setMenuPos({ top, left: Math.max(8, left) });
+    setMenuOpen(true);
+  };
+
+  const startRename = (e) => {
+    e?.stopPropagation();
+    setMenuOpen(false);
+    setDraftTitle(col.title);
+    // Compute floating input position from the <th> bounding rect
+    const th = btnRef.current?.closest('th') || btnRef.current;
+    if (th) {
+      const rect = th.getBoundingClientRect();
+      const inputW = Math.max(280, rect.width + 60);
+      let left = rect.left;
+      if (left + inputW > window.innerWidth - 12) left = window.innerWidth - inputW - 12;
+      setRenamePos({ top: rect.bottom + 6, left: Math.max(8, left), width: inputW });
+    }
+    setRenaming(true);
+  };
+
+  const commitRename = () => {
+    const trimmed = draftTitle.trim();
+    if (trimmed && trimmed !== col.title) onRename(col.id, trimmed);
+    setRenaming(false);
   };
 
   const handleSetDefault = (e) => {
@@ -396,77 +430,142 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onT
 
   const showMenu = isManager || col.type === 'status';
 
+  const menuItem = (onClick, children, danger) => (
+    <div
+      onClick={onClick}
+      style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: danger ? '#e2445c' : '#323338', display: 'flex', alignItems: 'center', gap: 9 }}
+      onMouseEnter={e => e.currentTarget.style.background = danger ? '#fff5f7' : '#f0f6ff'}
+      onMouseLeave={e => e.currentTarget.style.background = ''}
+    >{children}</div>
+  );
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 3, position: 'relative' }}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      <InlineEdit
-        value={col.title} onSave={title => onRename(col.id, title)} singleClick
-        style={{ fontSize: 12, fontWeight: 700, color: '#676879', flex: 1 }}
-      />
-      {col.type === 'person' && col.settings?.isOwnerColumn && (
-        <span title="Visibility Control active — only assigned members see restricted items" style={{ fontSize: 10, color: '#0073ea' }}>🔒</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative', minWidth: 0 }}>
+
+      {/* Title — always visible; double-click or use menu to rename */}
+      <span
+        title={col.title}
+        onDoubleClick={isManager ? startRename : undefined}
+        style={{
+          flex: 1, minWidth: 0,
+          fontSize: 12, fontWeight: 700,
+          color: renaming ? '#0073ea' : '#676879',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          cursor: 'default', userSelect: 'none',
+          fontStyle: renaming ? 'italic' : 'normal',
+        }}
+      >{col.title}</span>
+
+      {/* Floating rename panel — fixed position, readable size, never clipped */}
+      {renaming && (
+        <div
+          style={{
+            position: 'fixed',
+            top: renamePos.top,
+            left: renamePos.left,
+            width: renamePos.width,
+            zIndex: 10000,
+            background: '#fff',
+            borderRadius: 10,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.20)',
+            border: '2px solid #0073ea',
+            padding: '12px 14px 10px',
+          }}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          <div style={{ fontSize: 11, color: '#9699a6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
+            Rename column
+          </div>
+          <input
+            autoFocus
+            value={draftTitle}
+            onChange={e => setDraftTitle(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }}
+            onClick={e => e.stopPropagation()}
+            onFocus={e => e.currentTarget.select()}
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              fontSize: 15, fontWeight: 600, color: '#323338',
+              border: '1.5px solid #c4c7d0', borderRadius: 6,
+              padding: '8px 12px', outline: 'none', background: '#fafbfc',
+              transition: 'border-color 0.15s',
+            }}
+            onFocusCapture={e => { e.currentTarget.style.borderColor = '#0073ea'; e.currentTarget.style.background = '#fff'; }}
+            onBlurCapture={e => { e.currentTarget.style.borderColor = '#c4c7d0'; }}
+          />
+          <div style={{ fontSize: 11, color: '#9699a6', marginTop: 7, textAlign: 'right' }}>
+            ↵ Enter to save &nbsp;·&nbsp; Esc to cancel
+          </div>
+        </div>
       )}
+
+      {/* Lock badge */}
+      {col.type === 'person' && col.settings?.isOwnerColumn && (
+        <span title="Visibility Control active" style={{ fontSize: 10, color: '#0073ea', flexShrink: 0 }}>🔒</span>
+      )}
+
+      {/* Options button — always visible so it's easy to click on narrow columns */}
       {showMenu && (
         <button
           ref={btnRef}
           onClick={openMenu}
           title="Column options"
           style={{
-            fontSize: 10, color: hovered || menuOpen ? '#676879' : 'transparent',
-            transition: 'color 0.15s', padding: '1px 3px', flexShrink: 0,
-            lineHeight: 1, borderRadius: 3,
-            background: menuOpen ? '#e6e9ef' : 'transparent',
+            flexShrink: 0, width: 22, height: 22,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 4, border: 'none', cursor: 'pointer',
+            fontSize: 13, color: menuOpen ? '#0073ea' : '#9699a6',
+            background: menuOpen ? '#dce9ff' : 'transparent',
+            transition: 'color 0.12s, background 0.12s',
           }}
+          onMouseEnter={e => { if (!menuOpen) { e.currentTarget.style.color = '#323338'; e.currentTarget.style.background = '#e6e9ef'; }}}
+          onMouseLeave={e => { if (!menuOpen) { e.currentTarget.style.color = '#9699a6'; e.currentTarget.style.background = 'transparent'; }}}
         >▾</button>
       )}
 
-      {/* Dropdown menu */}
+      {/* Dropdown — fixed positioning, never clips */}
       {menuOpen && (
         <div
           ref={menuRef}
           style={{
-            position: 'absolute', top: '100%', right: 0, marginTop: 2, zIndex: 200,
-            background: '#fff', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.14)',
-            border: '1px solid #e6e9ef', minWidth: 170, overflow: 'hidden',
+            position: 'fixed',
+            top: menuPos.top,
+            left: menuPos.left,
+            zIndex: 9999,
+            background: '#fff',
+            borderRadius: 10,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            border: '1px solid #e0e3e8',
+            minWidth: 200,
+            overflow: 'hidden',
           }}
         >
-          {col.type === 'status' && (
-            <div
-              onClick={handleEditStatus}
-              style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#323338', display: 'flex', alignItems: 'center', gap: 8 }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
-              onMouseLeave={e => e.currentTarget.style.background = ''}
-            >🏷️ Edit Labels</div>
-          )}
-          {col.type === 'person' && isManager && (
-            <div
-              onClick={handleToggleVisibility}
-              style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                color: col.settings?.isOwnerColumn ? '#0073ea' : '#323338' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
-              onMouseLeave={e => e.currentTarget.style.background = ''}
-              title="When ON: only people listed in this column can see that item"
-            >
-              {col.settings?.isOwnerColumn ? '🔒 Visibility Control: ON' : '🔓 Visibility Control: OFF'}
+          {/* Header: column type + title */}
+          <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ fontSize: 10, color: '#9699a6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 3 }}>
+              {col.type.replace(/_/g, ' ')}
             </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#323338', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {col.title}
+            </div>
+          </div>
+
+          {isManager && menuItem(startRename, '✏️ Rename')}
+          {col.type === 'status' && menuItem(handleEditStatus, '🏷️ Edit Labels')}
+          {col.type === 'person' && isManager && menuItem(
+            handleToggleVisibility,
+            col.settings?.isOwnerColumn ? '🔒 Visibility: ON' : '🔓 Visibility: OFF'
           )}
-          {!NO_DEFAULT_TYPES.includes(col.type) && isManager && (
-            <div
-              onClick={handleSetDefault}
-              style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#323338', display: 'flex', alignItems: 'center', gap: 8 }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
-              onMouseLeave={e => e.currentTarget.style.background = ''}
-            >⚡ Default Value{(col.settings?.defaultValue !== undefined && col.settings?.defaultValue !== null && String(col.settings.defaultValue) !== '') ? ' ✓' : ''}</div>
+          {!NO_DEFAULT_TYPES.includes(col.type) && isManager && menuItem(
+            handleSetDefault,
+            <>⚡ Default Value{(col.settings?.defaultValue !== undefined && col.settings?.defaultValue !== null && String(col.settings.defaultValue) !== '') ? <span style={{ color: '#0073ea', marginLeft: 4 }}>✓</span> : null}</>
           )}
+
           {isManager && (
             <>
-              <div style={{ height: 1, background: '#f0f0f0', margin: '2px 0' }} />
-              <div
-                onClick={handleDelete}
-                style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: '#e2445c', display: 'flex', alignItems: 'center', gap: 8 }}
-                onMouseEnter={e => e.currentTarget.style.background = '#fff5f7'}
-                onMouseLeave={e => e.currentTarget.style.background = ''}
-              >× Delete Column</div>
+              <div style={{ height: 1, background: '#f0f0f0', margin: '3px 0' }} />
+              {menuItem(handleDelete, '🗑️ Delete Column', true)}
             </>
           )}
         </div>
@@ -515,8 +614,10 @@ function colWidth(col) {
 
 // ── Item row ──────────────────────────────────────────────────────────────────
 function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChange,
-                   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail }) {
+                   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
+                   isSelected, onToggleSelect }) {
   const [hovered, setHovered] = useState(false);
+  const rowBg = isSelected ? '#e8f0fe' : hovered ? '#f5f6f8' : '#fff';
   return (
     <tr
       draggable
@@ -524,21 +625,27 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChan
       onDragEnd={onDragEnd}
       onDragOver={e => onDragOver(e, group.id, item.id)}
       onDrop={e => onDrop(e, group.id, item.id)}
-      style={{ borderBottom: '1px solid #e6e9ef', background: hovered ? '#f5f6f8' : '#fff', height: 40, cursor: 'grab' }}
+      style={{ borderBottom: '1px solid #e6e9ef', background: rowBg, height: 40, cursor: 'grab', transition: 'background 0.1s' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Color stripe */}
-      <td style={{ width: 6, padding: 0, background: group.color }} />
+      <td style={{ width: 6, padding: 0, background: group.color, position: 'sticky', left: 0, zIndex: 2 }} />
       {/* Drag handle / checkbox */}
-      <td style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid #e6e9ef' }}>
-        {hovered
+      <td style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid #e6e9ef', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
+        {hovered && !isSelected
           ? <span style={{ color: '#c5c7d0', fontSize: 16, cursor: 'grab', userSelect: 'none', display: 'block', textAlign: 'center' }} title="Drag to reorder">⠿</span>
-          : <input type="checkbox" style={{ cursor: 'pointer', accentColor: group.color }} onClick={e => e.stopPropagation()} />
+          : <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={e => { e.stopPropagation(); onToggleSelect?.(item.id); }}
+              onClick={e => e.stopPropagation()}
+              style={{ cursor: 'pointer', accentColor: group.color }}
+            />
         }
       </td>
       {/* Item name */}
-      <td style={{ padding: '4px 8px 4px 12px', borderRight: '1px solid #e6e9ef' }}>
+      <td style={{ padding: '4px 8px 4px 12px', borderRight: 'none', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {hovered && (
             <button
@@ -597,10 +704,89 @@ function DropLine({ colSpan }) {
   );
 }
 
+// ── Bulk action bar ───────────────────────────────────────────────────────────
+function BulkActionBar({ count, groups, onMove, onClear }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div style={{
+      position: 'sticky', bottom: 0, zIndex: 50,
+      background: '#1f2d3d', color: '#fff',
+      padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 14,
+      boxShadow: '0 -3px 12px rgba(0,0,0,0.25)',
+      borderTop: '2px solid #0073ea',
+    }}>
+      <span style={{ fontWeight: 700, fontSize: 13, background: '#0073ea', borderRadius: 20, padding: '2px 10px' }}>
+        {count} selected
+      </span>
+      <span style={{ fontSize: 13, color: '#c5c7d0' }}>
+        {count === 1 ? '1 item' : `${count} items`}
+      </span>
+
+      {/* Move to group */}
+      <div style={{ position: 'relative' }} ref={ref}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{
+            background: open ? '#0073ea' : '#2d3f55', border: '1px solid #3d5166',
+            color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+          onMouseEnter={e => { if (!open) e.currentTarget.style.background = '#3d5166'; }}
+          onMouseLeave={e => { if (!open) e.currentTarget.style.background = '#2d3f55'; }}
+        >
+          ↗ Move to group ▾
+        </button>
+        {open && (
+          <div style={{
+            position: 'absolute', bottom: '110%', left: 0,
+            background: '#fff', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+            border: '1px solid #e6e9ef', minWidth: 200, overflow: 'hidden', zIndex: 200,
+          }}>
+            {groups.map(g => (
+              <div
+                key={g.id}
+                onClick={() => { setOpen(false); onMove(g.id); }}
+                style={{
+                  padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: '#323338',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}
+              >
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: g.color, flexShrink: 0 }} />
+                {g.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={onClear}
+        style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #3d5166', color: '#c5c7d0', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#e2445c'; e.currentTarget.style.color = '#e2445c'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = '#3d5166'; e.currentTarget.style.color = '#c5c7d0'; }}
+      >× Clear selection</button>
+    </div>
+  );
+}
+
 // ── Group rows (returns a fragment for tbody) ─────────────────────────────────
 function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupDelete,
                      onItemCreate, onItemUpdate, onItemDelete, onValueChange,
-                     onEditSettings, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, onOpenDetail }) {
+                     onEditSettings, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, onOpenDetail,
+                     isGroupDragSrc, isGroupDropOver,
+                     onGroupDragStart, onGroupDragEnd, onGroupDragOver, onGroupDrop,
+                     selectedItems, onToggleSelect }) {
   const [collapsed, setCollapsed] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState('');
@@ -622,10 +808,30 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
   return (
     <>
       {/* ── Group header row ── */}
-      <tr style={{ background: '#fff', borderTop: '6px solid #f5f6f8' }}>
+      <tr
+        draggable={isManager}
+        onDragStart={isManager ? onGroupDragStart : undefined}
+        onDragEnd={isManager ? onGroupDragEnd : undefined}
+        onDragOver={onGroupDragOver}
+        onDrop={onGroupDrop}
+        style={{
+          background: isGroupDropOver ? '#e8f0fe' : '#fff',
+          borderTop: isGroupDropOver ? '3px solid #0073ea' : '6px solid #f5f6f8',
+          opacity: isGroupDragSrc ? 0.45 : 1,
+          transition: 'background 0.12s, border-top 0.1s, opacity 0.1s',
+          cursor: isManager ? 'grab' : 'default',
+        }}
+      >
         <td style={{ width: 6, padding: 0, background: group.color, borderRadius: '3px 0 0 0' }} />
         <td colSpan={spanAll - 1} style={{ padding: '0', borderBottom: '1px solid #e6e9ef' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px 7px 6px' }}>
+            {isManager && (
+              <span
+                title="Drag to reorder group"
+                style={{ color: '#c5c7d0', fontSize: 16, cursor: 'grab', userSelect: 'none', flexShrink: 0, lineHeight: 1 }}
+                onMouseDown={e => e.stopPropagation()}
+              >⠿</span>
+            )}
             <button
               onClick={() => setCollapsed(c => !c)}
               style={{ color: group.color, fontSize: 10, width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'transform 0.15s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}
@@ -672,6 +878,8 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
             onDragOver={onDragOver}
             onDrop={onDrop}
             onOpenDetail={onOpenDetail}
+            isSelected={selectedItems?.has(item.id)}
+            onToggleSelect={onToggleSelect}
           />
         </React.Fragment>
       ))}
@@ -1182,9 +1390,95 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // ── Drag & drop ───────────────────────────────────────────────────────────
+  // ── Multi-select ─────────────────────────────────────────────────────────
+  const [selectedItems, setSelectedItems] = useState(new Set());
+
+  const handleToggleSelect = useCallback((itemId) => {
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      return next;
+    });
+  }, []);
+
+  const handleBulkMove = async (targetGroupId) => {
+    const itemIds = [...selectedItems];
+    const snapshot = board.groups;
+    // Optimistic update
+    updateLocalBoard(b => {
+      const moving = [];
+      let groups = b.groups.map(g => {
+        const toMove = g.items.filter(i => itemIds.includes(i.id));
+        moving.push(...toMove);
+        return { ...g, items: g.items.filter(i => !itemIds.includes(i.id)) };
+      });
+      groups = groups.map(g =>
+        g.id === targetGroupId ? { ...g, items: [...g.items, ...moving] } : g
+      );
+      return { groups };
+    });
+    setSelectedItems(new Set());
+    try {
+      const basePos = (board.groups.find(g => g.id === targetGroupId)?.items?.length) || 0;
+      await Promise.all(itemIds.map((id, i) => moveItem(id, { group_id: targetGroupId, position: basePos + i })));
+      toast(`${itemIds.length} item${itemIds.length !== 1 ? 's' : ''} moved`, 'success');
+    } catch {
+      toast('Failed to move items', 'error');
+      updateLocalBoard(() => ({ groups: snapshot }));
+    }
+  };
+
+  // ── Drag & drop (items) ───────────────────────────────────────────────────
   const dragRef = useRef(null); // { itemId, sourceGroupId }
   const [dropTarget, setDropTarget] = useState(null); // { groupId, beforeItemId }
+
+  // ── Group drag-to-reorder ─────────────────────────────────────────────────
+  const groupDragRef = useRef(null); // group ID being dragged
+  const [groupDragSrc, setGroupDragSrc] = useState(null);
+  const [groupDropOver, setGroupDropOver] = useState(null);
+
+  const handleGroupDragStart = useCallback((e, groupId) => {
+    groupDragRef.current = groupId;
+    setGroupDragSrc(groupId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `group:${groupId}`);
+  }, []);
+
+  const handleGroupDragEnd = useCallback(() => {
+    groupDragRef.current = null;
+    setGroupDragSrc(null);
+    setGroupDropOver(null);
+  }, []);
+
+  const handleGroupDragOver = useCallback((e, targetGroupId) => {
+    if (!groupDragRef.current || groupDragRef.current === targetGroupId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setGroupDropOver(prev => prev === targetGroupId ? prev : targetGroupId);
+  }, []);
+
+  const handleGroupDrop = useCallback(async (e, targetGroupId) => {
+    e.preventDefault();
+    const srcId = groupDragRef.current;
+    groupDragRef.current = null;
+    setGroupDragSrc(null);
+    setGroupDropOver(null);
+    if (!srcId || srcId === targetGroupId) return;
+    const current = board.groups || [];
+    const srcIdx = current.findIndex(g => g.id === srcId);
+    const tgtIdx = current.findIndex(g => g.id === targetGroupId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+    const reordered = [...current];
+    const [moved] = reordered.splice(srcIdx, 1);
+    reordered.splice(tgtIdx, 0, moved);
+    updateLocalBoard(() => ({ groups: reordered }));
+    try {
+      await reorderGroups(board.id, reordered.map(g => g.id));
+    } catch {
+      toast('Failed to reorder groups', 'error');
+      updateLocalBoard(() => ({ groups: current }));
+    }
+  }, [board.groups, board.id, updateLocalBoard, toast]);
 
   const handleDragStart = useCallback((e, item, groupId) => {
     dragRef.current = { itemId: item.id, sourceGroupId: groupId };
@@ -1201,6 +1495,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   }, []);
 
   const handleDragOver = useCallback((e, groupId, beforeItemId) => {
+    if (groupDragRef.current) return; // group drag in progress — ignore item zones
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDropTarget(prev =>
@@ -1211,6 +1506,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   }, []);
 
   const handleDrop = useCallback(async (e, groupId, beforeItemId) => {
+    if (groupDragRef.current) return; // group drag in progress — ignore item drop
     e.preventDefault();
     const drag = dragRef.current;
     if (!drag) return;
@@ -1380,6 +1676,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       const r = await updateColumn(id, { title, settings: col?.settings || {} });
       updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === id ? r.data : c) }));
     } catch { toast('Failed to rename column', 'error'); }
+  };
+
+  const handleItemNameRename = async (newName) => {
+    try {
+      const r = await updateBoard(board.id, {
+        name: board.name,
+        description: board.description,
+        visibility: board.visibility,
+        item_name: newName,
+      });
+      updateLocalBoard(() => ({ item_name: r.data.item_name }));
+    } catch { toast('Failed to rename Item column', 'error'); }
   };
 
   const handleColumnDelete = async (id) => {
@@ -1744,7 +2052,13 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           </div>
         ) : (
           /* ── Desktop table view ── */
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <table style={{
+            borderCollapse: 'collapse',
+            tableLayout: 'fixed',
+            width: '100%',
+            // Prevent columns shrinking when many are added — container scrolls instead
+            minWidth: 6 + 36 + getNameWidth() + cols.reduce((s, c) => s + getColWidth(c), 0) + 36 + (isManager ? 48 : 0),
+          }}>
             <colgroup>
               <col style={{ width: 6 }} />
               <col style={{ width: 36 }} />
@@ -1757,13 +2071,22 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             {/* ── Sticky header ── */}
             <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
               <tr style={{ background: '#f5f6f8', borderBottom: '2px solid #e6e9ef' }}>
-                <th style={{ padding: 0, background: '#f5f6f8', width: 6 }} />
-                <th style={{ padding: '0 8px', textAlign: 'center', background: '#f5f6f8', borderRight: '1px solid #e6e9ef' }}>
+                <th style={{ padding: 0, background: '#f5f6f8', width: 6, position: 'sticky', left: 0, zIndex: 30 }} />
+                <th style={{ padding: '0 8px', textAlign: 'center', background: '#f5f6f8', borderRight: '1px solid #e6e9ef', position: 'sticky', left: 6, zIndex: 30 }}>
                   <input type="checkbox" title="Select all" style={{ cursor: 'pointer' }} />
                 </th>
-                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#676879', background: '#f5f6f8', borderRight: '1px solid #e6e9ef', letterSpacing: '0.3px', position: 'relative' }}>
-                  Item
-                  <ResizeHandle onMouseDown={e => startResize(e, '_name', getNameWidth())} />
+                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#676879', background: '#f5f6f8', borderRight: 'none', letterSpacing: '0.3px', position: 'sticky', left: 42, zIndex: 30, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
+                    {isManager
+                      ? <InlineEdit
+                          value={board.item_name || 'Item'}
+                          onSave={handleItemNameRename}
+                          style={{ fontSize: 12, fontWeight: 700, color: '#676879', flex: 1 }}
+                        />
+                      : <span style={{ fontSize: 12, fontWeight: 700, color: '#676879' }}>{board.item_name || 'Item'}</span>
+                    }
+                    <ResizeHandle onMouseDown={e => startResize(e, '_name', getNameWidth())} />
+                  </div>
                 </th>
                 {cols.map(col => (
                   <th
@@ -1839,12 +2162,30 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                   onOpenDetail={setDetailItemId}
+                  isGroupDragSrc={groupDragSrc === group.id}
+                  isGroupDropOver={groupDropOver === group.id}
+                  onGroupDragStart={e => handleGroupDragStart(e, group.id)}
+                  onGroupDragEnd={handleGroupDragEnd}
+                  onGroupDragOver={e => handleGroupDragOver(e, group.id)}
+                  onGroupDrop={e => handleGroupDrop(e, group.id)}
+                  selectedItems={selectedItems}
+                  onToggleSelect={handleToggleSelect}
                 />
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* ── Bulk action bar ── */}
+      {selectedItems.size > 0 && (
+        <BulkActionBar
+          count={selectedItems.size}
+          groups={groups}
+          onMove={handleBulkMove}
+          onClear={() => setSelectedItems(new Set())}
+        />
+      )}
 
       {/* ── Mobile More bottom sheet ── */}
       {showMoreMenu && (
