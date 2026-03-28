@@ -141,3 +141,111 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — Phase 1
+   All desktop layout is driven by inline styles; these rules add mobile
+   behaviour on top with !important where needed to beat inline styles.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Desktop defaults for mobile-specific elements ───────────────────────── */
+.mobile-hamburger   { display: none; }
+.sidebar-close-btn  { display: none; }
+.sidebar-overlay    { display: none; }
+
+/* ── Mobile breakpoint ───────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Base resets */
+  * { -webkit-tap-highlight-color: transparent; }
+  body { overflow-x: hidden; }
+
+  /* ── Sidebar drawer ────────────────────────────────────────────────────── */
+  .app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    width: 80vw !important;
+    max-width: 300px !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.25s ease !important;
+    z-index: 1000 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+  .app-sidebar.sidebar-open {
+    transform: translateX(0) !important;
+  }
+
+  /* ── Overlay behind open drawer ────────────────────────────────────────── */
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+
+  /* ── Sidebar close button (×) ──────────────────────────────────────────── */
+  .sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 20px;
+    color: var(--sidebar-text-muted);
+    flex-shrink: 0;
+    background: var(--sidebar-btn-bg);
+    transition: background 0.15s;
+  }
+  .sidebar-close-btn:active { background: var(--sidebar-btn-hover); }
+
+  /* ── Hamburger button ──────────────────────────────────────────────────── */
+  .mobile-hamburger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    font-size: 20px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    color: var(--text-primary);
+    transition: background 0.15s;
+  }
+  .mobile-hamburger:active { background: var(--hover-bg); }
+
+  /* ── Top bar adjustments ───────────────────────────────────────────────── */
+  .app-topbar {
+    padding: 0 10px !important;
+    height: 56px !important;
+  }
+
+  /* Truncate board title on mobile */
+  .app-topbar h1 {
+    font-size: 15px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: calc(100vw - 160px);
+  }
+
+  /* Touch targets — all interactive elements at least 44px tall */
+  button, a, [role="button"] { min-height: 44px; }
+
+  /* Prevent iOS auto-zoom on inputs */
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  input[type="number"],
+  input[type="date"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

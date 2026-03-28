@@ -111,6 +111,7 @@ function MainApp() {
   const [showGlobalTrash, setShowGlobalTrash] = useState(false);
   const [boardMenuId, setBoardMenuId] = useState(null);
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const toggleNav = () => setIsNavCollapsed(v => {
     const next = !v;
@@ -140,6 +141,14 @@ function MainApp() {
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [boardMenuId]);
+
+  // Auto-close mobile drawer when viewport grows to desktop width
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => { if (!e.matches) setMobileNavOpen(false); };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     Promise.all([getBoards(), getFolders()])
@@ -273,7 +282,7 @@ function MainApp() {
       return (
         <div
           key={b.id}
-          onClick={() => loadBoard(b.id)}
+          onClick={() => { loadBoard(b.id); setMobileNavOpen(false); }}
           title={b.name}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -294,7 +303,7 @@ function MainApp() {
     return (
       <div key={b.id} style={{ position: 'relative' }}>
         <div
-          onClick={() => loadBoard(b.id)}
+          onClick={() => { loadBoard(b.id); setMobileNavOpen(false); }}
           style={{
             display: 'flex', alignItems: 'center', cursor: 'pointer',
             padding: indent ? '6px 16px 6px 28px' : '6px 16px',
@@ -391,18 +400,26 @@ function MainApp() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      {/* Mobile drawer overlay */}
+      {mobileNavOpen && (
+        <div className="sidebar-overlay" onClick={() => setMobileNavOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <div style={{
-        width: isNavCollapsed ? 48 : 230,
-        background: 'var(--bg-sidebar)',
-        color: 'var(--sidebar-text)',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-        transition: 'width 0.2s ease',
-        overflow: 'hidden',
-        borderRight: '1px solid var(--border-color)',
-      }}>
+      <div
+        className={`app-sidebar${mobileNavOpen ? ' sidebar-open' : ''}`}
+        style={{
+          width: isNavCollapsed ? 48 : 230,
+          background: 'var(--bg-sidebar)',
+          color: 'var(--sidebar-text)',
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+          transition: 'width 0.2s ease',
+          overflow: 'hidden',
+          borderRight: '1px solid var(--border-color)',
+        }}
+      >
         <div style={{
           padding: isNavCollapsed ? '14px 0' : '14px 12px 14px 16px',
           borderBottom: '1px solid var(--sidebar-border)',
@@ -425,18 +442,28 @@ function MainApp() {
             <span style={{ fontSize: 16, fontWeight: 800, color: '#fdab3d' }} title="D'Decor Workboard">D</span>
           )}
           {!isNavCollapsed && (
-            <button
-              onClick={toggleNav}
-              title="Collapse sidebar"
-              style={{
-                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                background: 'var(--sidebar-btn-bg)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--sidebar-text)', fontSize: 14, transition: 'background 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-btn-hover)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'var(--sidebar-btn-bg)'}
-            >‹</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              {/* Mobile close button */}
+              <button
+                className="sidebar-close-btn"
+                onClick={() => setMobileNavOpen(false)}
+                title="Close navigation"
+                aria-label="Close navigation"
+              >×</button>
+              {/* Desktop collapse button */}
+              <button
+                onClick={toggleNav}
+                title="Collapse sidebar"
+                style={{
+                  width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                  background: 'var(--sidebar-btn-bg)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--sidebar-text)', fontSize: 14, transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-btn-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'var(--sidebar-btn-bg)'}
+              >‹</button>
+            </div>
           )}
         </div>
 
@@ -667,10 +694,20 @@ function MainApp() {
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
         {/* Top bar */}
-        <div style={{
-          background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)',
-          padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', gap: 10,
-        }}>
+        <div
+          className="app-topbar"
+          style={{
+            background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)',
+            padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', gap: 10,
+          }}
+        >
+          {/* Hamburger — mobile only */}
+          <button
+            className="mobile-hamburger"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation"
+          >☰</button>
+
           {activeBoard && isManager
             ? <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
             : <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{activeBoard?.name || 'Select a Board'}</h1>

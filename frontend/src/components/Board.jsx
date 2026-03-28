@@ -858,6 +858,245 @@ function VisibilityBadge({ visibility, onChange, isManager }) {
   );
 }
 
+// ── Mobile Card View (renders one group as cards) ─────────────────────────────
+function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onItemUpdate,
+                          onItemDelete, onValueChange, onEditSettings, onOpenDetail }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [addingItem, setAddingItem] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const toast = useToast();
+
+  const handleAddItem = async () => {
+    if (!newItemName.trim()) return;
+    try {
+      await onItemCreate(group.id, newItemName.trim());
+      setNewItemName('');
+      setAddingItem(false);
+    } catch { toast('Failed to add item', 'error'); }
+  };
+
+  return (
+    <div style={{ padding: '0 12px 4px' }}>
+      {/* Group header */}
+      <div
+        onClick={() => setCollapsed(c => !c)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', marginBottom: 8,
+          background: 'var(--bg-secondary)', borderRadius: 8,
+          cursor: 'pointer', minHeight: 44,
+          borderLeft: `4px solid ${group.color}`,
+        }}
+      >
+        <span style={{
+          fontSize: 10, color: group.color, flexShrink: 0,
+          display: 'inline-block', transition: 'transform 0.15s',
+          transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+        }}>▼</span>
+        <span style={{ fontWeight: 700, fontSize: 14, color: group.color, flex: 1 }}>
+          {group.name}
+        </span>
+        <span style={{
+          background: `${group.color}22`, color: group.color,
+          borderRadius: 12, padding: '1px 9px', fontSize: 11, fontWeight: 700, flexShrink: 0,
+        }}>
+          {group.items?.length || 0}
+        </span>
+      </div>
+
+      {/* Item cards */}
+      {!collapsed && group.items?.map(item => (
+        <div
+          key={item.id}
+          style={{
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border-color)',
+            borderLeft: `3px solid ${group.color}`,
+            borderRadius: 8, padding: '12px 14px', marginBottom: 8,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+          }}
+        >
+          {/* Name row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <input
+              type="checkbox"
+              style={{ accentColor: group.color, flexShrink: 0, width: 16, height: 16 }}
+              onClick={e => e.stopPropagation()}
+            />
+            {canEdit
+              ? <InlineEdit
+                  value={item.name}
+                  onSave={name => onItemUpdate(item.id, name)}
+                  singleClick
+                  style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}
+                />
+              : <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{item.name}</span>
+            }
+            <button
+              onClick={() => onOpenDetail(item.id)}
+              style={{
+                color: '#0073ea', fontSize: 11, padding: '4px 10px',
+                border: '1.5px solid #0073ea', borderRadius: 6,
+                fontWeight: 600, flexShrink: 0, background: 'transparent',
+                minHeight: 32,
+              }}
+            >View</button>
+          </div>
+
+          {/* Column values */}
+          {columns.map(col => (
+            <div key={col.id} style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '6px 0', borderTop: '1px solid var(--border-color)',
+            }}>
+              <span style={{
+                fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600,
+                textTransform: 'uppercase', letterSpacing: '0.3px',
+                minWidth: 76, flexShrink: 0,
+              }}>
+                {col.title}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <ColumnCell
+                  column={col}
+                  value={item.values?.[col.id] || ''}
+                  onChange={
+                    (col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager))
+                      ? undefined
+                      : val => onValueChange(item.id, col.id, val, col.title)
+                  }
+                  onEditSettings={onEditSettings}
+                  item={item}
+                />
+              </div>
+            </div>
+          ))}
+
+          {/* Delete */}
+          {canEdit && (
+            <button
+              onClick={() => onItemDelete(item.id)}
+              style={{ marginTop: 10, color: '#e2445c', fontSize: 12, padding: '4px 0', fontWeight: 500 }}
+            >Delete item</button>
+          )}
+        </div>
+      ))}
+
+      {/* Add item */}
+      {!collapsed && canEdit && (
+        <div style={{ padding: '4px 0 8px' }}>
+          {addingItem ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                autoFocus
+                value={newItemName}
+                onChange={e => setNewItemName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleAddItem();
+                  if (e.key === 'Escape') { setAddingItem(false); setNewItemName(''); }
+                }}
+                placeholder="Item name…"
+                style={{
+                  flex: 1, border: '1.5px solid #0073ea', borderRadius: 6,
+                  padding: '10px 12px', fontSize: 16, outline: 'none',
+                  background: 'var(--input-bg)', color: 'var(--text-primary)',
+                }}
+              />
+              <button
+                onClick={handleAddItem}
+                style={{ padding: '10px 16px', background: '#0073ea', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: 13, minHeight: 44 }}
+              >Add</button>
+              <button
+                onClick={() => { setAddingItem(false); setNewItemName(''); }}
+                style={{ padding: '10px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6, color: 'var(--text-secondary)', fontSize: 13, minHeight: 44 }}
+              >✕</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddingItem(true)}
+              style={{
+                color: '#676879', fontSize: 13, fontWeight: 600,
+                padding: '10px 0', width: '100%', textAlign: 'left',
+                minHeight: 44, display: 'flex', alignItems: 'center',
+              }}
+            >+ Add Item</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── More bottom sheet (mobile toolbar) ────────────────────────────────────────
+function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, importing,
+                           onClose, onAutomations, onForms, onFilter, filtersActive,
+                           onExport, onImport, onMembers, onActivity, onTrash,
+                           boardMembersCount }) {
+  const options = [];
+  if (isManager) {
+    options.push({ icon: '⚡', label: `Automations${activeAutoCount > 0 ? ` (${activeAutoCount} active)` : ''}`, action: onAutomations });
+    options.push({ icon: '📋', label: 'Forms', action: onForms });
+  }
+  options.push({ icon: '🔽', label: `Filter${filtersActive ? ' (active)' : ''}`, action: onFilter });
+  options.push({ icon: '⬇️', label: 'Export', action: onExport });
+  if (canEdit) {
+    options.push({ icon: '⬆️', label: importing ? 'Importing…' : 'Import CSV', action: onImport, disabled: importing });
+  }
+  options.push({ icon: '👥', label: `Members (${boardMembersCount})`, action: onMembers });
+  options.push({ icon: '📋', label: 'Activity Log', action: onActivity });
+  options.push({ icon: '🗑️', label: `Trash${trashCount > 0 ? ` (${trashCount})` : ''}`, action: onTrash, danger: trashCount > 0 });
+
+  const handleOption = (action, disabled) => {
+    if (disabled) return;
+    onClose();
+    action();
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.5)', zIndex: 1100,
+        display: 'flex', alignItems: 'flex-end',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--bg-primary)', width: '100%',
+          maxHeight: '70vh', borderRadius: '16px 16px 0 0',
+          overflowY: 'auto',
+        }}
+      >
+        {/* Handle bar */}
+        <div style={{
+          width: 32, height: 4, background: 'var(--border-color)',
+          borderRadius: 2, margin: '12px auto 4px',
+        }} />
+        <div style={{ padding: '4px 0 16px' }}>
+          {options.map((opt, i) => (
+            <div
+              key={i}
+              onClick={() => handleOption(opt.action, opt.disabled)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '0 20px', fontSize: 15, fontWeight: 500, minHeight: 56,
+                color: opt.danger ? '#e2445c' : opt.disabled ? 'var(--text-muted)' : 'var(--text-primary)',
+                borderBottom: i < options.length - 1 ? '1px solid var(--border-color)' : 'none',
+                cursor: opt.disabled ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <span style={{ fontSize: 18, flexShrink: 0 }}>{opt.icon}</span>
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Board ────────────────────────────────────────────────────────────────
 export default function Board({ board, onBoardChange, openItemId, onOpenItemDone }) {
   const [showAddColumn, setShowAddColumn] = useState(false);
@@ -879,6 +1118,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const [importing, setImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null); // { csvRows } or null
   const importFileRef = React.useRef(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // Open item panel when triggered from a notification click
   useEffect(() => {
@@ -932,6 +1173,14 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     getTrashItems(board.id).then(r => setTrashCount(r.data.length)).catch(() => {});
     getAutomations(board.id).then(r => setActiveAutoCount(r.data.filter(a => a.enabled).length)).catch(() => {});
   }, [board.id]);
+
+  // Track viewport for mobile layout
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // ── Drag & drop ───────────────────────────────────────────────────────────
   const dragRef = useRef(null); // { itemId, sourceGroupId }
@@ -1326,110 +1575,140 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'Figtree, Roboto, -apple-system, sans-serif' }}>
 
       {/* ── Toolbar ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 20px', background: 'var(--bg-primary)',
-        borderBottom: showFilters ? 'none' : '1px solid var(--border-color)', flexShrink: 0, flexWrap: 'wrap',
-      }}>
-        {isManager && (
-          <>
+      {isMobile ? (
+        /* Mobile toolbar: Add Group + ⋯ More */
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 12px', background: 'var(--bg-primary)',
+          borderBottom: showFilters ? 'none' : '1px solid var(--border-color)', flexShrink: 0,
+        }}>
+          {isManager && (
             <button onClick={handleGroupCreate} style={{
-              padding: '6px 14px', background: '#0073ea', color: '#fff',
-              borderRadius: 6, fontWeight: 600, fontSize: 13,
+              padding: '8px 14px', background: '#0073ea', color: '#fff',
+              borderRadius: 6, fontWeight: 600, fontSize: 13, minHeight: 44,
             }}>+ Add Group</button>
-            <button onClick={() => setShowAutomations(true)} style={{
-              padding: '5px 12px', border: '1.5px solid #a25ddc', color: '#a25ddc',
-              borderRadius: 6, fontWeight: 600, fontSize: 12,
+          )}
+          <button
+            onClick={() => setShowMoreMenu(true)}
+            style={{
+              padding: '8px 14px', border: '1.5px solid var(--border-color)',
+              borderRadius: 6, fontWeight: 600, fontSize: 13,
+              color: 'var(--text-secondary)', background: 'var(--bg-primary)',
+              minHeight: 44, display: 'flex', alignItems: 'center', gap: 5,
+            }}
+          >⋯ More</button>
+          <div style={{ marginLeft: 'auto' }}>
+            <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
+          </div>
+          <input ref={importFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImportFile} />
+        </div>
+      ) : (
+        /* Desktop toolbar: full button row */
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 20px', background: 'var(--bg-primary)',
+          borderBottom: showFilters ? 'none' : '1px solid var(--border-color)', flexShrink: 0, flexWrap: 'wrap',
+        }}>
+          {isManager && (
+            <>
+              <button onClick={handleGroupCreate} style={{
+                padding: '6px 14px', background: '#0073ea', color: '#fff',
+                borderRadius: 6, fontWeight: 600, fontSize: 13,
+              }}>+ Add Group</button>
+              <button onClick={() => setShowAutomations(true)} style={{
+                padding: '5px 12px', border: '1.5px solid #a25ddc', color: '#a25ddc',
+                borderRadius: 6, fontWeight: 600, fontSize: 12,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                ⚡ Automations
+                {activeAutoCount > 0 && (
+                  <span style={{
+                    background: '#a25ddc', color: '#fff', borderRadius: 10,
+                    padding: '0px 6px', fontSize: 11, fontWeight: 700,
+                  }}>{activeAutoCount}</span>
+                )}
+              </button>
+              <button onClick={() => setShowForms(true)} style={{
+                padding: '5px 12px', border: '1.5px solid #0073ea', color: '#0073ea',
+                borderRadius: 6, fontWeight: 600, fontSize: 12,
+              }}>
+                📋 Forms
+              </button>
+            </>
+          )}
+
+          {/* Filter button */}
+          <button onClick={() => setShowFilters(f => !f)} style={{
+            padding: '5px 12px', border: `1.5px solid ${showFilters || filters.length ? '#0073ea' : '#e6e9ef'}`,
+            borderRadius: 6, fontSize: 12, fontWeight: 600,
+            color: showFilters || filters.length ? '#0073ea' : '#676879',
+            background: showFilters || filters.length ? '#e8f0fe' : '#fff',
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>
+            🔽 Filter{filters.length > 0 ? ` (${filters.length})` : ''}
+          </button>
+
+          {/* Export / Import */}
+          <button onClick={handleExport} style={{
+            padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+            fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>⬇️ Export</button>
+
+          {canEdit && (
+            <>
+              <button
+                onClick={() => importFileRef.current?.click()}
+                disabled={importing}
+                style={{
+                  padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+                  fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  opacity: importing ? 0.6 : 1, cursor: importing ? 'not-allowed' : 'pointer',
+                }}
+              >{importing ? 'Importing…' : '⬆️ Import CSV'}</button>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".csv"
+                style={{ display: 'none' }}
+                onChange={handleImportFile}
+              />
+            </>
+          )}
+
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
+            <button onClick={() => setShowMembers(true)} style={{
               display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              ⚡ Automations
-              {activeAutoCount > 0 && (
+              padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+              fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+            }}>👥 {board.members?.length || 0} Members</button>
+            <button onClick={() => setShowActivityLog(true)} style={{
+              padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
+              fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+            }}>📋 Activity</button>
+            <button
+              onClick={() => setShowTrash(true)}
+              style={{
+                padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                border: `1.5px solid ${trashCount > 0 ? '#e2445c' : '#e6e9ef'}`,
+                color: trashCount > 0 ? '#e2445c' : '#676879',
+                background: trashCount > 0 ? '#fff5f7' : '#fff',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              🗑️ Trash
+              {trashCount > 0 && (
                 <span style={{
-                  background: '#a25ddc', color: '#fff', borderRadius: 10,
+                  background: '#e2445c', color: '#fff', borderRadius: 10,
                   padding: '0px 6px', fontSize: 11, fontWeight: 700,
-                }}>{activeAutoCount}</span>
+                }}>{trashCount}</span>
               )}
             </button>
-            <button onClick={() => setShowForms(true)} style={{
-              padding: '5px 12px', border: '1.5px solid #0073ea', color: '#0073ea',
-              borderRadius: 6, fontWeight: 600, fontSize: 12,
-            }}>
-              📋 Forms
-            </button>
-          </>
-        )}
-
-        {/* Filter button */}
-        <button onClick={() => setShowFilters(f => !f)} style={{
-          padding: '5px 12px', border: `1.5px solid ${showFilters || filters.length ? '#0073ea' : '#e6e9ef'}`,
-          borderRadius: 6, fontSize: 12, fontWeight: 600,
-          color: showFilters || filters.length ? '#0073ea' : '#676879',
-          background: showFilters || filters.length ? '#e8f0fe' : '#fff',
-          display: 'flex', alignItems: 'center', gap: 5,
-        }}>
-          🔽 Filter{filters.length > 0 ? ` (${filters.length})` : ''}
-        </button>
-
-        {/* Export / Import */}
-        <button onClick={handleExport} style={{
-          padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-          fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
-          display: 'flex', alignItems: 'center', gap: 5,
-        }}>⬇️ Export</button>
-
-        {canEdit && (
-          <>
-            <button
-              onClick={() => importFileRef.current?.click()}
-              disabled={importing}
-              style={{
-                padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-                fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
-                display: 'flex', alignItems: 'center', gap: 5,
-                opacity: importing ? 0.6 : 1, cursor: importing ? 'not-allowed' : 'pointer',
-              }}
-            >{importing ? 'Importing…' : '⬆️ Import CSV'}</button>
-            <input
-              ref={importFileRef}
-              type="file"
-              accept=".csv"
-              style={{ display: 'none' }}
-              onChange={handleImportFile}
-            />
-          </>
-        )}
-
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
-          <button onClick={() => setShowMembers(true)} style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-            fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
-          }}>👥 {board.members?.length || 0} Members</button>
-          <button onClick={() => setShowActivityLog(true)} style={{
-            padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-            fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
-          }}>📋 Activity</button>
-          <button
-            onClick={() => setShowTrash(true)}
-            style={{
-              padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-              border: `1.5px solid ${trashCount > 0 ? '#e2445c' : '#e6e9ef'}`,
-              color: trashCount > 0 ? '#e2445c' : '#676879',
-              background: trashCount > 0 ? '#fff5f7' : '#fff',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}
-          >
-            🗑️ Trash
-            {trashCount > 0 && (
-              <span style={{
-                background: '#e2445c', color: '#fff', borderRadius: 10,
-                padding: '0px 6px', fontSize: 11, fontWeight: 700,
-              }}>{trashCount}</span>
-            )}
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Filter bar ── */}
       {showFilters && (
@@ -1444,7 +1723,27 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No groups yet</div>
             {isManager && <div style={{ fontSize: 13 }}>Click "+ Add Group" to get started</div>}
           </div>
+        ) : isMobile ? (
+          /* ── Mobile card view ── */
+          <div style={{ padding: '12px 0' }}>
+            {filteredGroups.map(group => (
+              <MobileCardView
+                key={group.id}
+                group={group}
+                columns={cols}
+                canEdit={canEdit}
+                isManager={isManager}
+                onItemCreate={handleItemCreate}
+                onItemUpdate={handleItemUpdate}
+                onItemDelete={handleItemDelete}
+                onValueChange={handleValueChange}
+                onEditSettings={handleColumnSettingsSave}
+                onOpenDetail={setDetailItemId}
+              />
+            ))}
+          </div>
         ) : (
+          /* ── Desktop table view ── */
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <colgroup>
               <col style={{ width: 6 }} />
@@ -1546,6 +1845,28 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           </table>
         )}
       </div>
+
+      {/* ── Mobile More bottom sheet ── */}
+      {showMoreMenu && (
+        <MoreBottomSheet
+          isManager={isManager}
+          canEdit={canEdit}
+          activeAutoCount={activeAutoCount}
+          trashCount={trashCount}
+          importing={importing}
+          filtersActive={showFilters || filters.length > 0}
+          boardMembersCount={board.members?.length || 0}
+          onClose={() => setShowMoreMenu(false)}
+          onAutomations={() => setShowAutomations(true)}
+          onForms={() => setShowForms(true)}
+          onFilter={() => setShowFilters(f => !f)}
+          onExport={handleExport}
+          onImport={() => importFileRef.current?.click()}
+          onMembers={() => setShowMembers(true)}
+          onActivity={() => setShowActivityLog(true)}
+          onTrash={() => setShowTrash(true)}
+        />
+      )}
 
       {/* ── Modals & panels ── */}
       {detailItemId && (() => {
