@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'; // lazy/Suspense kept for ActivityLogPanel
-import ColumnCell from './ColumnCell';
+import ColumnCell, { parseOwners } from './ColumnCell';
 import AddColumnModal from './AddColumnModal';
 import StatusOptionsEditor from './StatusOptionsEditor';
 import TrashPanel from './TrashPanel';
@@ -13,6 +13,7 @@ import {
   upsertColumnValue, updateBoard, updateBoardEmailSettings,
   getTrashItems, getAutomations,
   exportBoard, importBoardRows,
+  getBoardViews, createView, updateView, deleteView,
 } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -973,9 +974,25 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
           cursor: isManager ? 'grab' : 'default',
         }}
       >
-        <td style={{ width: 6, padding: 0, background: group.color, borderRadius: '3px 0 0 0' }} />
-        <td colSpan={spanAll - 1} style={{ padding: '0', borderBottom: '1px solid #e6e9ef' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px 7px 6px' }}>
+        {/* Color stripe — sticky, no colspan, works in all browsers */}
+        <td style={{ width: 6, padding: 0, background: group.color, borderRadius: '3px 0 0 0', position: 'sticky', left: 0, zIndex: 4 }} />
+
+        {/* Group content — sticky, NO colspan (colspan breaks sticky), overflow:visible so content extends right */}
+        <td style={{
+          padding: 0,
+          position: 'sticky', left: 6, zIndex: 3,
+          overflow: 'visible',
+          background: isGroupDropOver ? '#e8f0fe' : 'var(--bg-primary, #fff)',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 12px 7px 6px',
+            borderBottom: '1px solid #e6e9ef',
+            background: isGroupDropOver ? '#e8f0fe' : 'var(--bg-primary, #fff)',
+            boxShadow: '2px 0 6px rgba(0,0,0,0.07)',
+            whiteSpace: 'nowrap',
+            minWidth: 'max-content',
+          }}>
             {isManager && (
               <span
                 title="Drag to reorder group"
@@ -1000,13 +1017,19 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
             {isManager && (
               <button
                 onClick={() => onGroupDelete(group.id)}
-                style={{ marginLeft: 'auto', color: '#c5c7d0', fontSize: 12, padding: '2px 8px', borderRadius: 4, border: '1px solid #e6e9ef', background: '#fff' }}
+                style={{ marginLeft: 8, color: '#c5c7d0', fontSize: 12, padding: '2px 8px', borderRadius: 4, border: '1px solid #e6e9ef', background: '#fff' }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#e2445c'; e.currentTarget.style.borderColor = '#e2445c'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = '#c5c7d0'; e.currentTarget.style.borderColor = '#e6e9ef'; }}
               >Delete group</button>
             )}
           </div>
         </td>
+
+        {/* Filler — absorbs the remaining columns; not sticky so it scrolls normally */}
+        <td colSpan={spanAll - 2} style={{
+          borderBottom: '1px solid #e6e9ef',
+          background: isGroupDropOver ? '#e8f0fe' : 'var(--bg-primary, #fff)',
+        }} />
       </tr>
 
       {/* ── Item rows with drop indicators ── */}
@@ -1486,6 +1509,840 @@ function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, impo
   );
 }
 
+// ── Avatar helpers (used by AdvancedFilterBar) ────────────────────────────────
+const _AVATAR_COLORS = [
+  '#0073ea','#00c875','#fdab3d','#e2445c',
+  '#a25ddc','#037f4c','#ff642e','#784bd1',
+  '#ff5ac4','#0099cc','#bb3354','#666666',
+];
+function nameToColor(name) {
+  const n = name || '';
+  const sum = n.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  return _AVATAR_COLORS[sum % _AVATAR_COLORS.length];
+}
+function nameToInitials(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// ── Hover row helper for AdvancedFilterBar ────────────────────────────────────
+function FilterHoverRow({ selected, onClick, children }) {
+  const [h, setH] = useState(false);
+  const base = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 13 };
+  return (
+    <div
+      style={{ ...base, background: selected ? '#f0f6ff' : h ? '#f7f8f9' : 'transparent', fontWeight: selected ? 600 : 400 }}
+      onClick={onClick}
+      onMouseEnter={() => setH(true)}
+      onMouseLeave={() => setH(false)}
+    >{children}</div>
+  );
+}
+
+// ── Advanced filter bar constants ─────────────────────────────────────────────
+const FILTER_PRIORITY_OPTIONS = [
+  { label: 'Critical', color: '#e2445c' },
+  { label: 'High',     color: '#ff642e' },
+  { label: 'Medium',   color: '#fdab3d' },
+  { label: 'Low',      color: '#00c875' },
+];
+const FILTER_DUE_DATE_OPTIONS = [
+  { value: 'overdue',   label: 'Overdue' },
+  { value: 'today',     label: 'Due Today' },
+  { value: 'week',      label: 'Due This Week' },
+  { value: 'next_week', label: 'Due Next Week' },
+  { value: 'none',      label: 'No Due Date' },
+  { value: 'has_date',  label: 'Has Due Date' },
+];
+const FILTER_DEFAULT_STATUS = [
+  { label: 'Not Started', color: '#c4c4c4' },
+  { label: 'In Progress', color: '#fdab3d' },
+  { label: 'Done',        color: '#00c875' },
+  { label: 'Stuck',       color: '#e2445c' },
+];
+
+function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols }) {
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [personSearch, setPersonSearch] = useState('');
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpenDropdown(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openDropdown]);
+
+  // Collect options from board columns
+  const personOptions = [...new Set(
+    cols.filter(c => c.type === 'person').flatMap(c => c.settings?.options || [])
+  )];
+  const statusMap = {};
+  cols.filter(c => c.type === 'status').forEach(c => {
+    (c.settings?.options || FILTER_DEFAULT_STATUS).forEach(o => {
+      if (!statusMap[o.label]) statusMap[o.label] = o.color;
+    });
+  });
+  const statusOptions = Object.entries(statusMap).map(([label, color]) => ({ label, color }));
+  const filteredPersons = personOptions.filter(p =>
+    !personSearch || p.toLowerCase().includes(personSearch.toLowerCase())
+  );
+
+  const totalActive = activeFilters.persons.length + activeFilters.groups.length +
+    activeFilters.statuses.length + activeFilters.priorities.length + (activeFilters.dueDate ? 1 : 0);
+
+  const toggle = (key, val) => setActiveFilters(prev => {
+    const arr = prev[key];
+    return { ...prev, [key]: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] };
+  });
+
+  const selectAll = (key, options) => setActiveFilters(prev => ({
+    ...prev, [key]: prev[key].length === options.length ? [] : [...options],
+  }));
+
+  const filterBtn = (label, isActive) => ({
+    border: `1px solid ${isActive ? '#0073ea' : '#c8dfff'}`,
+    borderRadius: 20, padding: '5px 12px', fontSize: 13,
+    background: isActive ? '#e8f0fe' : '#fff',
+    color: isActive ? '#0073ea' : '#323338',
+    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+  });
+
+  const dropdownBase = {
+    position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+    background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+    zIndex: 100, minWidth: 200, maxHeight: 280, overflowY: 'auto',
+    border: '1px solid #e0e3e8',
+  };
+
+
+  const Checkbox = ({ checked }) => (
+    <span style={{
+      width: 16, height: 16, borderRadius: 3, border: '2px solid #0073ea',
+      background: checked ? '#0073ea' : '#fff',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      {checked && <span style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>✓</span>}
+    </span>
+  );
+
+  const Radio = ({ checked }) => (
+    <span style={{
+      width: 16, height: 16, borderRadius: '50%', border: '2px solid #0073ea',
+      background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      {checked && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0073ea' }} />}
+    </span>
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 6, padding: '10px 16px', margin: '0 16px 6px',
+        display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+        flexShrink: 0,
+      }}
+    >
+      <span style={{ fontSize: 13, color: 'var(--primary-blue)', fontWeight: 600, flexShrink: 0 }}>
+        🔍 Filters:
+      </span>
+
+      {/* ── Person ── */}
+      <div style={{ position: 'relative' }}>
+        <button
+          style={filterBtn('person', activeFilters.persons.length > 0)}
+          onClick={() => { setOpenDropdown(openDropdown === 'person' ? null : 'person'); setPersonSearch(''); }}
+        >
+          Person{activeFilters.persons.length > 0 ? ` (${activeFilters.persons.length})` : ''} ▾
+        </button>
+        {openDropdown === 'person' && (
+          <div style={dropdownBase} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '8px 10px 6px', borderBottom: '1px solid #f0f1f4' }}>
+              <input autoFocus placeholder="Search people…" value={personSearch}
+                onChange={e => setPersonSearch(e.target.value)}
+                style={{ width: '100%', border: '1px solid #ddd', borderRadius: 6, padding: '5px 8px', fontSize: 12, outline: 'none' }}
+              />
+            </div>
+            {filteredPersons.length > 0 && (
+              <FilterHoverRow selected={activeFilters.persons.length === filteredPersons.length && filteredPersons.length > 0}
+                onClick={() => selectAll('persons', filteredPersons)}>
+                <Checkbox checked={activeFilters.persons.length === filteredPersons.length && filteredPersons.length > 0} />
+                <span>Select All</span>
+              </FilterHoverRow>
+            )}
+            {filteredPersons.length === 0 && (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: '#aaa', textAlign: 'center' }}>No people found</div>
+            )}
+            {filteredPersons.map(name => (
+              <FilterHoverRow key={name} selected={activeFilters.persons.includes(name)} onClick={() => toggle('persons', name)}>
+                <Checkbox checked={activeFilters.persons.includes(name)} />
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: nameToColor(name), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                  {nameToInitials(name)}
+                </div>
+                {name}
+              </FilterHoverRow>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Group ── */}
+      <div style={{ position: 'relative' }}>
+        <button
+          style={filterBtn('group', activeFilters.groups.length > 0)}
+          onClick={() => setOpenDropdown(openDropdown === 'group' ? null : 'group')}
+        >
+          Group{activeFilters.groups.length > 0 ? ` (${activeFilters.groups.length})` : ''} ▾
+        </button>
+        {openDropdown === 'group' && (
+          <div style={dropdownBase} onClick={e => e.stopPropagation()}>
+            <FilterHoverRow selected={activeFilters.groups.length === allGroups.length && allGroups.length > 0}
+              onClick={() => selectAll('groups', allGroups.map(g => g.id))}>
+              <Checkbox checked={activeFilters.groups.length === allGroups.length && allGroups.length > 0} />
+              <span>Select All</span>
+            </FilterHoverRow>
+            {allGroups.map(g => (
+              <FilterHoverRow key={g.id} selected={activeFilters.groups.includes(g.id)} onClick={() => toggle('groups', g.id)}>
+                <Checkbox checked={activeFilters.groups.includes(g.id)} />
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: g.color, flexShrink: 0 }} />
+                {g.name}
+              </FilterHoverRow>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Status ── */}
+      <div style={{ position: 'relative' }}>
+        <button
+          style={filterBtn('status', activeFilters.statuses.length > 0)}
+          onClick={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+        >
+          Status{activeFilters.statuses.length > 0 ? ` (${activeFilters.statuses.length})` : ''} ▾
+        </button>
+        {openDropdown === 'status' && (
+          <div style={dropdownBase} onClick={e => e.stopPropagation()}>
+            <FilterHoverRow selected={statusOptions.length > 0 && activeFilters.statuses.length === statusOptions.length}
+              onClick={() => selectAll('statuses', statusOptions.map(o => o.label))}>
+              <Checkbox checked={statusOptions.length > 0 && activeFilters.statuses.length === statusOptions.length} />
+              <span>Select All</span>
+            </FilterHoverRow>
+            {statusOptions.map(opt => (
+              <FilterHoverRow key={opt.label} selected={activeFilters.statuses.includes(opt.label)} onClick={() => toggle('statuses', opt.label)}>
+                <Checkbox checked={activeFilters.statuses.includes(opt.label)} />
+                <span style={{ background: opt.color, color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>{opt.label}</span>
+              </FilterHoverRow>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Priority ── */}
+      <div style={{ position: 'relative' }}>
+        <button
+          style={filterBtn('priority', activeFilters.priorities.length > 0)}
+          onClick={() => setOpenDropdown(openDropdown === 'priority' ? null : 'priority')}
+        >
+          Priority{activeFilters.priorities.length > 0 ? ` (${activeFilters.priorities.length})` : ''} ▾
+        </button>
+        {openDropdown === 'priority' && (
+          <div style={dropdownBase} onClick={e => e.stopPropagation()}>
+            <FilterHoverRow selected={activeFilters.priorities.length === FILTER_PRIORITY_OPTIONS.length}
+              onClick={() => selectAll('priorities', FILTER_PRIORITY_OPTIONS.map(o => o.label))}>
+              <Checkbox checked={activeFilters.priorities.length === FILTER_PRIORITY_OPTIONS.length} />
+              <span>Select All</span>
+            </FilterHoverRow>
+            {FILTER_PRIORITY_OPTIONS.map(opt => (
+              <FilterHoverRow key={opt.label} selected={activeFilters.priorities.includes(opt.label)} onClick={() => toggle('priorities', opt.label)}>
+                <Checkbox checked={activeFilters.priorities.includes(opt.label)} />
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: opt.color, flexShrink: 0 }} />
+                {opt.label}
+              </FilterHoverRow>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Due Date ── */}
+      <div style={{ position: 'relative' }}>
+        <button
+          style={filterBtn('dueDate', !!activeFilters.dueDate)}
+          onClick={() => setOpenDropdown(openDropdown === 'dueDate' ? null : 'dueDate')}
+        >
+          Due Date{activeFilters.dueDate ? ' ✓' : ''} ▾
+        </button>
+        {openDropdown === 'dueDate' && (
+          <div style={dropdownBase} onClick={e => e.stopPropagation()}>
+            {FILTER_DUE_DATE_OPTIONS.map(opt => (
+              <FilterHoverRow key={opt.value} selected={activeFilters.dueDate === opt.value}
+                onClick={() => { setActiveFilters(prev => ({ ...prev, dueDate: activeFilters.dueDate === opt.value ? null : opt.value })); setOpenDropdown(null); }}>
+                <Radio checked={activeFilters.dueDate === opt.value} />
+                {opt.label}
+              </FilterHoverRow>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Clear All ── */}
+      {totalActive > 0 && (
+        <button
+          onClick={() => setActiveFilters({ persons: [], groups: [], statuses: [], priorities: [], dueDate: null })}
+          style={{ fontSize: 12, color: '#e2445c', fontWeight: 600, border: '1px solid #f5c0ca', borderRadius: 20, padding: '5px 12px', background: '#fff', cursor: 'pointer', flexShrink: 0 }}
+          onMouseEnter={e => e.currentTarget.style.background = '#fff5f7'}
+          onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+        >× Clear All</button>
+      )}
+    </div>
+  );
+}
+
+// ── View Tab Bar ──────────────────────────────────────────────────────────────
+function ViewTabBar({ views, activeViewId, unsavedChanges, onSwitch, onRename, onDelete, onCreate, isManager }) {
+  const [menuViewId, setMenuViewId] = useState(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuViewId) return;
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuViewId(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuViewId]);
+
+  const openMenu = (e, viewId) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left });
+    setMenuViewId(v => v === viewId ? null : viewId);
+  };
+
+  return (
+    <div style={{
+      height: 38, background: 'var(--bg-primary, #fff)',
+      borderBottom: '1px solid var(--border-color, #e6e9ef)',
+      display: 'flex', alignItems: 'center', padding: '0 16px',
+      flexShrink: 0, gap: 0, overflowX: 'auto',
+    }}>
+      {views.map(view => {
+        const isActive = view.id === activeViewId;
+        const showDot = isActive && unsavedChanges;
+        return (
+          <div
+            key={view.id}
+            style={{
+              display: 'flex', alignItems: 'center', height: '100%', gap: 4,
+              borderBottom: isActive ? '2px solid #0073ea' : '2px solid transparent',
+              padding: '0 4px 0 12px',
+              fontSize: 13, fontWeight: 500,
+              color: isActive ? '#0073ea' : '#676879',
+              cursor: 'pointer', userSelect: 'none', flexShrink: 0,
+              transition: 'color 0.12s',
+            }}
+            onClick={() => !isActive && onSwitch(view)}
+            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--hover-bg, #f5f6f8)'; }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = ''; }}
+          >
+            <span style={{ fontSize: 13 }}>⊞</span>
+            <InlineEdit
+              value={view.name}
+              onSave={name => onRename(view.id, name)}
+              style={{ fontSize: 13, fontWeight: 500, color: isActive ? '#0073ea' : '#676879', maxWidth: 140 }}
+            />
+            {showDot && (
+              <span title="Unsaved filter changes" style={{ width: 7, height: 7, borderRadius: '50%', background: '#fdab3d', flexShrink: 0 }} />
+            )}
+            {isManager && (
+              <button
+                onClick={e => openMenu(e, view.id)}
+                style={{
+                  width: 20, height: 20, borderRadius: 4, border: 'none',
+                  background: 'transparent', color: '#c5c7d0', fontSize: 14,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', flexShrink: 0, lineHeight: 1,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#e6e9ef'; e.currentTarget.style.color = '#676879'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#c5c7d0'; }}
+              >…</button>
+            )}
+          </div>
+        );
+      })}
+
+      {/* + Add View */}
+      {isManager && (
+        <button
+          onClick={onCreate}
+          style={{
+            marginLeft: 6, padding: '4px 12px', fontSize: 12, fontWeight: 500,
+            color: '#676879', border: '1px dashed #c5c7d0',
+            borderRadius: 6, background: 'transparent', cursor: 'pointer', flexShrink: 0,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#0073ea'; e.currentTarget.style.borderColor = '#0073ea'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = '#676879'; e.currentTarget.style.borderColor = '#c5c7d0'; }}
+        >+ Add View</button>
+      )}
+
+      {/* Context menu */}
+      {menuViewId && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed', top: menuPos.top, left: menuPos.left,
+            background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            border: '1px solid #e6e9ef', zIndex: 10000, minWidth: 160, overflow: 'hidden',
+          }}
+        >
+          <div
+            onClick={() => {
+              const isLast = views.length <= 1;
+              if (isLast) return;
+              onDelete(menuViewId);
+              setMenuViewId(null);
+            }}
+            style={{
+              padding: '9px 14px', fontSize: 13, cursor: views.length <= 1 ? 'not-allowed' : 'pointer',
+              color: views.length <= 1 ? '#c5c7d0' : '#e2445c',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+            onMouseEnter={e => { if (views.length > 1) e.currentTarget.style.background = '#fff5f7'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = ''; }}
+          >
+            🗑 Delete view
+            {views.length <= 1 && <span style={{ fontSize: 11, color: '#aaa', marginLeft: 'auto' }}>last view</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Condition options by column type ──────────────────────────────────────────
+function conditionsFor(colType) {
+  switch (colType) {
+    case 'status':
+    case 'priority':
+    case 'dropdown':
+      return [
+        { value: 'is',            label: 'is' },
+        { value: 'is_not',        label: 'is not' },
+        { value: 'is_empty',      label: 'is empty' },
+        { value: 'is_not_empty',  label: 'is not empty' },
+      ];
+    case 'person':
+      return [
+        { value: 'is',            label: 'is' },
+        { value: 'is_not',        label: 'is not' },
+        { value: 'is_empty',      label: 'is empty' },
+        { value: 'is_not_empty',  label: 'is not empty' },
+      ];
+    case 'date':
+      return [
+        { value: 'overdue',       label: 'overdue' },
+        { value: 'today',         label: 'due today' },
+        { value: 'this_week',     label: 'due this week' },
+        { value: 'next_week',     label: 'due next week' },
+        { value: 'before',        label: 'before' },
+        { value: 'after',         label: 'after' },
+        { value: 'is',            label: 'is (exact)' },
+        { value: 'is_empty',      label: 'is empty' },
+        { value: 'is_not_empty',  label: 'is not empty' },
+      ];
+    default: // text, email, number, etc.
+      return [
+        { value: 'contains',      label: 'contains' },
+        { value: 'not_contains',  label: 'does not contain' },
+        { value: 'is',            label: 'is (exact)' },
+        { value: 'is_not',        label: 'is not' },
+        { value: 'is_empty',      label: 'is empty' },
+        { value: 'is_not_empty',  label: 'is not empty' },
+      ];
+  }
+}
+
+const NO_VALUE_CONDITIONS = new Set([
+  'is_empty', 'is_not_empty', 'overdue', 'today', 'this_week', 'next_week',
+]);
+
+// ── Single filter row ─────────────────────────────────────────────────────────
+function FilterRow({ rule, cols, boardMembers, onChange, onRemove, isFirst }) {
+  const [valueDropOpen, setValueDropOpen] = useState(false);
+  const valueDropRef = useRef(null);
+
+  // Close value dropdown on outside click
+  useEffect(() => {
+    if (!valueDropOpen) return;
+    const handler = (e) => {
+      if (valueDropRef.current && !valueDropRef.current.contains(e.target)) {
+        setValueDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [valueDropOpen]);
+
+  const colOptions = [
+    { id: 'name', title: 'Item Name', type: 'text' },
+    ...cols,
+  ];
+
+  const selectedCol = colOptions.find(c => String(c.id) === String(rule.column_id)) || null;
+  const colType = selectedCol?.type || 'text';
+  const conditions = conditionsFor(colType);
+  const needsValue = rule.condition && !NO_VALUE_CONDITIONS.has(rule.condition);
+
+  // Close value dropdown when column or condition changes
+  const prevColumnId = useRef(rule.column_id);
+  const prevCondition = useRef(rule.condition);
+  useEffect(() => {
+    if (rule.column_id !== prevColumnId.current || rule.condition !== prevCondition.current) {
+      setValueDropOpen(false);
+      prevColumnId.current = rule.column_id;
+      prevCondition.current = rule.condition;
+    }
+  }, [rule.column_id, rule.condition]);
+
+  const getValueOptions = () => {
+    if (!selectedCol) return [];
+    if (colType === 'status' || colType === 'dropdown') {
+      const opts = selectedCol.settings?.options || [];
+      return opts.map(o => (typeof o === 'string' ? o : o.label));
+    }
+    if (colType === 'priority') return ['Critical', 'High', 'Medium', 'Low'];
+    if (colType === 'person') {
+      const opts = selectedCol.settings?.options || [];
+      return opts.length ? opts : boardMembers.map(m => m.name);
+    }
+    return [];
+  };
+
+  const valueOptions = getValueOptions();
+  const isMulti = ['status', 'priority', 'dropdown', 'person'].includes(colType);
+
+  const toggleMultiValue = (opt) => {
+    const current = Array.isArray(rule.value) ? rule.value : (rule.value ? [rule.value] : []);
+    const next = current.includes(opt) ? current.filter(v => v !== opt) : [...current, opt];
+    onChange({ ...rule, value: next });
+  };
+
+  const multiValues = Array.isArray(rule.value) ? rule.value : (rule.value ? [rule.value] : []);
+
+  const inputStyle = {
+    border: '1px solid #e6e9ef', borderRadius: 6, padding: '4px 8px',
+    fontSize: 12, outline: 'none', background: 'var(--input-bg, #fff)',
+    color: 'var(--text-primary, #323338)', minWidth: 80,
+  };
+  const selectStyle = { ...inputStyle, cursor: 'pointer', paddingRight: 4 };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      {/* Where / And label */}
+      <span style={{ fontSize: 12, color: '#676879', width: 38, textAlign: 'right', flexShrink: 0 }}>
+        {isFirst ? 'Where' : 'And'}
+      </span>
+
+      {/* Column dropdown */}
+      <select
+        value={rule.column_id || ''}
+        onChange={e => {
+          const col = colOptions.find(c => String(c.id) === e.target.value);
+          onChange({ ...rule, column_id: e.target.value, column_name: col?.title || '', column_type: col?.type || 'text', condition: '', value: '' });
+        }}
+        style={{ ...selectStyle, borderColor: !rule.column_id ? '#e2445c' : '#e6e9ef' }}
+      >
+        <option value="">Select column…</option>
+        {colOptions.map(c => (
+          <option key={c.id} value={String(c.id)}>{c.title}</option>
+        ))}
+      </select>
+
+      {/* Condition dropdown */}
+      {rule.column_id && (
+        <select
+          value={rule.condition || ''}
+          onChange={e => onChange({ ...rule, condition: e.target.value, value: '' })}
+          style={{ ...selectStyle, borderColor: !rule.condition ? '#e2445c' : '#e6e9ef' }}
+        >
+          <option value="">Select condition…</option>
+          {conditions.map(c => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+      )}
+
+      {/* Value input */}
+      {rule.column_id && rule.condition && needsValue && (
+        isMulti && valueOptions.length > 0 ? (
+          /* Multi-select with toggle dropdown */
+          <div ref={valueDropRef} style={{ position: 'relative' }}>
+            <div
+              onClick={() => setValueDropOpen(o => !o)}
+              style={{
+                ...inputStyle, display: 'flex', alignItems: 'center', gap: 4,
+                cursor: 'pointer', minWidth: 130, flexWrap: 'wrap', maxWidth: 240,
+                borderColor: valueDropOpen ? '#0073ea' : '#e6e9ef',
+                userSelect: 'none',
+              }}
+            >
+              {multiValues.length === 0 ? (
+                <span style={{ color: '#aaa', fontSize: 12, flex: 1 }}>Any…</span>
+              ) : multiValues.map(v => (
+                <span key={v} style={{
+                  background: '#e8f0fe', color: '#0073ea', borderRadius: 10,
+                  padding: '1px 7px', fontSize: 11, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: 3,
+                }}>
+                  {v}
+                  <span
+                    style={{ cursor: 'pointer', fontSize: 13, lineHeight: 1 }}
+                    onClick={e => { e.stopPropagation(); toggleMultiValue(v); }}
+                  >×</span>
+                </span>
+              ))}
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: '#676879', flexShrink: 0 }}>
+                {valueDropOpen ? '▲' : '▼'}
+              </span>
+            </div>
+
+            {valueDropOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 4px)', left: 0,
+                background: 'var(--bg-primary, #fff)', border: '1px solid #e6e9ef',
+                borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                zIndex: 500, minWidth: 160, maxHeight: 220, overflowY: 'auto',
+              }}>
+                {valueOptions.map(opt => (
+                  <div
+                    key={opt}
+                    onMouseDown={e => { e.preventDefault(); toggleMultiValue(opt); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '7px 12px', fontSize: 13, cursor: 'pointer',
+                      background: multiValues.includes(opt) ? '#f0f6ff' : 'transparent',
+                      fontWeight: multiValues.includes(opt) ? 600 : 400,
+                    }}
+                    onMouseEnter={e => { if (!multiValues.includes(opt)) e.currentTarget.style.background = '#f7f8f9'; }}
+                    onMouseLeave={e => { if (!multiValues.includes(opt)) e.currentTarget.style.background = multiValues.includes(opt) ? '#f0f6ff' : 'transparent'; }}
+                  >
+                    <span style={{
+                      width: 14, height: 14, borderRadius: 3, border: '2px solid #0073ea', flexShrink: 0,
+                      background: multiValues.includes(opt) ? '#0073ea' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {multiValues.includes(opt) && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                    </span>
+                    {opt}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : colType === 'date' ? (
+          <input
+            type="date"
+            value={typeof rule.value === 'string' ? rule.value : ''}
+            onChange={e => onChange({ ...rule, value: e.target.value })}
+            style={inputStyle}
+          />
+        ) : (
+          <input
+            type="text"
+            placeholder="Value…"
+            value={typeof rule.value === 'string' ? rule.value : ''}
+            onChange={e => onChange({ ...rule, value: e.target.value })}
+            style={{ ...inputStyle, minWidth: 120 }}
+          />
+        )
+      )}
+
+      {/* Delete row button */}
+      <button
+        onClick={onRemove}
+        title="Remove filter"
+        style={{
+          width: 24, height: 24, borderRadius: 4, border: 'none',
+          background: 'transparent', color: '#c5c7d0', fontSize: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', lineHeight: 1, flexShrink: 0,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#e2445c'; e.currentTarget.style.background = '#fff5f7'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = '#c5c7d0'; e.currentTarget.style.background = 'transparent'; }}
+      >×</button>
+    </div>
+  );
+}
+
+// ── View Filter Panel ─────────────────────────────────────────────────────────
+function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, onSave, unsavedChanges, totalItems, filteredItems }) {
+  const addRule = () => {
+    const newRule = { id: `f_${Date.now()}`, column_id: '', column_name: '', column_type: 'text', condition: '', value: '' };
+    setActiveFilters([...activeFilters, newRule]);
+  };
+
+  const updateRule = (idx, updated) => {
+    setActiveFilters(activeFilters.map((r, i) => i === idx ? updated : r));
+  };
+
+  const removeRule = (idx) => {
+    setActiveFilters(activeFilters.filter((_, i) => i !== idx));
+  };
+
+  const clearAll = () => setActiveFilters([]);
+
+  const completeRules = activeFilters.filter(f =>
+    f.column_id && f.condition &&
+    (NO_VALUE_CONDITIONS.has(f.condition) ? true : (Array.isArray(f.value) ? f.value.length > 0 : f.value?.length > 0))
+  );
+
+  return (
+    <div style={{
+      background: 'var(--card-bg, #fff)',
+      border: '1px solid var(--border-color, #e6e9ef)',
+      borderRadius: 8, padding: '12px 16px',
+      margin: '0 16px 8px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+      flexShrink: 0,
+    }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #323338)' }}>
+          Advanced filters
+        </span>
+        {completeRules.length > 0 && (
+          <span style={{ fontSize: 12, color: '#676879' }}>
+            Showing {filteredItems} of {totalItems} item{totalItems !== 1 ? 's' : ''}
+          </span>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {activeFilters.length > 0 && (
+            <button
+              onClick={clearAll}
+              style={{ fontSize: 12, color: '#e2445c', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+              onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+              onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+            >Clear all</button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {activeFilters.map((rule, idx) => (
+          <FilterRow
+            key={rule.id || idx}
+            rule={rule}
+            cols={cols}
+            boardMembers={board.members || []}
+            onChange={updated => updateRule(idx, updated)}
+            onRemove={() => removeRule(idx)}
+            isFirst={idx === 0}
+          />
+        ))}
+      </div>
+
+      {/* Footer row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: activeFilters.length > 0 ? 10 : 0 }}>
+        <button
+          onClick={addRule}
+          style={{
+            fontSize: 12, color: '#0073ea', fontWeight: 600,
+            background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}
+          onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+          onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+        >+ New filter</button>
+
+        <button
+          onClick={onSave}
+          style={{
+            padding: '6px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+            background: '#0073ea', color: '#fff', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 5,
+            opacity: activeFilters.length === 0 && !unsavedChanges ? 0.6 : 1,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#0060c0'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#0073ea'; }}
+        >
+          Save to this view{unsavedChanges ? ' ●' : ''}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Filter logic ──────────────────────────────────────────────────────────────
+function matchesFilter(item, rule) {
+  const { column_id, column_type, condition, value } = rule;
+
+  let itemValue;
+  const colIdStr = String(column_id);
+  if (colIdStr === 'name') {
+    itemValue = item.name || '';
+  } else {
+    itemValue = item.values?.[column_id] || item.values?.[colIdStr] || '';
+  }
+
+  switch (condition) {
+    case 'is':
+      if (Array.isArray(value)) return value.length === 0 || value.includes(itemValue);
+      return itemValue === value;
+    case 'is_not':
+      if (Array.isArray(value)) return value.length === 0 || !value.includes(itemValue);
+      return itemValue !== value;
+    case 'is_empty':
+      return !itemValue || itemValue === '';
+    case 'is_not_empty':
+      return !!itemValue && itemValue !== '';
+    case 'contains':
+      return String(itemValue).toLowerCase().includes(String(value).toLowerCase());
+    case 'not_contains':
+      return !String(itemValue).toLowerCase().includes(String(value).toLowerCase());
+    case 'before':
+      return !!itemValue && new Date(itemValue) < new Date(value);
+    case 'after':
+      return !!itemValue && new Date(itemValue) > new Date(value);
+    case 'overdue': {
+      const now = new Date(); now.setHours(0, 0, 0, 0);
+      return !!itemValue && new Date(itemValue) < now;
+    }
+    case 'today': {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const d = itemValue ? new Date(itemValue) : null;
+      if (!d) return false;
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() === today.getTime();
+    }
+    case 'this_week': {
+      const now = new Date(); now.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(now); weekEnd.setDate(now.getDate() + 7);
+      const d = itemValue ? new Date(itemValue) : null;
+      if (!d) return false;
+      d.setHours(0, 0, 0, 0);
+      return d >= now && d <= weekEnd;
+    }
+    case 'next_week': {
+      const now = new Date(); now.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(now); weekEnd.setDate(now.getDate() + 7);
+      const nextWeekEnd = new Date(now); nextWeekEnd.setDate(now.getDate() + 14);
+      const d = itemValue ? new Date(itemValue) : null;
+      if (!d) return false;
+      d.setHours(0, 0, 0, 0);
+      return d > weekEnd && d <= nextWeekEnd;
+    }
+    default: return true;
+  }
+}
+
 // ── Main Board ────────────────────────────────────────────────────────────────
 export default function Board({ board, onBoardChange, openItemId, onOpenItemDone }) {
   const [showAddColumn, setShowAddColumn] = useState(false);
@@ -1501,6 +2358,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const { isManager, canEdit } = useAuth();
   const [filters, setFilters] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [views, setViews] = useState([]);
+  const [activeViewId, setActiveViewId] = useState(null);
+  const [activeFilters, setActiveFilters] = useState([]); // array of {id,column_id,column_type,condition,value}
+  const [unsavedChanges, setUnsavedChanges] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [detailItemId, setDetailItemId] = useState(null);
   const [detailDefaultTab, setDetailDefaultTab] = useState('fields');
@@ -1561,10 +2423,69 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     onBoardChange(prev => ({ ...prev, ...updater(prev) }));
   }, [onBoardChange]);
 
+  // ── View handlers ─────────────────────────────────────────────────────────
+  const handleSwitchView = (view) => {
+    setActiveViewId(view.id);
+    setActiveFilters(view.filters || []);
+    setUnsavedChanges(false);
+  };
+
+  const handleViewCreate = async () => {
+    try {
+      const newView = await createView({ board_id: board.id, name: 'New View', type: 'table', filters: [] });
+      setViews(prev => [...prev, newView]);
+      setActiveViewId(newView.id);
+      setActiveFilters([]);
+      setUnsavedChanges(false);
+      setFilterPanelOpen(true);
+    } catch { toast('Failed to create view', 'error'); }
+  };
+
+  const handleViewRename = async (id, name) => {
+    try {
+      const updated = await updateView(id, { name });
+      setViews(prev => prev.map(v => v.id === id ? { ...v, name: updated.name } : v));
+    } catch { toast('Failed to rename view', 'error'); }
+  };
+
+  const handleViewDelete = async (id) => {
+    if (views.length <= 1) return;
+    try {
+      await deleteView(id);
+      const remaining = views.filter(v => v.id !== id);
+      setViews(remaining);
+      if (activeViewId === id) {
+        setActiveViewId(remaining[0].id);
+        setActiveFilters(remaining[0].filters || []);
+        setUnsavedChanges(false);
+      }
+    } catch { toast('Failed to delete view', 'error'); }
+  };
+
+  const handleSaveView = async () => {
+    if (!activeViewId) return;
+    try {
+      const updated = await updateView(activeViewId, { filters: activeFilters });
+      setViews(prev => prev.map(v => v.id === activeViewId ? { ...v, filters: updated.filters } : v));
+      setUnsavedChanges(false);
+      toast('View saved!', 'success');
+    } catch { toast('Failed to save view', 'error'); }
+  };
+
   // Load trash count + active automation count when board changes
   useEffect(() => {
     getTrashItems(board.id).then(r => setTrashCount(r.data.length)).catch(() => {});
     getAutomations(board.id).then(r => setActiveAutoCount(r.data.filter(a => a.enabled).length)).catch(() => {});
+  }, [board.id]);
+
+  // Load views on board mount / board change
+  useEffect(() => {
+    getBoardViews(board.id).then(data => {
+      setViews(data);
+      setActiveViewId(data[0]?.id ?? null);
+      setActiveFilters(data[0]?.filters ?? []);
+      setUnsavedChanges(false);
+    }).catch(() => {});
   }, [board.id]);
 
   // Track viewport for mobile layout
@@ -2129,7 +3050,10 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     });
   };
 
-  // Apply filters to groups
+  const cols = board.columns || [];
+  const groups = board.groups || [];
+
+  // Apply text-search filters (existing)
   const applyFilters = (grps) => {
     if (!filters.length) return grps;
     return grps.map(g => ({
@@ -2143,9 +3067,24 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     }));
   };
 
-  const cols = board.columns || [];
-  const groups = board.groups || [];
-  const filteredGroups = applyFilters(groups);
+  // Apply view-based filters (new — replaces applyAdvancedFilters)
+  const applyViewFilters = useCallback((grps) => {
+    const activeRules = activeFilters.filter(f =>
+      f.column_id && f.condition &&
+      (NO_VALUE_CONDITIONS.has(f.condition) ? true : (Array.isArray(f.value) ? f.value.length > 0 : (f.value?.length > 0)))
+    );
+    if (!activeRules.length) return grps;
+    return grps
+      .map(g => ({ ...g, items: (g.items || []).filter(item => activeRules.every(r => matchesFilter(item, r))) }))
+      .filter(g => g.items.length > 0);
+  }, [activeFilters]);
+
+  const filteredGroups = applyViewFilters(applyFilters(groups));
+
+  // Counts for "Showing X of Y" display
+  const totalItems      = groups.reduce((s, g) => s + (g.items?.length || 0), 0);
+  const filteredItems   = filteredGroups.reduce((s, g) => s + (g.items?.length || 0), 0);
+  const activeFilterCount = activeFilters.filter(f => f.column_id && f.condition).length;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'Figtree, Roboto, -apple-system, sans-serif' }}>
@@ -2183,7 +3122,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '8px 20px', background: 'var(--bg-primary)',
-          borderBottom: showFilters ? 'none' : '1px solid var(--border-color)', flexShrink: 0, flexWrap: 'wrap',
+          borderBottom: 'none', flexShrink: 0, flexWrap: 'wrap',
         }}>
           {isManager && (
             <>
@@ -2214,15 +3153,21 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           )}
 
           {/* Filter button */}
-          <button onClick={() => setShowFilters(f => !f)} style={{
-            padding: '5px 12px', border: `1.5px solid ${showFilters || filters.length ? '#0073ea' : '#e6e9ef'}`,
-            borderRadius: 6, fontSize: 12, fontWeight: 600,
-            color: showFilters || filters.length ? '#0073ea' : '#676879',
-            background: showFilters || filters.length ? '#e8f0fe' : '#fff',
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>
-            🔽 Filter{filters.length > 0 ? ` (${filters.length})` : ''}
-          </button>
+          {(() => {
+            const totalCount = filters.length + activeFilterCount;
+            const isActive = filterPanelOpen || totalCount > 0;
+            return (
+              <button onClick={() => setFilterPanelOpen(f => !f)} style={{
+                padding: '5px 12px', border: `1.5px solid ${isActive ? '#0073ea' : '#e6e9ef'}`,
+                borderRadius: 6, fontSize: 12, fontWeight: 600,
+                color: isActive ? '#0073ea' : '#676879',
+                background: isActive ? '#e8f0fe' : '#fff',
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                🔽 Filter{totalCount > 0 ? ` (${totalCount})` : ''}
+              </button>
+            );
+          })()}
 
           {/* Export / Import */}
           <button onClick={handleExport} style={{
@@ -2286,7 +3231,37 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         </div>
       )}
 
-      {/* ── Filter bar ── */}
+      {/* ── View tab bar (desktop only) ── */}
+      {!isMobile && views.length > 0 && (
+        <ViewTabBar
+          views={views}
+          activeViewId={activeViewId}
+          unsavedChanges={unsavedChanges}
+          onSwitch={handleSwitchView}
+          onRename={handleViewRename}
+          onDelete={handleViewDelete}
+          onCreate={handleViewCreate}
+          isManager={isManager}
+        />
+      )}
+
+      {/* ── View filter panel (desktop only) ── */}
+      {!isMobile && filterPanelOpen && (
+        <div style={{ flexShrink: 0, paddingTop: 8 }}>
+          <ViewFilterPanel
+            cols={cols}
+            board={board}
+            activeFilters={activeFilters}
+            setActiveFilters={(f) => { setActiveFilters(f); setUnsavedChanges(true); }}
+            onSave={handleSaveView}
+            unsavedChanges={unsavedChanges}
+            totalItems={totalItems}
+            filteredItems={filteredItems}
+          />
+        </div>
+      )}
+
+      {/* ── Filter bar (mobile / old text-search — kept for MoreBottomSheet) ── */}
       {showFilters && (
         <FilterBar cols={cols} filters={filters} onFiltersChange={setFilters} />
       )}
@@ -2467,7 +3442,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           activeAutoCount={activeAutoCount}
           trashCount={trashCount}
           importing={importing}
-          filtersActive={showFilters || filters.length > 0}
+          filtersActive={showFilters || filters.length > 0 || activeFilterCount > 0}
           boardMembersCount={board.members?.length || 0}
           onClose={() => setShowMoreMenu(false)}
           onAutomations={() => setShowAutomations(true)}

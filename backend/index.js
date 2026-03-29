@@ -39,6 +39,7 @@ app.use('/api/boards', require('./routes/exportImport'));
 app.use('/api/folders', require('./routes/folders'));
 app.use('/api/items',        require('./routes/itemEmails'));
 app.use('/api/global-trash', require('./routes/globalTrash'));
+app.use('/api/views',       require('./routes/views'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -216,6 +217,22 @@ async function start() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_form_fields_form ON form_fields(form_id)`);
+
+    // Board views (saved filter sets per board)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS board_views (
+        id          SERIAL PRIMARY KEY,
+        board_id    INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+        name        VARCHAR(255) NOT NULL DEFAULT 'Main Table',
+        type        VARCHAR(50) NOT NULL DEFAULT 'table',
+        filters     JSONB NOT NULL DEFAULT '[]',
+        created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at  TIMESTAMP DEFAULT NOW(),
+        updated_at  TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_board_views_board ON board_views(board_id)`);
+    console.log('✅ board_views table ready');
 
     const { rows } = await pool.query('SELECT COUNT(*) FROM boards');
     if (parseInt(rows[0].count) === 0) {

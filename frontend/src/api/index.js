@@ -135,6 +135,16 @@ export const updateFolder = (id, name) => api.put(`/folders/${id}`, { name });
 export const deleteFolder = (id) => api.delete(`/folders/${id}`);
 export const moveBoardToFolder = (boardId, folder_id) => api.patch(`/folders/board/${boardId}`, { folder_id });
 
+// ── Board Views ────────────────────────────────────────────────────────────────
+export const getBoardViews = (boardId) =>
+  api.get(`/views/board/${boardId}`).then(r => r.data);
+export const createView = (data) =>
+  api.post('/views', data).then(r => r.data);
+export const updateView = (id, data) =>
+  api.put(`/views/${id}`, data).then(r => r.data);
+export const deleteView = (id) =>
+  api.delete(`/views/${id}`).then(r => r.data);
+
 // Public form endpoints (no auth header needed — use plain fetch)
 export const getPublicForm    = (slug) => fetch(`/api/public/forms/${slug}`).then(r => r.json());
 export const submitPublicForm = (slug, data) =>
