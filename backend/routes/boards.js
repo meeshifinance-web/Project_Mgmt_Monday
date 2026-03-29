@@ -97,11 +97,26 @@ router.get('/:id', requireAuth, async (req, res) => {
 
     const groupsRes = await pool.query('SELECT * FROM groups WHERE board_id=$1 ORDER BY position', [id]);
     for (const group of groupsRes.rows) {
-      const itemsRes = await pool.query('SELECT * FROM items WHERE group_id=$1 ORDER BY position', [group.id]);
+      const itemsRes = await pool.query(
+        'SELECT * FROM items WHERE group_id=$1 AND parent_item_id IS NULL ORDER BY position',
+        [group.id]
+      );
       for (const item of itemsRes.rows) {
         const valsRes = await pool.query('SELECT * FROM column_values WHERE item_id=$1', [item.id]);
         item.values = {};
         for (const v of valsRes.rows) item.values[v.column_id] = v.value;
+        // Load subitems for each item
+        const subRes = await pool.query(
+          'SELECT * FROM items WHERE parent_item_id=$1 ORDER BY position',
+          [item.id]
+        );
+        for (const sub of subRes.rows) {
+          const svRes = await pool.query('SELECT * FROM column_values WHERE item_id=$1', [sub.id]);
+          sub.values = {};
+          for (const sv of svRes.rows) sub.values[sv.column_id] = sv.value;
+          sub.subitems = [];
+        }
+        item.subitems = subRes.rows;
       }
       group.items = itemsRes.rows;
     }

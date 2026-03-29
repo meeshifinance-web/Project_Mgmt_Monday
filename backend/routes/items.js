@@ -20,18 +20,20 @@ const READ_ONLY_ROLES = ['user'];
 router.post('/', requireAuth, async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot create items' });
-  const { group_id, name } = req.body;
+  const { group_id, name, parent_item_id } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const posRes = await client.query(
-      'SELECT COALESCE(MAX(position),0)+1 AS pos FROM items WHERE group_id=$1',
-      [group_id]
+      parent_item_id
+        ? 'SELECT COALESCE(MAX(position),0)+1 AS pos FROM items WHERE parent_item_id=$1'
+        : 'SELECT COALESCE(MAX(position),0)+1 AS pos FROM items WHERE group_id=$1 AND parent_item_id IS NULL',
+      [parent_item_id || group_id]
     );
     const { rows } = await client.query(
-      'INSERT INTO items (group_id, name, position, created_by_user_id, created_by_user_name) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [group_id, name, posRes.rows[0].pos, req.user.id, req.user.name]
+      'INSERT INTO items (group_id, name, position, created_by_user_id, created_by_user_name, parent_item_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [group_id, name, posRes.rows[0].pos, req.user.id, req.user.name, parent_item_id || null]
     );
     const item = rows[0];
     item.values = {};
@@ -42,37 +44,40 @@ router.post('/', requireAuth, async (req, res) => {
     const triggeredAutomations = [];
 
     if (board_id) {
-      const autoRes = await client.query(
-        "SELECT * FROM automations WHERE board_id=$1 AND trigger_type='item_created' AND enabled=true",
-        [board_id]
-      );
+      // Automations only fire for top-level items, not subitems
+      if (!parent_item_id) {
+        const autoRes = await client.query(
+          "SELECT * FROM automations WHERE board_id=$1 AND trigger_type='item_created' AND enabled=true",
+          [board_id]
+        );
 
-      for (const auto of autoRes.rows) {
-        const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : auto.action_config;
-        if (auto.action_type === 'set_status') {
-          const { column_id: colId, value: val } = acfg;
-          if (colId && val) {
-            await client.query(
-              `INSERT INTO column_values (item_id, column_id, value)
-               VALUES ($1,$2,$3)
-               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-              [item.id, colId, val]
-            );
-            item.values[parseInt(colId)] = val;
+        for (const auto of autoRes.rows) {
+          const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : auto.action_config;
+          if (auto.action_type === 'set_status') {
+            const { column_id: colId, value: val } = acfg;
+            if (colId && val) {
+              await client.query(
+                `INSERT INTO column_values (item_id, column_id, value)
+                 VALUES ($1,$2,$3)
+                 ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+                [item.id, colId, val]
+              );
+              item.values[parseInt(colId)] = val;
+            }
+          } else if (auto.action_type === 'send_email') {
+            // Fire after commit so item exists in DB for placeholder resolution
+            setImmediate(() => sendAutomationEmail({
+              boardId:    board_id,
+              itemId:     item.id,
+              to:         acfg.to || '',
+              toType:     acfg.to_type || 'specific',
+              toColumnId: acfg.to_column_id || null,
+              subject:    acfg.subject || '',
+              body:       acfg.body || '',
+            }).catch(err => console.error('[AutomationEmail] async error:', err.message)));
+          } else {
+            triggeredAutomations.push(auto);
           }
-        } else if (auto.action_type === 'send_email') {
-          // Fire after commit so item exists in DB for placeholder resolution
-          setImmediate(() => sendAutomationEmail({
-            boardId:    board_id,
-            itemId:     item.id,
-            to:         acfg.to || '',
-            toType:     acfg.to_type || 'specific',
-            toColumnId: acfg.to_column_id || null,
-            subject:    acfg.subject || '',
-            body:       acfg.body || '',
-          }).catch(err => console.error('[AutomationEmail] async error:', err.message)));
-        } else {
-          triggeredAutomations.push(auto);
         }
       }
 
@@ -101,7 +106,7 @@ router.post('/', requireAuth, async (req, res) => {
         user_name: req.user.name,
         item_id: item.id,
         item_name: name,
-        action: 'item_created',
+        action: parent_item_id ? 'subitem_created' : 'item_created',
       });
     }
 

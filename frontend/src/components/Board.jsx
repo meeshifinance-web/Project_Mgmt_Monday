@@ -615,7 +615,7 @@ function colWidth(col) {
 // ── Item row ──────────────────────────────────────────────────────────────────
 function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChange,
                    onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
-                   isSelected, onToggleSelect }) {
+                   isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand }) {
   const [hovered, setHovered] = useState(false);
   const rowBg = isSelected ? '#e8f0fe' : hovered ? '#f5f6f8' : '#fff';
   return (
@@ -645,8 +645,21 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChan
         }
       </td>
       {/* Item name */}
-      <td style={{ padding: '4px 8px 4px 12px', borderRight: 'none', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
+      <td style={{ padding: '4px 8px 4px 8px', borderRight: 'none', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {/* Expand/collapse toggle for subitems */}
+          <button
+            onClick={e => { e.stopPropagation(); onToggleExpand?.(); }}
+            title={isExpanded ? 'Collapse subitems' : 'Expand subitems'}
+            style={{
+              flexShrink: 0, width: 16, height: 16, padding: 0,
+              color: (subitems?.length > 0 || isExpanded) ? '#676879' : (hovered ? '#c5c7d0' : 'transparent'),
+              fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'transform 0.15s, color 0.15s',
+              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              border: 'none', background: 'transparent', cursor: 'pointer',
+            }}
+          >▶</button>
           {hovered && (
             <button
               onClick={e => { e.stopPropagation(); onOpenDetail(item.id); }}
@@ -664,6 +677,18 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChan
                 style={{ fontSize: 13, fontWeight: 500, color: '#323338' }} />
             : <span style={{ fontSize: 13, fontWeight: 500, color: '#323338', padding: '0 4px' }}>{item.name}</span>
           }
+          {/* Subitem count badge */}
+          {subitems?.length > 0 && !isExpanded && (
+            <span
+              onClick={e => { e.stopPropagation(); onToggleExpand?.(); }}
+              title="Click to expand subitems"
+              style={{
+                fontSize: 10, color: '#0073ea', background: '#e8f0fe',
+                borderRadius: 10, padding: '1px 6px', fontWeight: 600,
+                flexShrink: 0, cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >{subitems.length} {subitems.length === 1 ? 'subitem' : 'subitems'}</span>
+          )}
         </div>
       </td>
       {/* Data columns */}
@@ -687,6 +712,122 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChan
         )}
       </td>
       <td />
+    </tr>
+  );
+}
+
+// ── Subitem row ────────────────────────────────────────────────────────────────
+function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange, canEdit, isManager, onOpenDetail }) {
+  const [hovered, setHovered] = useState(false);
+  const rowBg = hovered ? '#f0f4fb' : '#f7f8fc';
+  return (
+    <tr
+      style={{ borderBottom: '1px solid #e6e9ef', background: rowBg, height: 36, transition: 'background 0.1s' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Color stripe (faded) */}
+      <td style={{ width: 6, padding: 0, background: group.color, opacity: 0.3, position: 'sticky', left: 0, zIndex: 2 }} />
+      {/* Indent marker */}
+      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid #e6e9ef', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
+        <span style={{
+          display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+          border: '1.5px solid #c5c7d0', verticalAlign: 'middle',
+        }} />
+      </td>
+      {/* Subitem name — indented */}
+      <td style={{ padding: '4px 8px 4px 28px', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {hovered && (
+            <button
+              onClick={e => { e.stopPropagation(); onOpenDetail(subitem.id); }}
+              title="Open detail panel"
+              style={{
+                flexShrink: 0, width: 18, height: 18, borderRadius: 3,
+                background: '#0073ea', color: '#fff', fontSize: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: 'none', cursor: 'pointer',
+              }}
+            >⊡</button>
+          )}
+          {canEdit
+            ? <InlineEdit value={subitem.name} onSave={name => onUpdate(subitem.id, name)} singleClick
+                style={{ fontSize: 12, color: '#323338' }} />
+            : <span style={{ fontSize: 12, color: '#323338', padding: '0 4px' }}>{subitem.name}</span>
+          }
+        </div>
+      </td>
+      {/* Data columns */}
+      {columns.map(col => (
+        <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef', background: rowBg }}>
+          <ColumnCell
+            column={col}
+            value={subitem.values?.[col.id] || ''}
+            onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager))
+              ? undefined
+              : val => onValueChange(subitem.id, col.id, val)}
+            onEditSettings={() => {}}
+            item={subitem}
+          />
+        </td>
+      ))}
+      {/* Delete */}
+      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid #e6e9ef', background: rowBg }}>
+        {canEdit && hovered && (
+          <button
+            onClick={() => onDelete(subitem.id)}
+            style={{ color: '#e2445c', fontSize: 18, lineHeight: 1 }}
+            title="Delete subitem"
+          >×</button>
+        )}
+      </td>
+      <td style={{ background: rowBg }} />
+    </tr>
+  );
+}
+
+// ── Add-subitem row ────────────────────────────────────────────────────────────
+function AddSubitemRow({ parentItemId, groupId, onAdd, colSpan }) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const toast = useToast();
+
+  const handleAdd = async () => {
+    if (!name.trim()) return;
+    try {
+      await onAdd(parentItemId, groupId, name.trim());
+      setName('');
+      setAdding(false);
+    } catch { toast('Failed to add subitem', 'error'); }
+  };
+
+  return (
+    <tr style={{ background: '#f7f8fc', borderBottom: '2px solid #e6e9ef' }}>
+      <td style={{ width: 6, padding: 0 }} />
+      <td style={{ width: 36 }} />
+      <td colSpan={colSpan} style={{ padding: '4px 12px 4px 28px' }}>
+        {adding ? (
+          <input
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleAdd();
+              if (e.key === 'Escape') { setAdding(false); setName(''); }
+            }}
+            onBlur={() => { if (!name.trim()) setAdding(false); }}
+            placeholder="Subitem name — press Enter to save"
+            style={{ width: 260, border: '1.5px solid #0073ea', borderRadius: 5, padding: '4px 8px', outline: 'none', fontSize: 12 }}
+          />
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            style={{ color: '#676879', fontSize: 12, fontWeight: 600 }}
+            onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+            onMouseLeave={e => e.currentTarget.style.color = '#676879'}
+          >+ Add Subitem</button>
+        )}
+      </td>
     </tr>
   );
 }
@@ -786,11 +927,21 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
                      onEditSettings, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, onOpenDetail,
                      isGroupDragSrc, isGroupDropOver,
                      onGroupDragStart, onGroupDragEnd, onGroupDragOver, onGroupDrop,
-                     selectedItems, onToggleSelect }) {
+                     selectedItems, onToggleSelect,
+                     onSubitemCreate, onSubitemUpdate, onSubitemDelete, onSubitemValueChange }) {
   const [collapsed, setCollapsed] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState('');
+  const [expandedItems, setExpandedItems] = useState(new Set());
   const toast = useToast();
+
+  const toggleExpand = (itemId) => {
+    setExpandedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      return next;
+    });
+  };
 
   const spanAll = columns.length + 5;
 
@@ -880,7 +1031,37 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
             onOpenDetail={onOpenDetail}
             isSelected={selectedItems?.has(item.id)}
             onToggleSelect={onToggleSelect}
+            subitems={item.subitems || []}
+            isExpanded={expandedItems.has(item.id)}
+            onToggleExpand={() => toggleExpand(item.id)}
           />
+          {/* Subitems — shown when expanded */}
+          {expandedItems.has(item.id) && (
+            <>
+              {(item.subitems || []).map(sub => (
+                <SubitemRow
+                  key={sub.id}
+                  subitem={sub}
+                  group={group}
+                  columns={columns}
+                  canEdit={canEdit}
+                  isManager={isManager}
+                  onUpdate={(id, name) => onSubitemUpdate(id, item.id, name)}
+                  onDelete={(id) => onSubitemDelete(id, item.id)}
+                  onValueChange={(id, colId, val) => onSubitemValueChange(id, item.id, colId, val)}
+                  onOpenDetail={onOpenDetail}
+                />
+              ))}
+              {canEdit && (
+                <AddSubitemRow
+                  parentItemId={item.id}
+                  groupId={group.id}
+                  onAdd={onSubitemCreate}
+                  colSpan={columns.length + 3}
+                />
+              )}
+            </>
+          )}
         </React.Fragment>
       ))}
 
@@ -1332,7 +1513,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   // Open item panel when triggered from a notification click
   useEffect(() => {
     if (!openItemId) return;
-    const exists = board.groups?.flatMap(g => g.items || []).some(i => i.id === openItemId);
+    const allItems = board.groups?.flatMap(g => [
+      ...(g.items || []),
+      ...(g.items || []).flatMap(i => i.subitems || []),
+    ]);
+    const exists = allItems?.some(i => i.id === openItemId);
     if (exists) {
       setDetailItemId(openItemId);
       setDetailDefaultTab('updates');
@@ -1586,7 +1771,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const handleItemUpdate = async (id, name) => {
     try {
       await updateItem(id, { name });
-      updateLocalBoard(b => ({ groups: b.groups.map(g => ({ ...g, items: g.items.map(i => i.id === id ? { ...i, name } : i) })) }));
+      updateLocalBoard(b => ({
+        groups: b.groups.map(g => ({
+          ...g,
+          items: g.items.map(i => {
+            if (i.id === id) return { ...i, name };
+            if ((i.subitems || []).some(s => s.id === id)) {
+              return { ...i, subitems: i.subitems.map(s => s.id === id ? { ...s, name } : s) };
+            }
+            return i;
+          }),
+        })),
+      }));
     } catch { toast('Failed to rename item', 'error'); }
   };
 
@@ -1602,10 +1798,71 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const handleTrashRestore = ({ item, group_id }) => {
     updateLocalBoard(b => ({
       groups: b.groups.map(g =>
-        g.id === group_id ? { ...g, items: [...(g.items || []), item] } : g
+        g.id === group_id ? { ...g, items: [...(g.items || []), { ...item, subitems: [] }] } : g
       ),
     }));
     toast('Item restored', 'success');
+  };
+
+  // ── Subitems ──────────────────────────────────────────────────────────────
+  const handleSubitemCreate = async (parentItemId, groupId, name) => {
+    const r = await createItem({ group_id: groupId, name, parent_item_id: parentItemId });
+    updateLocalBoard(b => ({
+      groups: b.groups.map(g => ({
+        ...g,
+        items: g.items.map(i => i.id === parentItemId
+          ? { ...i, subitems: [...(i.subitems || []), { ...r.data, subitems: [] }] }
+          : i
+        ),
+      })),
+    }));
+    return r.data;
+  };
+
+  const handleSubitemUpdate = async (subitemId, parentItemId, name) => {
+    try {
+      await updateItem(subitemId, { name });
+      updateLocalBoard(b => ({
+        groups: b.groups.map(g => ({
+          ...g,
+          items: g.items.map(i => i.id === parentItemId
+            ? { ...i, subitems: (i.subitems || []).map(s => s.id === subitemId ? { ...s, name } : s) }
+            : i
+          ),
+        })),
+      }));
+    } catch { toast('Failed to rename subitem', 'error'); }
+  };
+
+  const handleSubitemDelete = async (subitemId, parentItemId) => {
+    try {
+      await deleteItem(subitemId);
+      updateLocalBoard(b => ({
+        groups: b.groups.map(g => ({
+          ...g,
+          items: g.items.map(i => i.id === parentItemId
+            ? { ...i, subitems: (i.subitems || []).filter(s => s.id !== subitemId) }
+            : i
+          ),
+        })),
+      }));
+      setTrashCount(c => c + 1);
+    } catch { toast('Failed to delete subitem', 'error'); }
+  };
+
+  const handleSubitemValueChange = async (subitemId, parentItemId, columnId, value) => {
+    try {
+      await upsertColumnValue({ item_id: subitemId, column_id: columnId, value });
+      updateLocalBoard(b => ({
+        groups: b.groups.map(g => ({
+          ...g,
+          items: g.items.map(i => i.id === parentItemId
+            ? { ...i, subitems: (i.subitems || []).map(s => s.id === subitemId ? { ...s, values: { ...s.values, [columnId]: value } } : s) }
+            : i
+          ),
+        })),
+      }));
+    } catch { toast('Failed to save value', 'error'); }
   };
 
   // ── Column values ─────────────────────────────────────────────────────────
@@ -1615,7 +1872,14 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       updateLocalBoard(b => {
         let groups = b.groups.map(g => ({
           ...g,
-          items: g.items.map(i => i.id === itemId ? { ...i, values: { ...i.values, [columnId]: value } } : i)
+          items: g.items.map(i => {
+            if (i.id === itemId) return { ...i, values: { ...i.values, [columnId]: value } };
+            // Check subitems in case this is a subitem value update from detail panel
+            if ((i.subitems || []).some(s => s.id === itemId)) {
+              return { ...i, subitems: i.subitems.map(s => s.id === itemId ? { ...s, values: { ...s.values, [columnId]: value } } : s) };
+            }
+            return i;
+          })
         }));
         if (r.data.movedItem) {
           const { id, old_group_id, group_id: newGid } = r.data.movedItem;
@@ -1662,7 +1926,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         columns: [...b.columns, newCol],
         groups: b.groups.map(g => ({
           ...g,
-          items: g.items.map(item => ({ ...item, values: { ...item.values, [newCol.id]: '' } })),
+          items: g.items.map(item => ({
+            ...item,
+            values: { ...item.values, [newCol.id]: '' },
+            subitems: (item.subitems || []).map(sub => ({ ...sub, values: { ...sub.values, [newCol.id]: '' } })),
+          })),
         })),
       }));
       setShowAddColumn(false);
@@ -2170,6 +2438,10 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                   onGroupDrop={e => handleGroupDrop(e, group.id)}
                   selectedItems={selectedItems}
                   onToggleSelect={handleToggleSelect}
+                  onSubitemCreate={handleSubitemCreate}
+                  onSubitemUpdate={handleSubitemUpdate}
+                  onSubitemDelete={handleSubitemDelete}
+                  onSubitemValueChange={handleSubitemValueChange}
                 />
               ))}
             </tbody>
@@ -2211,8 +2483,15 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
       {/* ── Modals & panels ── */}
       {detailItemId && (() => {
-        const detailItem = board.groups.flatMap(g => g.items).find(i => i.id === detailItemId);
-        const detailGroup = board.groups.find(g => g.items.some(i => i.id === detailItemId));
+        const allBoardItems = board.groups.flatMap(g => [
+          ...(g.items || []),
+          ...(g.items || []).flatMap(i => i.subitems || []),
+        ]);
+        const detailItem = allBoardItems.find(i => i.id === detailItemId);
+        const detailGroup = board.groups.find(g =>
+          g.items.some(i => i.id === detailItemId) ||
+          g.items.some(i => (i.subitems || []).some(s => s.id === detailItemId))
+        );
         if (!detailItem || !detailGroup) return null;
         return (
           <ItemDetailPanel

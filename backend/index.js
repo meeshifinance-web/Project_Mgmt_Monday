@@ -176,6 +176,10 @@ async function start() {
     await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS created_by_user_id   INT`);
     await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS created_by_user_name TEXT`);
 
+    // Subitems — hierarchical items support
+    await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS parent_item_id INT REFERENCES items(id) ON DELETE CASCADE`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_items_parent ON items(parent_item_id)`);
+
     // Extend role CHECK constraint to include 'member'
     // Drop old constraint (if any) and recreate with all 4 roles
     await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
