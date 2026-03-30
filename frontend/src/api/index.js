@@ -31,6 +31,7 @@ export const createBoard = (data) => api.post('/boards', data);
 export const updateBoard = (id, data) => api.put(`/boards/${id}`, data);
 export const updateBoardEmailSettings = (id, emailFrom) => api.patch(`/boards/${id}/email-settings`, { email_from: emailFrom });
 export const deleteBoard = (id) => api.delete(`/boards/${id}`);
+export const cloneBoard = (id, data) => api.post(`/boards/${id}/clone`, data).then(r => r.data);
 
 // ── Board members ─────────────────────────────────────────────────────────────
 export const getBoardMembers = (boardId) => api.get(`/boards/${boardId}/members`);

@@ -2346,6 +2346,7 @@ function matchesFilter(item, rule) {
 // ── Main Board ────────────────────────────────────────────────────────────────
 export default function Board({ board, onBoardChange, openItemId, onOpenItemDone }) {
   const [showAddColumn, setShowAddColumn] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
   const [activeAutoCount, setActiveAutoCount] = useState(0);
   const [showForms, setShowForms] = useState(false);
@@ -2371,6 +2372,20 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const importFileRef = React.useRef(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}/board/${board.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Clipboard API not supported — show URL in a prompt as fallback
+      prompt('Copy this board link:', url);
+      return;
+    }
+    setShareCopied(true);
+    toast('Board link copied to clipboard!', 'success');
+    setTimeout(() => setShareCopied(false), 2000);
+  };
 
   // Open item panel when triggered from a notification click
   useEffect(() => {
@@ -3112,6 +3127,15 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               minHeight: 44, display: 'flex', alignItems: 'center', gap: 5,
             }}
           >⋯ More</button>
+          <button
+            onClick={handleShare}
+            style={{
+              padding: '8px 12px', border: `1.5px solid ${shareCopied ? '#00c875' : 'var(--border-color)'}`,
+              borderRadius: 6, fontWeight: 600, fontSize: 13, minHeight: 44,
+              color: shareCopied ? '#00c875' : 'var(--text-secondary)', background: 'var(--bg-primary)',
+              display: 'flex', alignItems: 'center', gap: 5,
+            }}
+          >{shareCopied ? '✓ Copied!' : '🔗'}</button>
           <div style={{ marginLeft: 'auto' }}>
             <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
           </div>
@@ -3199,6 +3223,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           )}
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={handleShare}
+              style={{
+                padding: '6px 12px', border: `1px solid ${shareCopied ? '#00c875' : 'var(--border-color)'}`,
+                borderRadius: 6, background: 'var(--bg-primary)', fontSize: 13, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+                color: shareCopied ? '#00c875' : 'var(--text-secondary)',
+                transition: 'color 0.15s, border-color 0.15s',
+              }}
+            >{shareCopied ? '✓ Copied!' : '🔗 Share'}</button>
             <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
             <button onClick={() => setShowMembers(true)} style={{
               display: 'flex', alignItems: 'center', gap: 5,

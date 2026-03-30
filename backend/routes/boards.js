@@ -306,6 +306,123 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   }
 });
 
+// ── POST clone board ──────────────────────────────────────────────────────────
+router.post('/:id/clone', requireAuth, async (req, res) => {
+  const { name, includeItems = true, includeColumns = true, includeGroups = true } = req.body;
+  const sourceId = req.params.id;
+  const client = await pool.connect();
+  try {
+    // 1. Fetch source board and verify access
+    const srcRes = await client.query(
+      'SELECT * FROM boards WHERE id=$1 AND (is_deleted IS NULL OR is_deleted=false)',
+      [sourceId]
+    );
+    if (!srcRes.rows.length) return res.status(404).json({ error: 'Board not found' });
+    if (!(await canAccessBoard(sourceId, req.user)))
+      return res.status(403).json({ error: 'Access denied' });
+    const src = srcRes.rows[0];
+
+    await client.query('BEGIN');
+
+    // 2. Create new board
+    const newBoardRes = await client.query(
+      'INSERT INTO boards (name, description, visibility, folder_id, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [name || `Copy of ${src.name}`, src.description || '', src.visibility, src.folder_id, req.user.id]
+    );
+    const newBoard = newBoardRes.rows[0];
+
+    // Add creator as member
+    await client.query(
+      'INSERT INTO board_members (board_id, user_id, added_by) VALUES ($1,$2,$2) ON CONFLICT DO NOTHING',
+      [newBoard.id, req.user.id]
+    );
+
+    // 3. Copy columns and build columnIdMap
+    const columnIdMap = {};
+    newBoard.columns = [];
+    if (includeColumns) {
+      const colsRes = await client.query(
+        'SELECT * FROM columns WHERE board_id=$1 ORDER BY position', [sourceId]
+      );
+      for (const col of colsRes.rows) {
+        const r = await client.query(
+          'INSERT INTO columns (board_id, title, type, settings, position) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+          [newBoard.id, col.title, col.type, JSON.stringify(col.settings || {}), col.position]
+        );
+        columnIdMap[col.id] = r.rows[0].id;
+        newBoard.columns.push(r.rows[0]);
+      }
+    }
+
+    // 4. Copy groups and build groupIdMap
+    const groupIdMap = {};
+    newBoard.groups = [];
+    if (includeGroups) {
+      const grpsRes = await client.query(
+        'SELECT * FROM groups WHERE board_id=$1 ORDER BY position', [sourceId]
+      );
+      for (const grp of grpsRes.rows) {
+        const r = await client.query(
+          'INSERT INTO groups (board_id, name, color, position) VALUES ($1,$2,$3,$4) RETURNING *',
+          [newBoard.id, grp.name, grp.color, grp.position]
+        );
+        groupIdMap[grp.id] = r.rows[0].id;
+        newBoard.groups.push({ ...r.rows[0], items: [] });
+      }
+
+      // 5. Copy items (only if both groups and columns are included)
+      if (includeItems && includeColumns) {
+        const itemsRes = await client.query(
+          `SELECT * FROM items
+           WHERE group_id = ANY(SELECT id FROM groups WHERE board_id=$1)
+             AND parent_item_id IS NULL
+           ORDER BY position`,
+          [sourceId]
+        );
+        for (const item of itemsRes.rows) {
+          const newGroupId = groupIdMap[item.group_id];
+          if (!newGroupId) continue;
+          const newItemRes = await client.query(
+            'INSERT INTO items (group_id, name, position) VALUES ($1,$2,$3) RETURNING *',
+            [newGroupId, item.name, item.position]
+          );
+          const newItem = { ...newItemRes.rows[0], values: {} };
+
+          // Copy column values — skip person columns (no assignees)
+          const valsRes = await client.query(
+            'SELECT cv.*, c.type FROM column_values cv JOIN columns c ON c.id=cv.column_id WHERE cv.item_id=$1',
+            [item.id]
+          );
+          for (const val of valsRes.rows) {
+            const newColId = columnIdMap[val.column_id];
+            if (!newColId) continue;
+            if (val.type === 'person') continue; // do not copy assignees
+            await client.query(
+              'INSERT INTO column_values (item_id, column_id, value) VALUES ($1,$2,$3)',
+              [newItem.id, newColId, val.value]
+            );
+            newItem.values[newColId] = val.value;
+          }
+
+          const grpObj = newBoard.groups.find(g => g.id === newGroupId);
+          if (grpObj) grpObj.items.push(newItem);
+        }
+      }
+    }
+
+    const creatorRes = await client.query('SELECT name FROM users WHERE id=$1', [req.user.id]);
+    newBoard.members = [{ id: req.user.id, name: creatorRes.rows[0]?.name || req.user.name }];
+
+    await client.query('COMMIT');
+    res.status(201).json({ success: true, board: newBoard });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ── GET board members ─────────────────────────────────────────────────────────
 router.get('/:id/members', requireAuth, async (req, res) => {
   if (!(await canAccessBoard(req.params.id, req.user)))

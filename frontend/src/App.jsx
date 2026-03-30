@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ToastProvider, useToast } from './components/Toast';
@@ -13,7 +13,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import PublicForm from './pages/PublicForm';
-import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder } from './api';
+import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, cloneBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
 
 // ── Route guards ──────────────────────────────────────────────────────────────
@@ -94,6 +94,175 @@ function BoardNameEditor({ name, onSave }) {
   );
 }
 
+// ── Clone Board Modal ─────────────────────────────────────────────────────────
+
+function CloneModal({ board, onClose, onCloned }) {
+  const [name, setName] = useState(`Copy of ${board.name}`);
+  const [includeGroups, setIncludeGroups] = useState(true);
+  const [includeItems, setIncludeItems] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const toast = useToast();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await cloneBoard(board.id, {
+        name: name.trim(),
+        includeColumns: true,
+        includeGroups,
+        includeItems: includeGroups && includeItems,
+      });
+      onCloned(result.board);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to duplicate board. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  // Close on overlay click or Escape
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const overlayStyle = {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 16,
+  };
+  const modalStyle = {
+    background: 'var(--bg-primary)', borderRadius: 10, width: '100%', maxWidth: 420,
+    boxShadow: '0 8px 40px rgba(0,0,0,0.28)', display: 'flex', flexDirection: 'column',
+    overflow: 'hidden',
+  };
+  const cbRow = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer' };
+  const cbBox = (checked, disabled) => ({
+    width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? '#0073ea' : '#c5c7d4'}`,
+    background: checked ? '#0073ea' : 'transparent', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', flexShrink: 0, opacity: disabled ? 0.5 : 1,
+    transition: 'all 0.12s',
+  });
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={modalStyle} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-color)' }}>
+          <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)' }}>Duplicate Board</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+            Creating a copy of: <strong>{board.name}</strong>
+          </div>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit}>
+          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Board name input */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                New board name
+              </label>
+              <input
+                autoFocus
+                value={name}
+                onChange={e => setName(e.target.value)}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 14,
+                  border: '1.5px solid var(--border-color)', background: 'var(--input-bg)',
+                  color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
+                }}
+                onFocus={e => e.currentTarget.style.borderColor = '#0073ea'}
+                onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+              />
+            </div>
+
+            {/* Checkboxes */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                What to include
+              </div>
+
+              {/* Structure — always checked, disabled */}
+              <label style={{ ...cbRow, cursor: 'default', opacity: 0.7 }}>
+                <div style={cbBox(true, true)}>
+                  <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>
+                </div>
+                <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>Board structure &amp; columns</span>
+              </label>
+
+              {/* Groups */}
+              <label style={cbRow} onClick={() => setIncludeGroups(v => !v)}>
+                <div style={cbBox(includeGroups, false)}>
+                  {includeGroups && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>Groups / Swimlanes</span>
+              </label>
+
+              {/* Items — disabled if groups unchecked */}
+              <label
+                style={{ ...cbRow, paddingLeft: 24, opacity: includeGroups ? 1 : 0.4, cursor: includeGroups ? 'pointer' : 'default' }}
+                onClick={() => { if (includeGroups) setIncludeItems(v => !v); }}
+              >
+                <div style={cbBox(includeItems && includeGroups, !includeGroups)}>
+                  {includeItems && includeGroups && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: 14, color: 'var(--text-primary)' }}>Items &amp; tasks</span>
+              </label>
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+              Items will be copied without assignees or comments.
+            </div>
+
+            {error && (
+              <div style={{ fontSize: 13, color: '#e2445c', background: '#fff5f7', padding: '8px 12px', borderRadius: 6, border: '1px solid #f5c0ca' }}>
+                {error}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div style={{ padding: '12px 24px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid var(--border-color)' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                padding: '8px 18px', borderRadius: 6, fontWeight: 600, fontSize: 14,
+                border: '1.5px solid var(--border-color)', background: 'var(--bg-primary)',
+                color: 'var(--text-secondary)', cursor: 'pointer',
+              }}
+            >Cancel</button>
+            <button
+              type="submit"
+              disabled={loading || !name.trim()}
+              style={{
+                padding: '8px 18px', borderRadius: 6, fontWeight: 600, fontSize: 14,
+                border: 'none', background: loading ? '#a0c4f1' : '#0073ea',
+                color: '#fff', cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {loading ? (
+                <>
+                  <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                  Duplicating…
+                </>
+              ) : 'Duplicate Board →'}
+            </button>
+          </div>
+        </form>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 // ── Main board app (authenticated) ───────────────────────────────────────────
 
 function MainApp() {
@@ -112,6 +281,7 @@ function MainApp() {
   const [boardMenuId, setBoardMenuId] = useState(null);
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [cloneTargetBoard, setCloneTargetBoard] = useState(null);
 
   const toggleNav = () => setIsNavCollapsed(v => {
     const next = !v;
@@ -122,6 +292,7 @@ function MainApp() {
   const { user: currentUser, isManager, isAdmin } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const { boardId: urlBoardId } = useParams();
 
   const closeNewBoard = () => { setShowNewBoard(false); setNewBoardName(''); setNewBoardVisibility('private'); };
 
@@ -155,8 +326,20 @@ function MainApp() {
       .then(([boardsRes, foldersRes]) => {
         setBoards(boardsRes.data);
         setFolders(foldersRes.data);
-        if (boardsRes.data.length > 0) loadBoard(boardsRes.data[0].id);
-        else setLoading(false);
+        if (urlBoardId) {
+          const target = boardsRes.data.find(b => String(b.id) === String(urlBoardId));
+          if (target) {
+            loadBoard(target.id);
+          } else {
+            toast('Board not found or you don\'t have access', 'error');
+            navigate('/', { replace: true });
+            setLoading(false);
+          }
+        } else if (boardsRes.data.length > 0) {
+          loadBoard(boardsRes.data[0].id);
+        } else {
+          setLoading(false);
+        }
       })
       .catch(() => { toast('Failed to load boards', 'error'); setLoading(false); });
   }, []);
@@ -188,6 +371,7 @@ function MainApp() {
       setNewBoardVisibility('private');
       setShowNewBoard(false);
       loadBoard(r.data.id);
+      navigate(`/board/${r.data.id}`, { replace: true });
       toast('Board created', 'success');
     } catch (err) {
       toast(err.response?.data?.error || 'Failed to create board', 'error');
@@ -200,8 +384,13 @@ function MainApp() {
       const remaining = boards.filter(b => b.id !== id);
       setBoards(remaining);
       if (activeBoard?.id === id) {
-        if (remaining.length) loadBoard(remaining[0].id);
-        else setActiveBoard(null);
+        if (remaining.length) {
+          loadBoard(remaining[0].id);
+          navigate(`/board/${remaining[0].id}`, { replace: true });
+        } else {
+          setActiveBoard(null);
+          navigate('/', { replace: true });
+        }
       }
       toast('Board moved to trash · restores within 15 days');
     } catch (err) {
@@ -282,7 +471,7 @@ function MainApp() {
       return (
         <div
           key={b.id}
-          onClick={() => { loadBoard(b.id); setMobileNavOpen(false); }}
+          onClick={() => { loadBoard(b.id); navigate(`/board/${b.id}`, { replace: true }); setMobileNavOpen(false); }}
           title={b.name}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -303,7 +492,7 @@ function MainApp() {
     return (
       <div key={b.id} style={{ position: 'relative' }}>
         <div
-          onClick={() => { loadBoard(b.id); setMobileNavOpen(false); }}
+          onClick={() => { loadBoard(b.id); navigate(`/board/${b.id}`, { replace: true }); setMobileNavOpen(false); }}
           style={{
             display: 'flex', alignItems: 'center', cursor: 'pointer',
             padding: indent ? '6px 16px 6px 28px' : '6px 16px',
@@ -366,6 +555,19 @@ function MainApp() {
             ) : null)}
             {folders.length === 0 && !b.folder_id && (
               <div style={{ padding: '6px 12px', fontSize: 11, color: '#aaa', fontStyle: 'italic' }}>No folders yet</div>
+            )}
+            {isManager && (
+              <>
+                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }} />
+                <div
+                  onClick={() => { setBoardMenuId(null); setCloneTargetBoard(b); }}
+                  style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f5f6f8'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  📋 Duplicate Board
+                </div>
+              </>
             )}
             {isAdmin && (
               <>
@@ -776,6 +978,21 @@ function MainApp() {
           }}
         />
       )}
+
+      {/* Clone board modal */}
+      {cloneTargetBoard && (
+        <CloneModal
+          board={cloneTargetBoard}
+          onClose={() => setCloneTargetBoard(null)}
+          onCloned={(newBoard) => {
+            setBoards(bs => [...bs, newBoard]);
+            setCloneTargetBoard(null);
+            loadBoard(newBoard.id);
+            navigate(`/board/${newBoard.id}`, { replace: true });
+            toast('Board duplicated successfully!', 'success');
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -801,6 +1018,7 @@ export default function App() {
 
             {/* Protected */}
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/board/:boardId" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
             <Route path="/" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
 
             {/* Fallback */}
