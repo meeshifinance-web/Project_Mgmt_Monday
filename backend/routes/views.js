@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
 
@@ -10,6 +10,9 @@ const canWrite = [requireAuth, requireRole('admin', 'manager')];
 router.get('/board/:boardId', requireAuth, async (req, res) => {
   const { boardId } = req.params;
   try {
+    if (!(await canAccessBoard(boardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     let { rows } = await pool.query(
       `SELECT id, board_id, name, type, filters, created_at, updated_at
          FROM board_views
@@ -31,7 +34,8 @@ router.get('/board/:boardId', requireAuth, async (req, res) => {
 
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -42,6 +46,9 @@ router.post('/', ...canWrite, async (req, res) => {
     return res.status(400).json({ error: 'board_id and name are required' });
   }
   try {
+    if (!(await canAccessBoard(board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     const { rows } = await pool.query(
       `INSERT INTO board_views (board_id, name, type, filters, created_by)
        VALUES ($1, $2, $3, $4, $5)
@@ -50,7 +57,8 @@ router.post('/', ...canWrite, async (req, res) => {
     );
     res.status(201).json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -60,6 +68,13 @@ router.put('/:id', ...canWrite, async (req, res) => {
   const { name, filters } = req.body;
 
   try {
+    // Fetch view first so we can verify board membership
+    const viewRes = await pool.query('SELECT board_id FROM board_views WHERE id = $1', [id]);
+    if (!viewRes.rows.length) return res.status(404).json({ error: 'View not found' });
+
+    if (!(await canAccessBoard(viewRes.rows[0].board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     // Build a partial update — only set columns that were supplied
     const setClauses = ['updated_at = NOW()'];
     const values = [];
@@ -86,7 +101,8 @@ router.put('/:id', ...canWrite, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'View not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -104,6 +120,9 @@ router.delete('/:id', ...canWrite, async (req, res) => {
 
     const { board_id } = viewRes.rows[0];
 
+    if (!(await canAccessBoard(board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     // Count remaining views on this board
     const countRes = await pool.query(
       'SELECT COUNT(*) FROM board_views WHERE board_id = $1',
@@ -116,7 +135,8 @@ router.delete('/:id', ...canWrite, async (req, res) => {
     await pool.query('DELETE FROM board_views WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

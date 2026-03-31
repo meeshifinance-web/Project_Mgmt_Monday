@@ -2,16 +2,32 @@ require('dotenv').config();
 const express = require('express');
 const { startEmailPoller } = require('./services/emailPoller');
 const cors = require('cors');
+const helmet = require('helmet');
 const session = require('express-session');
 const pool = require('./db');
 
 const app = express();
 
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:     ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'workboard_session_secret',
   resave: false,
@@ -42,6 +58,15 @@ app.use('/api/global-trash', require('./routes/globalTrash'));
 app.use('/api/views',       require('./routes/views'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
+// ── Global error handler ──────────────────────────────────────────────────────
+// Must be defined after all routes. Catches any error passed via next(err)
+// and prevents raw err.message / stack traces leaking to clients.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('[UNHANDLED ERROR]', err.stack || err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;

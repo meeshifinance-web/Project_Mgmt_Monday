@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, canAccessBoard } = require('../middleware/auth');
 const { sendAutomationEmail } = require('../services/automationEmail');
 
 async function logActivity(client, data) {
@@ -17,10 +17,27 @@ async function logActivity(client, data) {
 
 const READ_ONLY_ROLES = ['user'];
 
+// ── POST / — create item ──────────────────────────────────────────────────────
 router.post('/', requireAuth, async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot create items' });
+
   const { group_id, name, parent_item_id } = req.body;
+  if (!group_id) return res.status(400).json({ error: 'group_id is required' });
+
+  // Resolve board and verify access BEFORE opening a transaction
+  let board_id;
+  try {
+    const groupRes = await pool.query('SELECT board_id FROM groups WHERE id=$1', [group_id]);
+    if (!groupRes.rows.length) return res.status(404).json({ error: 'Group not found' });
+    board_id = groupRes.rows[0].board_id;
+    if (!(await canAccessBoard(board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -38,89 +55,86 @@ router.post('/', requireAuth, async (req, res) => {
     const item = rows[0];
     item.values = {};
 
-    const groupRes = await client.query('SELECT board_id FROM groups WHERE id=$1', [group_id]);
-    const board_id = groupRes.rows[0]?.board_id;
-
     const triggeredAutomations = [];
 
-    if (board_id) {
-      // Automations only fire for top-level items, not subitems
-      if (!parent_item_id) {
-        const autoRes = await client.query(
-          "SELECT * FROM automations WHERE board_id=$1 AND trigger_type='item_created' AND enabled=true",
-          [board_id]
-        );
-
-        for (const auto of autoRes.rows) {
-          const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : auto.action_config;
-          if (auto.action_type === 'set_status') {
-            const { column_id: colId, value: val } = acfg;
-            if (colId && val) {
-              await client.query(
-                `INSERT INTO column_values (item_id, column_id, value)
-                 VALUES ($1,$2,$3)
-                 ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-                [item.id, colId, val]
-              );
-              item.values[parseInt(colId)] = val;
-            }
-          } else if (auto.action_type === 'send_email') {
-            // Fire after commit so item exists in DB for placeholder resolution
-            setImmediate(() => sendAutomationEmail({
-              boardId:    board_id,
-              itemId:     item.id,
-              to:         acfg.to || '',
-              toType:     acfg.to_type || 'specific',
-              toColumnId: acfg.to_column_id || null,
-              subject:    acfg.subject || '',
-              body:       acfg.body || '',
-            }).catch(err => console.error('[AutomationEmail] async error:', err.message)));
-          } else {
-            triggeredAutomations.push(auto);
-          }
-        }
-      }
-
-      // Apply column default values for columns not already set by an automation
-      const colsRes = await client.query(
-        'SELECT id, settings FROM columns WHERE board_id=$1',
+    // Automations only fire for top-level items, not subitems
+    if (!parent_item_id) {
+      const autoRes = await client.query(
+        "SELECT * FROM automations WHERE board_id=$1 AND trigger_type='item_created' AND enabled=true",
         [board_id]
       );
-      for (const col of colsRes.rows) {
-        const s = typeof col.settings === 'string' ? JSON.parse(col.settings) : (col.settings || {});
-        const dv = s?.defaultValue;
-        if (dv !== undefined && dv !== null && String(dv) !== '' && item.values[col.id] === undefined) {
-          await client.query(
-            `INSERT INTO column_values (item_id, column_id, value)
-             VALUES ($1,$2,$3)
-             ON CONFLICT (item_id, column_id) DO NOTHING`,
-            [item.id, col.id, String(dv)]
-          );
-          item.values[col.id] = String(dv);
+
+      for (const auto of autoRes.rows) {
+        const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : auto.action_config;
+        if (auto.action_type === 'set_status') {
+          const { column_id: colId, value: val } = acfg;
+          if (colId && val) {
+            await client.query(
+              `INSERT INTO column_values (item_id, column_id, value)
+               VALUES ($1,$2,$3)
+               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+              [item.id, colId, val]
+            );
+            item.values[parseInt(colId)] = val;
+          }
+        } else if (auto.action_type === 'send_email') {
+          // Fire after commit so item exists in DB for placeholder resolution
+          setImmediate(() => sendAutomationEmail({
+            boardId:    board_id,
+            itemId:     item.id,
+            to:         acfg.to || '',
+            toType:     acfg.to_type || 'specific',
+            toColumnId: acfg.to_column_id || null,
+            subject:    acfg.subject || '',
+            body:       acfg.body || '',
+          }).catch(err => console.error('[AutomationEmail] async error:', err.message)));
+        } else {
+          triggeredAutomations.push(auto);
         }
       }
-
-      await logActivity(client, {
-        board_id,
-        user_id: req.user.id,
-        user_name: req.user.name,
-        item_id: item.id,
-        item_name: name,
-        action: parent_item_id ? 'subitem_created' : 'item_created',
-      });
     }
+
+    // Apply column default values for columns not already set by an automation
+    const colsRes = await client.query(
+      'SELECT id, settings FROM columns WHERE board_id=$1',
+      [board_id]
+    );
+    for (const col of colsRes.rows) {
+      const s = typeof col.settings === 'string' ? JSON.parse(col.settings) : (col.settings || {});
+      const dv = s?.defaultValue;
+      if (dv !== undefined && dv !== null && String(dv) !== '' && item.values[col.id] === undefined) {
+        await client.query(
+          `INSERT INTO column_values (item_id, column_id, value)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (item_id, column_id) DO NOTHING`,
+          [item.id, col.id, String(dv)]
+        );
+        item.values[col.id] = String(dv);
+      }
+    }
+
+    await logActivity(client, {
+      board_id,
+      user_id: req.user.id,
+      user_name: req.user.name,
+      item_id: item.id,
+      item_name: name,
+      action: parent_item_id ? 'subitem_created' : 'item_created',
+    });
 
     await client.query('COMMIT');
     item.triggeredAutomations = triggeredAutomations;
     res.status(201).json(item);
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
 });
 
+// ── PUT /:id — rename item ────────────────────────────────────────────────────
 router.put('/:id', requireAuth, async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot edit items' });
@@ -128,38 +142,49 @@ router.put('/:id', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Fetch old name + board_id
+
+    // Fetch old name + board_id (used for access check and activity log)
     const oldRes = await client.query(
       `SELECT i.name, g.board_id FROM items i JOIN groups g ON g.id=i.group_id WHERE i.id=$1`,
       [req.params.id]
     );
     const old = oldRes.rows[0];
+    if (!old) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (!(await canAccessBoard(old.board_id, req.user, pool))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const { rows } = await client.query(
       'UPDATE items SET name=$1 WHERE id=$2 RETURNING *',
       [name, req.params.id]
     );
-    if (old) {
-      await logActivity(client, {
-        board_id: old.board_id,
-        user_id: req.user.id,
-        user_name: req.user.name,
-        item_id: parseInt(req.params.id),
-        item_name: name,
-        action: 'item_renamed',
-        old_value: old.name,
-        new_value: name,
-      });
-    }
+    await logActivity(client, {
+      board_id: old.board_id,
+      user_id: req.user.id,
+      user_name: req.user.name,
+      item_id: parseInt(req.params.id),
+      item_name: name,
+      action: 'item_renamed',
+      old_value: old.name,
+      new_value: name,
+    });
     await client.query('COMMIT');
     res.json(rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
 });
 
+// ── DELETE /:id — delete item (moves to trash) ────────────────────────────────
 router.delete('/:id', requireAuth, async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot delete items' });
@@ -167,14 +192,22 @@ router.delete('/:id', requireAuth, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Fetch item + group info
+    // Fetch item + group info (also used for access check)
     const infoRes = await client.query(
       `SELECT i.name, i.group_id, g.board_id, g.name AS group_name
        FROM items i JOIN groups g ON g.id=i.group_id WHERE i.id=$1`,
       [req.params.id]
     );
     const info = infoRes.rows[0];
-    if (!info) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Item not found' }); }
+    if (!info) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (!(await canAccessBoard(info.board_id, req.user, pool))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     // Snapshot all column values
     const cvRes = await client.query(
@@ -209,7 +242,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -228,12 +262,33 @@ router.patch('/:id/move', requireAuth, async (req, res) => {
       `SELECT i.*, g.board_id FROM items i JOIN groups g ON g.id=i.group_id WHERE i.id=$1`,
       [req.params.id]
     );
-    if (!itemRes.rows.length) return res.status(404).json({ error: 'Item not found' });
+    if (!itemRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Item not found' });
+    }
 
     const item = itemRes.rows[0];
+
+    if (!(await canAccessBoard(item.board_id, req.user, pool))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const oldGroupId = item.group_id;
     const newGroupId = parseInt(group_id);
-    const newPos    = Math.max(0, parseInt(position));
+    const newPos     = Math.max(0, parseInt(position));
+
+    // Guard: target group must belong to the same board (prevent cross-board moves)
+    if (oldGroupId !== newGroupId) {
+      const targetRes = await client.query(
+        'SELECT board_id FROM groups WHERE id=$1',
+        [newGroupId]
+      );
+      if (!targetRes.rows.length || targetRes.rows[0].board_id !== item.board_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Target group does not belong to the same board' });
+      }
+    }
 
     if (oldGroupId === newGroupId) {
       // ── Reorder within same group ──────────────────────────────────────────
@@ -279,7 +334,8 @@ router.patch('/:id/move', requireAuth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }

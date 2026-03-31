@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, canAccessBoard } = require('../middleware/auth');
 const XLSX = require('xlsx');
 
 const READ_ONLY_ROLES = ['user'];
@@ -12,6 +12,10 @@ router.get('/:boardId/export', requireAuth, async (req, res) => {
   try {
     const boardRes = await pool.query('SELECT name FROM boards WHERE id=$1', [boardId]);
     if (!boardRes.rows.length) return res.status(404).json({ error: 'Board not found' });
+
+    if (!(await canAccessBoard(boardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     const boardName = boardRes.rows[0].name;
 
     const colRes = await pool.query(
@@ -71,7 +75,8 @@ router.get('/:boardId/export', requireAuth, async (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buf);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -85,6 +90,19 @@ router.post('/:boardId/import', requireAuth, async (req, res) => {
   const { rows } = req.body;
   if (!Array.isArray(rows) || rows.length === 0)
     return res.status(400).json({ error: 'No rows provided' });
+  if (rows.length > 2000)
+    return res.status(400).json({ error: 'Maximum 2000 rows per import' });
+
+  // Verify board exists and user has access before opening a transaction
+  try {
+    const boardCheck = await pool.query('SELECT id FROM boards WHERE id=$1', [boardId]);
+    if (!boardCheck.rows.length) return res.status(404).json({ error: 'Board not found' });
+    if (!(await canAccessBoard(boardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 
   const client = await pool.connect();
   try {
@@ -180,7 +198,8 @@ router.post('/:boardId/import', requireAuth, async (req, res) => {
     res.json({ created, errors });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }

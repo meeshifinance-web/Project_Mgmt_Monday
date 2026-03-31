@@ -57,7 +57,9 @@ router.post('/register', loginLimiter, async (req, res) => {
     res.status(201).json({ token, user: safeUser(rows[0]) });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -85,7 +87,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       const jwt = require('jsonwebtoken');
       const tempToken = jwt.sign(
         { id: user.id, mfa_pending: true },
-        process.env.JWT_SECRET || 'changeme_use_strong_secret_32chars',
+        process.env.JWT_SECRET,
         { expiresIn: '5m' }
       );
       return res.json({ mfa_required: true, temp_token: tempToken });
@@ -94,12 +96,14 @@ router.post('/login', loginLimiter, async (req, res) => {
     await pool.query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
     res.json({ token: signToken(user), user: safeUser(user) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ── POST /auth/mfa/verify-login ───────────────────────────────────────────────
-router.post('/mfa/verify-login', async (req, res) => {
+router.post('/mfa/verify-login', loginLimiter, async (req, res) => {
   const { temp_token, code } = req.body;
   if (!temp_token || !code) return res.status(400).json({ error: 'Token and code required' });
 
@@ -107,7 +111,7 @@ router.post('/mfa/verify-login', async (req, res) => {
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(
       temp_token,
-      process.env.JWT_SECRET || 'changeme_use_strong_secret_32chars'
+      process.env.JWT_SECRET
     );
     if (!decoded.mfa_pending) return res.status(400).json({ error: 'Invalid token' });
 
@@ -128,7 +132,9 @@ router.post('/mfa/verify-login', async (req, res) => {
   } catch (err) {
     if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError')
       return res.status(401).json({ error: 'Session expired, please log in again' });
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -200,7 +206,9 @@ router.get('/me', requireAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -214,7 +222,9 @@ router.put('/me', requireAuth, async (req, res) => {
     );
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -238,7 +248,9 @@ router.put('/me/password', requireAuth, async (req, res) => {
     await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, user.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -270,12 +282,14 @@ router.post('/forgot-password', loginLimiter, async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ── POST /auth/reset-password ─────────────────────────────────────────────────
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', loginLimiter, async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) return res.status(400).json({ error: 'Token and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -293,7 +307,9 @@ router.post('/reset-password', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -309,7 +325,9 @@ router.post('/mfa/setup', requireAuth, async (req, res) => {
     const qrCode = await QRCode.toDataURL(secret.otpauth_url);
     res.json({ secret: secret.base32, qrCode });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -333,7 +351,9 @@ router.post('/mfa/enable', requireAuth, async (req, res) => {
     await pool.query('UPDATE users SET mfa_enabled=true WHERE id=$1', [req.user.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -354,7 +374,9 @@ router.post('/mfa/disable', requireAuth, async (req, res) => {
     await pool.query('UPDATE users SET mfa_enabled=false, mfa_secret=NULL WHERE id=$1', [req.user.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -379,7 +401,9 @@ router.post('/admin/create-user', requireAuth, requireRole('admin'), async (req,
     res.status(201).json(safeUser(rows[0]));
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -399,7 +423,9 @@ router.get('/users/search', requireAuth, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -414,7 +440,9 @@ router.get('/users', requireAuth, requireRole('admin'), async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -434,7 +462,9 @@ router.put('/users/:id/role', requireAuth, requireRole('admin'), async (req, res
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -451,7 +481,9 @@ router.put('/users/:id/active', requireAuth, requireRole('admin'), async (req, r
     );
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -471,7 +503,9 @@ router.put('/admin/users/:id/reset-password', requireAuth, requireRole('admin'),
     await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -483,7 +517,9 @@ router.delete('/users/:id', requireAuth, requireRole('admin'), async (req, res) 
     await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

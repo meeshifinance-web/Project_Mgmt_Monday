@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, canAccessBoard } = require('../middleware/auth');
 
 // Helper: create notifications for an array of user IDs
 async function createNotifications(notifications) {
@@ -17,16 +17,32 @@ async function createNotifications(notifications) {
   }
 }
 
+// Helper: resolve board_id from an item (used for access checks)
+async function boardIdFromItem(itemId) {
+  const res = await pool.query(
+    `SELECT g.board_id FROM items i JOIN groups g ON g.id = i.group_id WHERE i.id = $1`,
+    [itemId]
+  );
+  return res.rows[0]?.board_id ?? null;
+}
+
 // GET all comments for an item (flat list — client nests them)
 router.get('/item/:itemId', requireAuth, async (req, res) => {
   try {
+    const board_id = await boardIdFromItem(req.params.itemId);
+    if (board_id === null) return res.status(404).json({ error: 'Item not found' });
+
+    if (!(await canAccessBoard(board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     const { rows } = await pool.query(
       `SELECT * FROM comments WHERE item_id=$1 ORDER BY created_at ASC`,
       [req.params.itemId]
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -36,17 +52,24 @@ router.post('/', requireAuth, async (req, res) => {
   if (!body?.trim()) return res.status(400).json({ error: 'Comment body required' });
 
   try {
+    // Resolve board from the item (do not trust board_id from the request body)
+    const resolvedBoardId = await boardIdFromItem(item_id);
+    if (resolvedBoardId === null) return res.status(404).json({ error: 'Item not found' });
+
+    if (!(await canAccessBoard(resolvedBoardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     // Fetch item name + board name for notification messages
     const itemRow = await pool.query('SELECT name FROM items WHERE id=$1', [item_id]);
     const itemName = itemRow.rows[0]?.name || 'an item';
-    const boardRow = await pool.query('SELECT name FROM boards WHERE id=$1', [board_id]);
+    const boardRow = await pool.query('SELECT name FROM boards WHERE id=$1', [resolvedBoardId]);
     const boardName = boardRow.rows[0]?.name || 'a board';
 
     // Insert comment
     const { rows } = await pool.query(
       `INSERT INTO comments (item_id, board_id, user_id, user_name, body, parent_id)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [item_id, board_id, req.user.id, req.user.name, body.trim(), parent_id || null]
+      [item_id, resolvedBoardId, req.user.id, req.user.name, body.trim(), parent_id || null]
     );
     const comment = rows[0];
 
@@ -65,7 +88,7 @@ router.post('/', requireAuth, async (req, res) => {
         from_user_name: req.user.name,
         item_id,
         item_name: itemName,
-        board_id,
+        board_id: resolvedBoardId,
         board_name: boardName,
         comment_id: comment.id,
         message: `${req.user.name} mentioned you in "${itemName}"`,
@@ -84,7 +107,7 @@ router.post('/', requireAuth, async (req, res) => {
           from_user_name: req.user.name,
           item_id,
           item_name: itemName,
-          board_id,
+          board_id: resolvedBoardId,
           board_name: boardName,
           comment_id: comment.id,
           message: `${req.user.name} replied to your comment on "${itemName}"`,
@@ -95,7 +118,8 @@ router.post('/', requireAuth, async (req, res) => {
     await createNotifications(notifBatch);
     res.json(comment);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -110,7 +134,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     await pool.query('DELETE FROM comments WHERE id=$1 OR parent_id=$1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

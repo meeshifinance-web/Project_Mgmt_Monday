@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme_use_strong_secret_32chars';
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  throw new Error('FATAL: JWT_SECRET env var must be set and be at least 32 characters long');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 async function requireAuth(req, res, next) {
   const header = req.headers['authorization'];
@@ -42,4 +45,17 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { requireAuth, requireRole };
+// Shared board-access check used by all resource routes.
+// Admins can access every board; other roles must be members.
+// Pass `pool` explicitly so the function stays dependency-free and testable.
+async function canAccessBoard(boardId, user, dbPool) {
+  if (!boardId) return false;
+  if (user.role === 'admin') return true;
+  const result = await dbPool.query(
+    `SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2 LIMIT 1`,
+    [boardId, user.id]
+  );
+  return result.rows.length > 0;
+}
+
+module.exports = { requireAuth, requireRole, canAccessBoard };

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, canAccessBoard } = require('../middleware/auth');
 const { sendAutomationEmail } = require('../services/automationEmail');
 
 async function logActivity(client, data) {
@@ -18,7 +18,23 @@ async function logActivity(client, data) {
 router.post('/upsert', requireAuth, async (req, res) => {
   if (req.user.role === 'user')
     return res.status(403).json({ error: 'Read-only access — you cannot edit values' });
+
   const { item_id, column_id, value } = req.body;
+
+  // Resolve board from item and verify membership BEFORE opening a transaction
+  try {
+    const boardRes = await pool.query(
+      `SELECT g.board_id FROM items i JOIN groups g ON g.id = i.group_id WHERE i.id = $1`,
+      [item_id]
+    );
+    if (!boardRes.rows.length) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessBoard(boardRes.rows[0].board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -127,7 +143,8 @@ router.post('/upsert', requireAuth, async (req, res) => {
     res.json({ value: rows[0], triggeredAutomations, movedItem, setValues });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }

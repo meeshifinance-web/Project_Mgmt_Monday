@@ -1,9 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
+const rateLimit = require('express-rate-limit');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
+
+// Rate-limit unauthenticated form submissions: 10 per IP per hour
+const formSubmitLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions — please try again later' },
+});
 
 function generateSlug() {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -17,6 +27,9 @@ function generateSlug() {
 // GET /api/boards/:boardId/forms
 router.get('/boards/:boardId/forms', requireAuth, async (req, res) => {
   try {
+    if (!(await canAccessBoard(req.params.boardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     const { rows } = await pool.query(
       `SELECT f.*, g.name AS target_group_name
        FROM forms f
@@ -27,12 +40,21 @@ router.get('/boards/:boardId/forms', requireAuth, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // POST /api/boards/:boardId/forms
 router.post('/boards/:boardId/forms', ...canWrite, async (req, res) => {
+  try {
+    if (!(await canAccessBoard(req.params.boardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+
   const { title, description, cover_color, target_group_id, thank_you_message } = req.body;
   let slug;
   for (let i = 0; i < 10; i++) {
@@ -56,7 +78,8 @@ router.post('/boards/:boardId/forms', ...canWrite, async (req, res) => {
     );
     res.status(201).json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -65,6 +88,10 @@ router.get('/forms/:id', requireAuth, async (req, res) => {
   try {
     const formRes = await pool.query('SELECT * FROM forms WHERE id=$1', [req.params.id]);
     if (!formRes.rows.length) return res.status(404).json({ error: 'Form not found' });
+
+    if (!(await canAccessBoard(formRes.rows[0].board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     const fieldsRes = await pool.query(
       `SELECT ff.*, c.title AS column_title, c.type AS column_type, c.settings AS column_settings
        FROM form_fields ff
@@ -75,43 +102,63 @@ router.get('/forms/:id', requireAuth, async (req, res) => {
     );
     res.json({ ...formRes.rows[0], fields: fieldsRes.rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // PUT /api/forms/:id
 router.put('/forms/:id', ...canWrite, async (req, res) => {
-  const { title, description, cover_color, target_group_id, thank_you_message, is_active } = req.body;
   try {
+    const formRes = await pool.query('SELECT board_id FROM forms WHERE id=$1', [req.params.id]);
+    if (!formRes.rows.length) return res.status(404).json({ error: 'Form not found' });
+
+    if (!(await canAccessBoard(formRes.rows[0].board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
+    const { title, description, cover_color, target_group_id, thank_you_message, is_active } = req.body;
     const { rows } = await pool.query(
       `UPDATE forms SET title=$1, description=$2, cover_color=$3, target_group_id=$4,
               thank_you_message=$5, is_active=$6
        WHERE id=$7 RETURNING *`,
       [title, description, cover_color, target_group_id || null, thank_you_message, is_active, req.params.id]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Form not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // DELETE /api/forms/:id
 router.delete('/forms/:id', ...canWrite, async (req, res) => {
   try {
+    const formRes = await pool.query('SELECT board_id FROM forms WHERE id=$1', [req.params.id]);
+    if (!formRes.rows.length) return res.status(404).json({ error: 'Form not found' });
+
+    if (!(await canAccessBoard(formRes.rows[0].board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     await pool.query('DELETE FROM forms WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // PUT /api/forms/:id/fields  (full replace)
 router.put('/forms/:id/fields', ...canWrite, async (req, res) => {
-  const { fields } = req.body;
   const client = await pool.connect();
   try {
+    const formRes = await client.query('SELECT board_id FROM forms WHERE id=$1', [req.params.id]);
+    if (!formRes.rows.length) return res.status(404).json({ error: 'Form not found' });
+
+    if (!(await canAccessBoard(formRes.rows[0].board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     await client.query('BEGIN');
+    const { fields } = req.body;
     await client.query('DELETE FROM form_fields WHERE form_id=$1', [req.params.id]);
     if (Array.isArray(fields)) {
       for (let i = 0; i < fields.length; i++) {
@@ -133,7 +180,8 @@ router.put('/forms/:id/fields', ...canWrite, async (req, res) => {
     res.json(rows);
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -142,6 +190,7 @@ router.put('/forms/:id/fields', ...canWrite, async (req, res) => {
 // ── Public endpoints (no auth required) ───────────────────────────────────────
 
 // GET /api/public/forms/:slug
+// Returns only the display fields needed for rendering — internal IDs stripped.
 router.get('/public/forms/:slug', async (req, res) => {
   try {
     const formRes = await pool.query('SELECT * FROM forms WHERE slug=$1', [req.params.slug]);
@@ -157,12 +206,14 @@ router.get('/public/forms/:slug', async (req, res) => {
     );
     res.json({ ...form, fields: fieldsRes.rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // POST /api/public/forms/:slug/submit
-router.post('/public/forms/:slug/submit', async (req, res) => {
+// Rate-limited; only writes to columns that are part of this form's visible fields.
+router.post('/public/forms/:slug/submit', formSubmitLimiter, async (req, res) => {
   const { fields: submittedFields } = req.body;
   const client = await pool.connect();
   try {
@@ -177,6 +228,14 @@ router.post('/public/forms/:slug/submit', async (req, res) => {
       return res.status(404).json({ error: 'Form not found or inactive' });
     }
     const form = formRes.rows[0];
+
+    // Build the set of column IDs that are actually part of this form's visible fields.
+    // Any submitted key not in this set is silently ignored — prevents arbitrary column writes.
+    const allowedFieldsRes = await client.query(
+      `SELECT column_id FROM form_fields WHERE form_id = $1 AND is_visible = true`,
+      [form.id]
+    );
+    const allowedColIds = new Set(allowedFieldsRes.rows.map(r => String(r.column_id)));
 
     // Resolve target group
     let targetGroupId = form.target_group_id;
@@ -205,9 +264,10 @@ router.post('/public/forms/:slug/submit', async (req, res) => {
     );
     const item = itemRes.rows[0];
 
-    // Insert column values
+    // Insert column values — only for columns that are in the form's allowed field set
     for (const [colKey, value] of Object.entries(submittedFields)) {
       if (colKey === '_name') continue;
+      if (!allowedColIds.has(colKey)) continue; // reject unauthorized column writes
       const colId = parseInt(colKey);
       if (!colId || value === undefined || value === null || value === '') continue;
       await client.query(
@@ -222,7 +282,8 @@ router.post('/public/forms/:slug/submit', async (req, res) => {
     res.status(201).json({ success: true, item_id: item.id });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
