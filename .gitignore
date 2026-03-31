@@ -5,4 +5,5 @@
 "backup.sql" 
 "*.jpg" 
 "*.png" 
-"frontend/dist/" 
+"frontend/dist/"
+"migration-tool/.workboard-token"
