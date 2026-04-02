@@ -120,9 +120,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 /* Text inside table cells — override hardcoded dark colors */
 [data-theme="dark"] tbody td span,
 [data-theme="dark"] tbody td div,
-[data-theme="dark"] tbody td label,
+[data-theme="dark"] tbody td label {
+  color: var(--text-primary) !important;
+}
 [data-theme="dark"] tbody td input:not([type="checkbox"]) {
   color: var(--text-primary) !important;
+  background-color: var(--input-bg) !important;
 }
 /* Preserve colored pill/chip text (status cells keep their explicit white/colored text) */
 [data-theme="dark"] thead th span,
@@ -131,15 +134,18 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 /* ── Inputs & form elements ───────────────────────────────────────────────── */
-[data-theme="dark"] input[type="text"],
-[data-theme="dark"] input[type="email"],
-[data-theme="dark"] input[type="search"],
-[data-theme="dark"] input[type="number"],
+/* Cover all input types, including those without an explicit type attribute  */
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]),
 [data-theme="dark"] textarea,
 [data-theme="dark"] select {
   background-color: var(--input-bg) !important;
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
+}
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"])::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--text-secondary) !important;
+  opacity: 1;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

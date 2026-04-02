@@ -5,12 +5,36 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
 
-// GET /api/folders — list all non-deleted folders
+// GET /api/folders — list folders visible to the current user.
+// Admins see all folders. Everyone else sees only:
+//   1. Folders they created (so creators can manage their own empty folders), OR
+//   2. Folders that contain at least one board they are a member of.
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM board_folders WHERE (is_deleted IS NULL OR is_deleted = false) ORDER BY position, name'
-    );
+    let rows;
+    if (req.user.role === 'admin') {
+      ({ rows } = await pool.query(
+        'SELECT * FROM board_folders WHERE (is_deleted IS NULL OR is_deleted = false) ORDER BY position, name'
+      ));
+    } else {
+      ({ rows } = await pool.query(
+        `SELECT DISTINCT f.*
+         FROM board_folders f
+         WHERE (f.is_deleted IS NULL OR f.is_deleted = false)
+           AND (
+             f.created_by = $1
+             OR EXISTS (
+               SELECT 1 FROM boards b
+               JOIN board_members bm ON bm.board_id = b.id
+               WHERE b.folder_id = f.id
+                 AND bm.user_id = $1
+                 AND (b.is_deleted IS NULL OR b.is_deleted = false)
+             )
+           )
+         ORDER BY f.position, f.name`,
+        [req.user.id]
+      ));
+    }
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });

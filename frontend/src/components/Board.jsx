@@ -325,7 +325,8 @@ function InlineEdit({ value, onSave, style, placeholder, singleClick = false }) 
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
-        style={{ border: '1.5px solid #0073ea', borderRadius: 4, padding: '2px 6px', outline: 'none', background: '#fff', fontWeight: 'inherit', fontSize: 'inherit', width: '100%', boxSizing: 'border-box' }}
+        type="text"
+        style={{ border: '1.5px solid #0073ea', borderRadius: 4, padding: '2px 6px', outline: 'none', background: 'var(--input-bg)', color: 'var(--text-primary)', fontWeight: 'inherit', fontSize: 'inherit', width: '100%', boxSizing: 'border-box' }}
       />
     );
   }
@@ -675,8 +676,8 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChan
           )}
           {canEdit
             ? <InlineEdit value={item.name} onSave={name => onItemUpdate(item.id, name)} singleClick
-                style={{ fontSize: 13, fontWeight: 500, color: '#323338' }} />
-            : <span style={{ fontSize: 13, fontWeight: 500, color: '#323338', padding: '0 4px' }}>{item.name}</span>
+                style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }} />
+            : <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', padding: '0 4px' }}>{item.name}</span>
           }
           {/* Subitem count badge */}
           {subitems?.length > 0 && !isExpanded && (
@@ -753,8 +754,8 @@ function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange
           )}
           {canEdit
             ? <InlineEdit value={subitem.name} onSave={name => onUpdate(subitem.id, name)} singleClick
-                style={{ fontSize: 12, color: '#323338' }} />
-            : <span style={{ fontSize: 12, color: '#323338', padding: '0 4px' }}>{subitem.name}</span>
+                style={{ fontSize: 12, color: 'var(--text-primary)' }} />
+            : <span style={{ fontSize: 12, color: 'var(--text-primary)', padding: '0 4px' }}>{subitem.name}</span>
           }
         </div>
       </td>
@@ -803,13 +804,14 @@ function AddSubitemRow({ parentItemId, groupId, onAdd, colSpan }) {
   };
 
   return (
-    <tr style={{ background: '#f7f8fc', borderBottom: '2px solid #e6e9ef' }}>
+    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border-color)' }}>
       <td style={{ width: 6, padding: 0 }} />
       <td style={{ width: 36 }} />
       <td colSpan={colSpan} style={{ padding: '4px 12px 4px 28px' }}>
         {adding ? (
           <input
             autoFocus
+            type="text"
             value={name}
             onChange={e => setName(e.target.value)}
             onKeyDown={e => {
@@ -818,14 +820,14 @@ function AddSubitemRow({ parentItemId, groupId, onAdd, colSpan }) {
             }}
             onBlur={() => { if (!name.trim()) setAdding(false); }}
             placeholder="Subitem name — press Enter to save"
-            style={{ width: 260, border: '1.5px solid #0073ea', borderRadius: 5, padding: '4px 8px', outline: 'none', fontSize: 12 }}
+            style={{ width: 260, border: '1.5px solid #0073ea', borderRadius: 5, padding: '4px 8px', outline: 'none', fontSize: 12, background: 'var(--input-bg)', color: 'var(--text-primary)' }}
           />
         ) : (
           <button
             onClick={() => setAdding(true)}
-            style={{ color: '#676879', fontSize: 12, fontWeight: 600 }}
+            style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}
             onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
-            onMouseLeave={e => e.currentTarget.style.color = '#676879'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >+ Add Subitem</button>
         )}
       </td>
@@ -1095,7 +1097,7 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
           {isDropTarget && dropTarget.beforeItemId === null && <DropLine colSpan={spanAll} />}
           {canEdit && (
             <tr
-              style={{ borderBottom: '2px solid #e6e9ef', background: '#fff' }}
+              style={{ borderBottom: '2px solid var(--border-color)', background: 'var(--card-bg)' }}
               onDragOver={e => onDragOver(e, group.id, null)}
               onDrop={e => onDrop(e, group.id, null)}
             >
@@ -1117,9 +1119,9 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
                 ) : (
                   <button
                     onClick={() => setAddingItem(true)}
-                    style={{ color: '#676879', fontSize: 13, fontWeight: 600, padding: '3px 0' }}
+                    style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, padding: '3px 0' }}
                     onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
-                    onMouseLeave={e => e.currentTarget.style.color = '#676879'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                   >+ Add Item</button>
                 )}
               </td>

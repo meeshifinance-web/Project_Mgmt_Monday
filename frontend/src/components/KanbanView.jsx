@@ -11,9 +11,9 @@ function KanbanCard({ item, group, statusColId, columns, onValueChange, onItemDe
   return (
     <div
       style={{
-        background: '#fff', borderRadius: 8, padding: '10px 12px',
+        background: 'var(--card-bg)', borderRadius: 8, padding: '10px 12px',
         boxShadow: hovered ? '0 4px 16px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.08)',
-        border: `1px solid ${hovered ? '#c0d4f5' : '#e6e9ef'}`,
+        border: `1px solid ${hovered ? '#c0d4f5' : 'var(--border-color)'}`,
         cursor: 'pointer', transition: 'box-shadow 0.15s, border-color 0.15s',
         position: 'relative',
       }}
@@ -24,7 +24,7 @@ function KanbanCard({ item, group, statusColId, columns, onValueChange, onItemDe
       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: group.color, borderRadius: '8px 0 0 8px' }} />
       <div style={{ paddingLeft: 8 }}>
         {/* Item name */}
-        <div style={{ fontWeight: 600, fontSize: 13, color: '#323338', marginBottom: previewCols.length ? 6 : 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', marginBottom: previewCols.length ? 6 : 0 }}>
           {item.name}
         </div>
         {/* Preview column values */}
@@ -33,8 +33,8 @@ function KanbanCard({ item, group, statusColId, columns, onValueChange, onItemDe
           if (!val) return null;
           return (
             <div key={col.id} style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
-              <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0 }}>{col.title}:</span>
-              <span style={{ fontSize: 11, color: '#676879', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{col.title}:</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>
             </div>
           );
         })}
@@ -115,12 +115,12 @@ export default function KanbanView({ groups, columns, onValueChange, onItemCreat
         return (
           <div key={opt.label || '__none__'} style={{
             width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column',
-            background: '#f5f6f8', borderRadius: 10, overflow: 'hidden',
+            background: 'var(--bg-secondary)', borderRadius: 10, overflow: 'hidden',
           }}>
             {/* Column header */}
-            <div style={{ padding: '10px 12px 8px', borderBottom: '2px solid #e6e9ef', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ padding: '10px 12px 8px', borderBottom: '2px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 12, height: 12, borderRadius: '50%', background: color, flexShrink: 0 }} />
-              <span style={{ fontWeight: 700, fontSize: 13, color: '#323338', flex: 1 }}>{label}</span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', flex: 1 }}>{label}</span>
               <span style={{ background: `${color}25`, color, borderRadius: 10, padding: '1px 8px', fontSize: 11, fontWeight: 700 }}>{cards.length}</span>
             </div>
 
@@ -141,14 +141,14 @@ export default function KanbanView({ groups, columns, onValueChange, onItemCreat
               {/* Add item in this column */}
               {isManager && (
                 addingIn === opt.label ? (
-                  <div style={{ background: '#fff', borderRadius: 8, padding: '8px 10px', border: '1.5px solid #0073ea' }}>
+                  <div style={{ background: 'var(--input-bg)', borderRadius: 8, padding: '8px 10px', border: '1.5px solid #0073ea' }}>
                     <input
-                      autoFocus value={newName}
+                      autoFocus type="text" value={newName}
                       onChange={e => setNewName(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handleAddItem(opt.label); if (e.key === 'Escape') { setAddingIn(null); setNewName(''); } }}
                       onBlur={() => { if (!newName.trim()) { setAddingIn(null); } }}
                       placeholder="Item name…"
-                      style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13 }}
+                      style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13, background: 'transparent', color: 'var(--text-primary)' }}
                     />
                     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                       <button onClick={() => handleAddItem(opt.label)} style={{ background: '#0073ea', color: '#fff', borderRadius: 5, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>Add</button>
@@ -158,9 +158,9 @@ export default function KanbanView({ groups, columns, onValueChange, onItemCreat
                 ) : (
                   <button
                     onClick={() => { setAddingIn(opt.label); setNewName(''); }}
-                    style={{ color: '#676879', fontSize: 12, fontWeight: 600, padding: '6px 4px', textAlign: 'left' }}
+                    style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, padding: '6px 4px', textAlign: 'left' }}
                     onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
-                    onMouseLeave={e => e.currentTarget.style.color = '#676879'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                   >+ Add Item</button>
                 )
               )}
