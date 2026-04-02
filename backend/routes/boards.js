@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
 
@@ -289,7 +290,7 @@ router.patch('/:id/email-settings', ...canWrite, async (req, res) => {
 });
 
 // ── DELETE board — soft-delete (moves to global trash, 15-day retention) ──────
-router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+router.delete('/:id', requireAuth, requireScope('full'), requireRole('admin'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `UPDATE boards

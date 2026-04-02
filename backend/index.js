@@ -35,6 +35,26 @@ app.use(session({
   cookie: { secure: false, maxAge: 10 * 60 * 1000 }, // 10 min, only for OAuth state
 }));
 
+// ── Rate limiter for API key requests ────────────────────────────────────────
+// Only active on requests that carry an X-API-Key header.
+// JWT-authenticated browser traffic is skipped entirely.
+const rateLimit = require('express-rate-limit');
+const apiKeyRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: (req) => {
+    if (!req.headers['x-api-key']) return 10000;
+    // Scope-based limits; scope is not yet decoded here so we use a safe default.
+    // Fine-grained enforcement is done post-auth inside requireScope.
+    return 2000;
+  },
+  keyGenerator: (req) => req.headers['x-api-key'] || req.ip,
+  message: { error: 'Rate limit exceeded. See X-RateLimit-Limit header.' },
+  standardHeaders: true,
+  legacyHeaders:   false,
+  skip: (req) => !req.headers['x-api-key'],
+});
+app.use('/api/', apiKeyRateLimiter);
+
 // ── Public auth routes (no JWT required) ──────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
 
@@ -56,6 +76,7 @@ app.use('/api/folders', require('./routes/folders'));
 app.use('/api/items',        require('./routes/itemEmails'));
 app.use('/api/global-trash', require('./routes/globalTrash'));
 app.use('/api/views',       require('./routes/views'));
+app.use('/api/keys',        require('./routes/apiKeys'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -242,6 +263,27 @@ async function start() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_form_fields_form ON form_fields(form_id)`);
+
+    // API Keys table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id            SERIAL PRIMARY KEY,
+        user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name          VARCHAR(100) NOT NULL,
+        key_prefix    VARCHAR(16) NOT NULL,
+        key_hash      VARCHAR(255) NOT NULL,
+        scope         VARCHAR(20) NOT NULL DEFAULT 'read'
+                      CHECK (scope IN ('read','write','full')),
+        board_ids     INTEGER[] DEFAULT NULL,
+        last_used_at  TIMESTAMP,
+        request_count INTEGER DEFAULT 0,
+        created_at    TIMESTAMP DEFAULT NOW(),
+        is_active     BOOLEAN DEFAULT true
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_keys_user   ON api_keys(user_id)`);
+    console.log('✅ api_keys table ready');
 
     // Board views (saved filter sets per board)
     await pool.query(`

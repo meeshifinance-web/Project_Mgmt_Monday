@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 const { sendAutomationEmail } = require('../services/automationEmail');
 
 async function logActivity(client, data) {
@@ -18,7 +19,7 @@ async function logActivity(client, data) {
 const READ_ONLY_ROLES = ['user'];
 
 // ── POST / — create item ──────────────────────────────────────────────────────
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, requireScope('write'), async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot create items' });
 
@@ -135,7 +136,7 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 // ── PUT /:id — rename item ────────────────────────────────────────────────────
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, requireScope('write'), async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot edit items' });
   const { name } = req.body;
@@ -185,7 +186,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 });
 
 // ── DELETE /:id — delete item (moves to trash) ────────────────────────────────
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, requireScope('full'), async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot delete items' });
   const client = await pool.connect();

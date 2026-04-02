@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 
-const canWrite = [requireAuth, requireRole('admin', 'manager')];
+const canWrite     = [requireAuth, requireScope('write'), requireRole('admin', 'manager')];
+const canWriteFull = [requireAuth, requireScope('full'),  requireRole('admin', 'manager')];
 
 async function logActivity(client, data) {
   try {
@@ -113,7 +115,7 @@ router.patch('/reorder', ...canWrite, async (req, res) => {
 });
 
 // ── DELETE /:id — delete group ────────────────────────────────────────────────
-router.delete('/:id', ...canWrite, async (req, res) => {
+router.delete('/:id', ...canWriteFull, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

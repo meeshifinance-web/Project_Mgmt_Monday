@@ -15,6 +15,7 @@ import AuthCallbackPage from './pages/AuthCallbackPage';
 import PublicForm from './pages/PublicForm';
 import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, cloneBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
+import ApiKeysPanel from './components/ApiKeysPanel';
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 
@@ -278,6 +279,7 @@ function MainApp() {
   const [renamingFolderId, setRenamingFolderId] = useState(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const [showGlobalTrash, setShowGlobalTrash] = useState(false);
+  const [showApiKeys, setShowApiKeys] = useState(false);
   const [boardMenuId, setBoardMenuId] = useState(null);
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -869,7 +871,7 @@ function MainApp() {
         </div>
 
         {isAdmin && (
-          <div style={{ padding: isNavCollapsed ? '8px 0' : '8px 16px', borderTop: '1px solid var(--sidebar-border)', display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-start' }}>
+          <div style={{ padding: isNavCollapsed ? '8px 0' : '8px 16px', borderTop: '1px solid var(--sidebar-border)', display: 'flex', flexDirection: 'column', alignItems: isNavCollapsed ? 'center' : 'flex-start', gap: 2 }}>
             <button
               onClick={() => setShowGlobalTrash(true)}
               title="Trash"
@@ -878,11 +880,27 @@ function MainApp() {
                 padding: isNavCollapsed ? '7px 0' : '7px 4px',
                 fontSize: 12, color: 'var(--sidebar-text-muted)',
                 display: 'flex', alignItems: 'center', gap: isNavCollapsed ? 0 : 6,
+                width: '100%',
               }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text-muted)'}
             >
               🗑️{!isNavCollapsed && ' Trash'}
+            </button>
+            <button
+              onClick={() => setShowApiKeys(true)}
+              title="API Keys"
+              style={{
+                textAlign: isNavCollapsed ? 'center' : 'left',
+                padding: isNavCollapsed ? '7px 0' : '7px 4px',
+                fontSize: 12, color: 'var(--sidebar-text-muted)',
+                display: 'flex', alignItems: 'center', gap: isNavCollapsed ? 0 : 6,
+                width: '100%',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text-muted)'}
+            >
+              🔑{!isNavCollapsed && ' API Keys'}
             </button>
           </div>
         )}
@@ -976,6 +994,14 @@ function MainApp() {
             }
             toast(`Folder "${folder.name}" restored`, 'success');
           }}
+        />
+      )}
+
+      {/* API Keys panel */}
+      {showApiKeys && (
+        <ApiKeysPanel
+          boards={boards}
+          onClose={() => setShowApiKeys(false)}
         />
       )}
 

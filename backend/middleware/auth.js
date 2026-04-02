@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
+const { requireApiKey } = require('./apiAuth');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   throw new Error('FATAL: JWT_SECRET env var must be set and be at least 32 characters long');
@@ -7,6 +8,11 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 const JWT_SECRET = process.env.JWT_SECRET;
 
 async function requireAuth(req, res, next) {
+  // API key takes priority — if the header is present, use that auth path
+  if (req.headers['x-api-key']) {
+    return requireApiKey(req, res, next);
+  }
+
   const header = req.headers['authorization'];
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required' });

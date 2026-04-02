@@ -146,6 +146,12 @@ export const updateView = (id, data) =>
 export const deleteView = (id) =>
   api.delete(`/views/${id}`).then(r => r.data);
 
+// ── API Keys (admin only) ──────────────────────────────────────────────────────
+export const getApiKeys    = ()           => api.get('/keys').then(r => r.data);
+export const generateApiKey = (data)     => api.post('/keys', data).then(r => r.data);
+export const revokeApiKey  = (id)        => api.delete(`/keys/${id}`).then(r => r.data);
+export const renameApiKey  = (id, name)  => api.put(`/keys/${id}/rename`, { name }).then(r => r.data);
+
 // Public form endpoints (no auth header needed — use plain fetch)
 export const getPublicForm    = (slug) => fetch(`/api/public/forms/${slug}`).then(r => r.json());
 export const submitPublicForm = (slug, data) =>
