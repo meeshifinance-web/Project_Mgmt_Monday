@@ -2292,6 +2292,25 @@ function matchesFilter(item, rule) {
     itemValue = item.values?.[column_id] || item.values?.[colIdStr] || '';
   }
 
+  // Person columns store a JSON-encoded array (e.g. '["Alice","Bob"]').
+  // Compare by parsing and checking set intersection instead of a raw string match.
+  if (column_type === 'person') {
+    const assigned = parseOwners(itemValue);
+    const filterValues = Array.isArray(value) ? value : (value ? [value] : []);
+    switch (condition) {
+      case 'is':
+        return filterValues.length === 0 || filterValues.some(v => assigned.includes(v));
+      case 'is_not':
+        return filterValues.length === 0 || !filterValues.some(v => assigned.includes(v));
+      case 'is_empty':
+        return assigned.length === 0;
+      case 'is_not_empty':
+        return assigned.length > 0;
+      default:
+        return true;
+    }
+  }
+
   switch (condition) {
     case 'is':
       if (Array.isArray(value)) return value.length === 0 || value.includes(itemValue);
