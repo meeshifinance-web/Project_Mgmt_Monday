@@ -37,7 +37,8 @@ router.get('/', requireAuth, async (req, res) => {
     }
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -53,7 +54,8 @@ router.post('/', ...canWrite, async (req, res) => {
     );
     res.status(201).json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -69,7 +71,8 @@ router.put('/:id', ...canWrite, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Folder not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -106,7 +109,8 @@ router.delete('/:id', ...canWrite, async (req, res) => {
     res.json({ success: true, unfiledBoardIds: boardIds });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -123,7 +127,8 @@ router.patch('/board/:boardId', ...canWrite, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Board not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

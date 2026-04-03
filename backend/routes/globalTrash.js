@@ -45,7 +45,8 @@ router.get('/', ...adminOnly, async (req, res) => {
     ]);
     res.json({ boards: boardsRes.rows, folders: foldersRes.rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -63,7 +64,8 @@ router.post('/boards/:id/restore', ...adminOnly, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Board not found in trash' });
     res.json({ board: rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -113,7 +115,8 @@ router.post('/folders/:id/restore', ...adminOnly, async (req, res) => {
     res.json({ folder, refiledBoardIds });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -126,7 +129,8 @@ router.delete('/boards/:id', ...adminOnly, async (req, res) => {
     await pool.query('DELETE FROM boards WHERE id=$1 AND is_deleted = true', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -136,7 +140,8 @@ router.delete('/folders/:id', ...adminOnly, async (req, res) => {
     await pool.query('DELETE FROM board_folders WHERE id=$1 AND is_deleted = true', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -147,7 +152,8 @@ router.delete('/empty', ...adminOnly, async (req, res) => {
     await pool.query('DELETE FROM board_folders WHERE is_deleted = true');
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

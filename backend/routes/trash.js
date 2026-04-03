@@ -17,7 +17,8 @@ router.get('/board/:boardId', requireAuth, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -91,7 +92,8 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
     res.json({ item: newItem, group_id: targetGroupId });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -104,7 +106,8 @@ router.delete('/board/:boardId/empty', requireAuth, async (req, res) => {
     await pool.query('DELETE FROM trash_items WHERE board_id=$1', [req.params.boardId]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -114,7 +117,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     await pool.query('DELETE FROM trash_items WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
