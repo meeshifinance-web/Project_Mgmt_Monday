@@ -16,7 +16,7 @@ const DEFAULT_PRIORITY_OPTIONS = [
 
 const PRIORITY_ICONS = { Critical: '🔴', High: '🟠', Medium: '🟡', Low: '🟢' };
 
-const NO_DEFAULT_TYPES = ['formula', 'creation_log'];
+const NO_DEFAULT_TYPES = ['formula', 'creation_log', 'file'];
 
 function DefaultInput({ col, value, onChange }) {
   const settings = col.settings || {};
