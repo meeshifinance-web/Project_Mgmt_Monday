@@ -13,11 +13,16 @@ async function requireAuth(req, res, next) {
     return requireApiKey(req, res, next);
   }
 
-  const header = req.headers['authorization'];
-  if (!header || !header.startsWith('Bearer ')) {
+  // Cookie-first: httpOnly cookie is invisible to JS and safe from XSS.
+  // Authorization header is kept as fallback for API clients and backward compat.
+  let token = req.cookies?.wb_token;
+  if (!token) {
+    const header = req.headers['authorization'];
+    if (header?.startsWith('Bearer ')) token = header.slice(7);
+  }
+  if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  const token = header.slice(7);
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
