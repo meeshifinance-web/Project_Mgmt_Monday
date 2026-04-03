@@ -154,6 +154,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
    behaviour on top with !important where needed to beat inline styles.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Login Page ──────────────────────────────────────────────────────────── */
+@keyframes loginFadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.login-left-panel   { display: flex; flex-direction: column; }
+.login-mobile-logo  { display: none !important; }
+.login-pwd-toggle   { min-height: unset !important; height: auto !important; padding: 0 !important; }
+
 /* ── Desktop defaults for mobile-specific elements ───────────────────────── */
 .mobile-hamburger   { display: none; }
 .sidebar-close-btn  { display: none; }
@@ -242,6 +256,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
   /* Touch targets — all interactive elements at least 44px tall */
   button, a, [role="button"] { min-height: 44px; }
+
+  /* ── Login page responsive ─────────────────────────────────────────────── */
+  .login-left-panel  { display: none !important; }
+  .login-mobile-logo { display: flex !important; }
 
   /* Prevent iOS auto-zoom on inputs */
   input[type="text"],
