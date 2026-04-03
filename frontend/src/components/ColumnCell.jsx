@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { updateColumn } from '../api';
+import { updateColumn, uploadFile, deleteFile } from '../api';
 
 const STAR = '★';
 const STAR_E = '☆';
@@ -714,6 +714,90 @@ function PersonCell({ value, settings, onChange }) {
   );
 }
 
+// ── File attachment cell ───────────────────────────────────────────────────────
+function FileCell({ value, onChange }) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef(null);
+
+  let files = [];
+  try { files = value ? JSON.parse(value) : []; } catch { files = []; }
+  if (!Array.isArray(files)) files = [];
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true);
+    try {
+      const uploaded = await uploadFile(file);
+      const next = [...files, uploaded];
+      onChange(JSON.stringify(next));
+    } catch {
+      // upload failed — silent
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = async (index) => {
+    const entry = files[index];
+    const next = files.filter((_, i) => i !== index);
+    onChange(next.length > 0 ? JSON.stringify(next) : '');
+    if (entry?.name) deleteFile(entry.name).catch(() => {});
+  };
+
+  const fmt = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const icon = (mime) => {
+    if (!mime) return '📄';
+    if (mime.startsWith('image/')) return '🖼️';
+    if (mime === 'application/pdf') return '📕';
+    if (mime.includes('spreadsheet') || mime.includes('excel')) return '📊';
+    if (mime.includes('word') || mime.includes('document')) return '📝';
+    if (mime.includes('zip') || mime.includes('compressed')) return '🗜️';
+    return '📎';
+  };
+
+  return (
+    <div style={{ padding: '4px 2px' }}>
+      {files.map((f, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+          <span style={{ fontSize: 13 }}>{icon(f.mimeType)}</span>
+          <a
+            href={f.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{ fontSize: 12, color: '#0073ea', textDecoration: 'none', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            title={f.originalName}
+          >
+            {f.originalName}
+          </a>
+          {f.size ? <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0 }}>{fmt(f.size)}</span> : null}
+          <button
+            onClick={e => { e.stopPropagation(); handleRemove(i); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e2445c', fontSize: 13, padding: '0 2px', lineHeight: 1 }}
+            title="Remove"
+          >✕</button>
+        </div>
+      ))}
+      <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
+      <button
+        onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
+        disabled={uploading}
+        style={{ fontSize: 11, color: '#0073ea', background: 'none', border: 'none', cursor: uploading ? 'default' : 'pointer', padding: '2px 0', opacity: uploading ? 0.5 : 1 }}
+      >
+        {uploading ? '⏳ Uploading…' : '📎 Attach file'}
+      </button>
+    </div>
+  );
+}
+
 export default function ColumnCell({ column, value, onChange, onEditSettings, item }) {
   const { type, settings } = column;
 
@@ -760,8 +844,9 @@ export default function ColumnCell({ column, value, onChange, onEditSettings, it
       return <div style={{ padding: '3px 4px', color: '#7b7e8f', fontStyle: 'italic', fontSize: 12 }}>{value || '—'}</div>;
     case 'person':
       return <PersonCell value={value} settings={settings} onChange={onChange} />;
-    case 'location':
     case 'file':
+      return <FileCell value={value} onChange={onChange} />;
+    case 'location':
     default:
       return <TextCell value={value} onChange={onChange} />;
   }

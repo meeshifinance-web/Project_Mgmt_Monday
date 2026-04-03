@@ -152,6 +152,14 @@ export const generateApiKey = (data)     => api.post('/keys', data).then(r => r.
 export const revokeApiKey  = (id)        => api.delete(`/keys/${id}`).then(r => r.data);
 export const renameApiKey  = (id, name)  => api.put(`/keys/${id}/rename`, { name }).then(r => r.data);
 
+// ── Files ──────────────────────────────────────────────────────────────────────
+export const uploadFile = (file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post('/files/upload', fd).then(r => r.data);
+};
+export const deleteFile = (filename) => api.delete(`/files/${filename}`).then(r => r.data);
+
 // Public form endpoints (no auth header needed — use plain fetch)
 export const getPublicForm    = (slug) => fetch(`/api/public/forms/${slug}`).then(r => r.json());
 export const submitPublicForm = (slug, data) =>
