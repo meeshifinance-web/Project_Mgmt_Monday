@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
 const { requireScope } = require('../middleware/apiAuth');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
@@ -13,16 +13,6 @@ function parseOwners(val) {
   if (!val) return [];
   try { const p = JSON.parse(val); return Array.isArray(p) ? p : p ? [String(p)] : []; }
   catch { return val.trim() ? [val.trim()] : []; }
-}
-
-async function canAccessBoard(boardId, user) {
-  const { rows } = await pool.query('SELECT id FROM boards WHERE id=$1', [boardId]);
-  if (!rows.length) return false;
-  if (user.role === 'admin') return true;
-  const mem = await pool.query(
-    'SELECT 1 FROM board_members WHERE board_id=$1 AND user_id=$2', [boardId, user.id]
-  );
-  return mem.rows.length > 0;
 }
 
 // Sync member options on all person-type columns.
@@ -78,7 +68,8 @@ router.get('/', requireAuth, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -90,7 +81,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     if (!boardRes.rows.length) return res.status(404).json({ error: 'Board not found' });
 
     const board = boardRes.rows[0];
-    if (!(await canAccessBoard(id, req.user)))
+    if (!(await canAccessBoard(id, req.user, pool)))
       return res.status(403).json({ error: 'You do not have access to this board' });
 
     const colsRes = await pool.query('SELECT * FROM columns WHERE board_id=$1 ORDER BY position', [id]);
@@ -161,7 +152,8 @@ router.get('/:id', requireAuth, async (req, res) => {
 
     res.json(board);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -253,7 +245,8 @@ router.post('/', ...canWrite, async (req, res) => {
     res.status(201).json(board);
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -264,13 +257,18 @@ router.put('/:id', ...canWrite, async (req, res) => {
   const { id } = req.params;
   const { name, description, visibility, item_name } = req.body;
   try {
+    if (!(await canAccessBoard(id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     const { rows } = await pool.query(
       'UPDATE boards SET name=$1, description=$2, visibility=$3, item_name=$4 WHERE id=$5 RETURNING *',
       [name, description ?? '', visibility ?? 'private', item_name ?? 'Item', id]
     );
+    if (!rows.length) return res.status(404).json({ error: 'Board not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -278,6 +276,9 @@ router.put('/:id', ...canWrite, async (req, res) => {
 router.patch('/:id/email-settings', ...canWrite, async (req, res) => {
   const { email_from } = req.body;
   try {
+    if (!(await canAccessBoard(req.params.id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
     const { rows } = await pool.query(
       'UPDATE boards SET email_from=$1 WHERE id=$2 RETURNING id, email_from',
       [email_from || null, req.params.id]
@@ -285,7 +286,8 @@ router.patch('/:id/email-settings', ...canWrite, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Board not found' });
     res.json(rows[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -303,7 +305,8 @@ router.delete('/:id', requireAuth, requireScope('full'), requireRole('admin'), a
     if (!rows.length) return res.status(404).json({ error: 'Board not found' });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -319,7 +322,7 @@ router.post('/:id/clone', requireAuth, async (req, res) => {
       [sourceId]
     );
     if (!srcRes.rows.length) return res.status(404).json({ error: 'Board not found' });
-    if (!(await canAccessBoard(sourceId, req.user)))
+    if (!(await canAccessBoard(sourceId, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
     const src = srcRes.rows[0];
 
@@ -418,7 +421,8 @@ router.post('/:id/clone', requireAuth, async (req, res) => {
     res.status(201).json({ success: true, board: newBoard });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -426,7 +430,7 @@ router.post('/:id/clone', requireAuth, async (req, res) => {
 
 // ── GET board members ─────────────────────────────────────────────────────────
 router.get('/:id/members', requireAuth, async (req, res) => {
-  if (!(await canAccessBoard(req.params.id, req.user)))
+  if (!(await canAccessBoard(req.params.id, req.user, pool)))
     return res.status(403).json({ error: 'Access denied' });
   try {
     const { rows } = await pool.query(
@@ -437,7 +441,8 @@ router.get('/:id/members', requireAuth, async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -445,6 +450,14 @@ router.get('/:id/members', requireAuth, async (req, res) => {
 router.post('/:id/members', ...canWrite, async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
+
+  try {
+    if (!(await canAccessBoard(req.params.id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 
   const client = await pool.connect();
   try {
@@ -466,7 +479,8 @@ router.post('/:id/members', ...canWrite, async (req, res) => {
 
     res.status(201).json({ member: invitee, updatedColumns });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -474,6 +488,14 @@ router.post('/:id/members', ...canWrite, async (req, res) => {
 
 // ── DELETE remove member — also syncs person columns ─────────────────────────
 router.delete('/:id/members/:userId', ...canWrite, async (req, res) => {
+  try {
+    if (!(await canAccessBoard(req.params.id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query(
@@ -486,7 +508,8 @@ router.delete('/:id/members/:userId', ...canWrite, async (req, res) => {
 
     res.json({ success: true, updatedColumns });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
   }
