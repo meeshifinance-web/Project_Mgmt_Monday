@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const { startEmailPoller } = require('./services/emailPoller');
 const cors = require('cors');
 const helmet = require('helmet');
 const session = require('express-session');
@@ -312,7 +311,6 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log(`🚀 Backend running on http://localhost:${PORT}`);
-    startEmailPoller();
   });
 }
 
