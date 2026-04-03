@@ -13,6 +13,14 @@ const { requireAuth } = require('../middleware/auth');
 
 const APP_URL = () => process.env.FRONTEND_URL || 'http://localhost:5173';
 
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  path: '/',
+};
+
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 15,
@@ -54,6 +62,7 @@ router.post('/register', loginLimiter, async (req, res) => {
     );
 
     const token = signToken(rows[0]);
+    res.cookie('wb_token', token, COOKIE_OPTIONS);
     res.status(201).json({ token, user: safeUser(rows[0]) });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
@@ -94,7 +103,9 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     await pool.query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
-    res.json({ token: signToken(user), user: safeUser(user) });
+    const token = signToken(user);
+    res.cookie('wb_token', token, COOKIE_OPTIONS);
+    res.json({ token, user: safeUser(user) });
   } catch (err) {
     console.error(err);
 
@@ -128,7 +139,9 @@ router.post('/mfa/verify-login', loginLimiter, async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Invalid authenticator code' });
 
     await pool.query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
-    res.json({ token: signToken(user), user: safeUser(user) });
+    const token = signToken(user);
+    res.cookie('wb_token', token, COOKIE_OPTIONS);
+    res.json({ token, user: safeUser(user) });
   } catch (err) {
     if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError')
       return res.status(401).json({ error: 'Session expired, please log in again' });
@@ -189,7 +202,8 @@ router.get('/microsoft/callback', async (req, res) => {
     }
 
     const token = signToken(user);
-    res.redirect(`${APP_URL()}/auth/callback?token=${token}`);
+    res.cookie('wb_token', token, COOKIE_OPTIONS);
+    res.redirect(`${APP_URL()}/auth/callback?success=true`);
   } catch (err) {
     console.error('Microsoft OAuth error:', err.response?.data || err.message);
     res.redirect(`${APP_URL()}/login?error=microsoft_auth_failed`);
@@ -507,6 +521,12 @@ router.put('/admin/users/:id/reset-password', requireAuth, requireRole('admin'),
 
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ── POST /auth/logout ─────────────────────────────────────────────────────────
+router.post('/logout', (req, res) => {
+  res.clearCookie('wb_token', { path: '/' });
+  res.json({ success: true });
 });
 
 // ── DELETE /auth/users/:id (admin only) ───────────────────────────────────────

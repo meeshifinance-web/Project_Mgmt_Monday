@@ -7,30 +7,37 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Bootstrap: verify stored token on mount
+  // Bootstrap: verify session on mount.
+  // Attaches the localStorage token as Authorization header if present (backward compat),
+  // then calls /auth/me — which succeeds via either the httpOnly cookie OR the header.
   useEffect(() => {
     const token = localStorage.getItem('wb_token');
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      api.get('/auth/me')
-        .then(r => setUser(r.data))
-        .catch(() => {
-          localStorage.removeItem('wb_token');
-          delete api.defaults.headers.common['Authorization'];
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
     }
+    api.get('/auth/me')
+      .then(r => setUser(r.data))
+      .catch(() => {
+        localStorage.removeItem('wb_token');
+        delete api.defaults.headers.common['Authorization'];
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback((token, userData) => {
-    localStorage.setItem('wb_token', token);
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      // Store token for backward compat and attach to headers.
+      // When token is null (cookie-only flow), the httpOnly cookie handles auth.
+      localStorage.setItem('wb_token', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
     setUser(userData);
   }, []);
 
   const logout = useCallback(() => {
+    // Fire-and-forget: clear the httpOnly cookie server-side.
+    // State is cleared synchronously so navigation after logout works immediately.
+    api.post('/auth/logout').catch(() => {});
     localStorage.removeItem('wb_token');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
