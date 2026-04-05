@@ -55,7 +55,7 @@ router.post('/boards/:boardId/forms', ...canWrite, async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 
-  const { title, description, cover_color, target_group_id, thank_you_message } = req.body;
+  const { title, description, cover_color, target_group_id, thank_you_message, item_name_label } = req.body;
   let slug;
   for (let i = 0; i < 10; i++) {
     slug = generateSlug();
@@ -64,8 +64,8 @@ router.post('/boards/:boardId/forms', ...canWrite, async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `INSERT INTO forms (board_id, title, description, cover_color, target_group_id, thank_you_message, slug)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      `INSERT INTO forms (board_id, title, description, cover_color, target_group_id, thank_you_message, item_name_label, slug)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [
         req.params.boardId,
         title || 'Untitled Form',
@@ -73,6 +73,7 @@ router.post('/boards/:boardId/forms', ...canWrite, async (req, res) => {
         cover_color || '#0073ea',
         target_group_id || null,
         thank_you_message || 'Thank you! Your response has been submitted.',
+        item_name_label || 'Item Name',
         slug,
       ]
     );
@@ -116,12 +117,12 @@ router.put('/forms/:id', ...canWrite, async (req, res) => {
     if (!(await canAccessBoard(formRes.rows[0].board_id, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
 
-    const { title, description, cover_color, target_group_id, thank_you_message, is_active } = req.body;
+    const { title, description, cover_color, target_group_id, thank_you_message, is_active, item_name_label } = req.body;
     const { rows } = await pool.query(
       `UPDATE forms SET title=$1, description=$2, cover_color=$3, target_group_id=$4,
-              thank_you_message=$5, is_active=$6
-       WHERE id=$7 RETURNING *`,
-      [title, description, cover_color, target_group_id || null, thank_you_message, is_active, req.params.id]
+              thank_you_message=$5, is_active=$6, item_name_label=$7
+       WHERE id=$8 RETURNING *`,
+      [title, description, cover_color, target_group_id || null, thank_you_message, is_active, item_name_label || 'Item Name', req.params.id]
     );
     res.json(rows[0]);
   } catch (err) {
