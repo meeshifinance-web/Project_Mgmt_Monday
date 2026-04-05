@@ -97,7 +97,7 @@ export default function LoginPage() {
             style={{ width: '220px', marginBottom: '8px', filter: 'brightness(0) invert(1)' }}
           />
           <div style={{ color: '#0073ea', fontSize: '22px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '4px' }}>
-            Workboard
+            TUESDAY.COM
           </div>
           <div style={{ color: '#8ba3bc', fontSize: '14px', marginBottom: '48px', fontStyle: 'italic' }}>
             Your team's project management hub
@@ -139,7 +139,7 @@ export default function LoginPage() {
               alt="D'Decor"
               style={{ width: '180px', marginBottom: '6px', filter: isDark ? 'brightness(0) invert(1)' : 'none' }}
             />
-            <div style={{ color: '#0073ea', fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>Workboard</div>
+            <div style={{ color: '#0073ea', fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>TUESDAY.COM</div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center' }}>
               Project Management Platform
             </div>
@@ -185,10 +185,10 @@ export default function LoginPage() {
                 }}
               >
                 <svg width="20" height="20" viewBox="0 0 21 21">
-                  <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-                  <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-                  <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-                  <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                  <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                  <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                  <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                  <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
                 </svg>
                 <span style={{ fontSize: '15px', fontWeight: 500, color: '#323338' }}>Sign in with Microsoft</span>
               </a>

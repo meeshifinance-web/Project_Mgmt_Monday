@@ -640,8 +640,8 @@ function MainApp() {
                 alt="D'Decor"
                 style={{ height: 64, width: 'auto', objectFit: 'contain', display: 'block' }}
               />
-              <div style={{ fontSize: 12, color: 'var(--sidebar-text)', marginTop: 4, letterSpacing: 0.3, fontWeight: 500 }}>
-                Project Management System
+              <div style={{ fontSize: 14, color: '#000000', marginTop: 4, letterSpacing: 0.3, fontWeight: 1600, textAlign: 'center' }}>
+                TUESDAY.COM
               </div>
             </div>
 
