@@ -635,15 +635,19 @@ function MainApp() {
         }}>
           {!isNavCollapsed && (
             <div>
-              <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 0.5, whiteSpace: 'nowrap' }}>
-                <span style={{ color: '#fdab3d' }}>D'Decor</span>
-                <span style={{ color: 'var(--sidebar-text)', marginLeft: 4 }}>Workboard</span>
+              <img
+                src="/ddecor-logo.png"
+                alt="D'Decor"
+                style={{ height: 64, width: 'auto', objectFit: 'contain', display: 'block' }}
+              />
+              <div style={{ fontSize: 12, color: 'var(--sidebar-text)', marginTop: 4, letterSpacing: 0.3, fontWeight: 500 }}>
+                Project Management System
               </div>
-              <div style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', marginTop: 2 }}>Project Management</div>
             </div>
+
           )}
           {isNavCollapsed && (
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#fdab3d' }} title="D'Decor Workboard">D</span>
+            <img src="/ddecor-logo.png" alt="D'Decor" style={{ height: 24, width: 'auto', objectFit: 'contain' }} title="D'Decor Workboard" />
           )}
           {!isNavCollapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -1030,27 +1034,27 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-        <ToastProvider>
-          <Routes>
-            {/* Public */}
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-            <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <ToastProvider>
+            <Routes>
+              {/* Public */}
+              <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+              <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+              <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-            {/* Public form — no auth needed */}
-            <Route path="/form/:slug" element={<PublicForm />} />
+              {/* Public form — no auth needed */}
+              <Route path="/form/:slug" element={<PublicForm />} />
 
-            {/* Protected */}
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/board/:boardId" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
-            <Route path="/" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
+              {/* Protected */}
+              <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="/board/:boardId" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
+              <Route path="/" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </ToastProvider>
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ToastProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
