@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
+const { sendAutomationEmail } = require('../services/automationEmail');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
 
@@ -266,6 +267,7 @@ router.post('/public/forms/:slug/submit', formSubmitLimiter, async (req, res) =>
     const item = itemRes.rows[0];
 
     // Insert column values — only for columns that are in the form's allowed field set
+    const setColIds = new Set(); // track which columns have been given a value
     for (const [colKey, value] of Object.entries(submittedFields)) {
       if (colKey === '_name') continue;
       if (!allowedColIds.has(colKey)) continue; // reject unauthorized column writes
@@ -277,9 +279,77 @@ router.post('/public/forms/:slug/submit', formSubmitLimiter, async (req, res) =>
          ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
         [item.id, colId, String(value)]
       );
+      setColIds.add(colId);
+    }
+
+    // ── Run item_created automations (same logic as items.js) ──────────────────
+    const autoRes = await client.query(
+      "SELECT * FROM automations WHERE board_id=$1 AND trigger_type='item_created' AND enabled=true",
+      [form.board_id]
+    );
+    const emailAutomations = [];
+    for (const auto of autoRes.rows) {
+      const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : (auto.action_config || {});
+      if (auto.action_type === 'set_status') {
+        const { column_id: colId, value: val } = acfg;
+        if (colId && val) {
+          await client.query(
+            `INSERT INTO column_values (item_id, column_id, value)
+             VALUES ($1,$2,$3)
+             ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+            [item.id, colId, val]
+          );
+          setColIds.add(parseInt(colId));
+        }
+      } else if (auto.action_type === 'assign_person') {
+        const { column_id: colId, user_name: userName } = acfg;
+        if (colId && userName) {
+          await client.query(
+            `INSERT INTO column_values (item_id, column_id, value)
+             VALUES ($1,$2,$3)
+             ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+            [item.id, colId, userName]
+          );
+          setColIds.add(parseInt(colId));
+        }
+      } else if (auto.action_type === 'send_email') {
+        emailAutomations.push({ auto, acfg }); // fire after commit
+      }
+    }
+
+    // ── Apply column default values for columns not already set ────────────────
+    const colsRes = await client.query(
+      'SELECT id, settings FROM columns WHERE board_id=$1',
+      [form.board_id]
+    );
+    for (const col of colsRes.rows) {
+      const s = typeof col.settings === 'string' ? JSON.parse(col.settings) : (col.settings || {});
+      const dv = s?.defaultValue;
+      if (dv !== undefined && dv !== null && String(dv) !== '' && !setColIds.has(col.id)) {
+        await client.query(
+          `INSERT INTO column_values (item_id, column_id, value)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (item_id, column_id) DO NOTHING`,
+          [item.id, col.id, String(dv)]
+        );
+      }
     }
 
     await client.query('COMMIT');
+
+    // Fire email automations after commit so item exists in DB
+    for (const { acfg } of emailAutomations) {
+      setImmediate(() => sendAutomationEmail({
+        boardId:    form.board_id,
+        itemId:     item.id,
+        to:         acfg.to || '',
+        toType:     acfg.to_type || 'specific',
+        toColumnId: acfg.to_column_id || null,
+        subject:    acfg.subject || '',
+        body:       acfg.body || '',
+      }).catch(err => console.error('[AutomationEmail] form async error:', err.message)));
+    }
+
     res.status(201).json({ success: true, item_id: item.id });
   } catch (err) {
     await client.query('ROLLBACK');

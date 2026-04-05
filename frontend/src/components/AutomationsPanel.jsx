@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getAutomations, createAutomation, updateAutomation, deleteAutomation } from '../api';
+import { getAutomations, createAutomation, updateAutomation, deleteAutomation, getBoardMembers } from '../api';
 import { useToast } from './Toast';
 
 // ── Trigger definitions ───────────────────────────────────────────────────────
@@ -19,9 +19,10 @@ const ACTIONS_FOR = {
     { value: 'send_email',    label: '✉️ Send email' },
   ],
   item_created: [
-    { value: 'set_status', label: 'Set status to…' },
-    { value: 'notify',     label: 'Show notification' },
-    { value: 'send_email', label: '✉️ Send email' },
+    { value: 'set_status',    label: 'Set status to…' },
+    { value: 'assign_person', label: '👤 Assign to person / owner' },
+    { value: 'notify',        label: 'Show notification' },
+    { value: 'send_email',    label: '✉️ Send email' },
   ],
   date_arrives: [
     { value: 'notify',     label: 'Show notification' },
@@ -104,6 +105,10 @@ function Summary({ auto, columns, groups }) {
     const col = columns.find(c => String(c.id) === String(acfg.column_id));
     actText = `Set "${col?.title || 'Status'}" → "${acfg.value || '?'}"`;
   }
+  if (auto.action_type === 'assign_person') {
+    const col = columns.find(c => String(c.id) === String(acfg.column_id));
+    actText = `Assign "${acfg.user_name || '?'}" → ${col?.title || 'person column'}`;
+  }
   if (auto.action_type === 'notify')     actText = `Notify: "${acfg.message || '…'}"`;
   if (auto.action_type === 'send_email') {
     const toType = acfg.to_type || 'specific';
@@ -136,7 +141,7 @@ function Summary({ auto, columns, groups }) {
 }
 
 // ── Automation form ───────────────────────────────────────────────────────────
-function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial }) {
+function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, initial }) {
   const [name,          setName]          = useState(initial?.name || '');
   const [triggerType,   setTriggerType]   = useState(initial?.trigger_type || 'status_change');
   const [triggerConfig, setTriggerConfig] = useState(initial?.trigger_config || {});
@@ -317,6 +322,42 @@ function AutomationForm({ boardId, columns, groups, onSave, onCancel, initial })
                 <option value="">Select value…</option>
                 {actStatusOptions.map(o => <option key={o.label} value={o.label}>{o.label}</option>)}
               </select>
+            </div>
+          </div>
+        )}
+
+        {/* assign_person */}
+        {actionType === 'assign_person' && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <div style={{ flex: 1 }}>
+              <p style={label}>Person / Owner column</p>
+              {columns.filter(c => c.type === 'person').length === 0 ? (
+                <div style={{ fontSize: 11, color: '#e2445c', padding: '6px 10px', background: '#fff0f2', borderRadius: 6 }}>
+                  No person columns found on this board. Add a People/Owner column first.
+                </div>
+              ) : (
+                <select value={actionConfig.column_id || ''} onChange={e => setAC({ column_id: e.target.value })} style={sel}>
+                  <option value="">Select person column…</option>
+                  {columns.filter(c => c.type === 'person').map(c => (
+                    <option key={c.id} value={c.id}>{c.title}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={label}>Assign to</p>
+              {members.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#888', padding: '6px 10px', background: '#f5f5f5', borderRadius: 6 }}>
+                  No board members found.
+                </div>
+              ) : (
+                <select value={actionConfig.user_name || ''} onChange={e => setAC({ user_name: e.target.value })} style={sel}>
+                  <option value="">Select member…</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         )}
@@ -564,6 +605,7 @@ export default function AutomationsPanel({
   const [automations, setAutomations] = useState([]);
   const [showForm,    setShowForm]    = useState(false);
   const [editingId,   setEditingId]   = useState(null);
+  const [members,     setMembers]     = useState([]);
   const toast = useToast();
 
   const updateList = (list) => {
@@ -573,6 +615,7 @@ export default function AutomationsPanel({
 
   useEffect(() => {
     getAutomations(boardId).then(r => updateList(r.data)).catch(() => {});
+    getBoardMembers(boardId).then(r => setMembers(r.data || [])).catch(() => {});
   }, [boardId]);
 
   const handleCreate = async (data) => {
@@ -664,7 +707,7 @@ export default function AutomationsPanel({
 
           {showForm && (
             <AutomationForm
-              boardId={boardId} columns={columns} groups={groups}
+              boardId={boardId} columns={columns} groups={groups} members={members}
               onSave={handleCreate} onCancel={() => setShowForm(false)}
             />
           )}
@@ -680,7 +723,7 @@ export default function AutomationsPanel({
           {automations.map(auto => (
             editingId === auto.id ? (
               <AutomationForm
-                key={auto.id} boardId={boardId} columns={columns} groups={groups} initial={auto}
+                key={auto.id} boardId={boardId} columns={columns} groups={groups} members={members} initial={auto}
                 onSave={(data) => handleUpdate(auto.id, data)}
                 onCancel={() => setEditingId(null)}
               />
