@@ -78,6 +78,17 @@ router.post('/', requireAuth, requireScope('write'), async (req, res) => {
             );
             item.values[parseInt(colId)] = val;
           }
+        } else if (auto.action_type === 'assign_person') {
+          const { column_id: colId, user_name: userName } = acfg;
+          if (colId && userName) {
+            await client.query(
+              `INSERT INTO column_values (item_id, column_id, value)
+               VALUES ($1,$2,$3)
+               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+              [item.id, colId, userName]
+            );
+            item.values[parseInt(colId)] = userName;
+          }
         } else if (auto.action_type === 'send_email') {
           // Fire after commit so item exists in DB for placeholder resolution
           setImmediate(() => sendAutomationEmail({
