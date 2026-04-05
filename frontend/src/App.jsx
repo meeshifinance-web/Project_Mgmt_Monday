@@ -650,7 +650,7 @@ function MainApp() {
 
           )}
           {isNavCollapsed && (
-            <img src="/ddecor-logo.png" alt="D'Decor" style={{ height: 24, width: 'auto', objectFit: 'contain' }} title="D'Decor Workboard" />
+            <img src="/ddecor-logo.png" alt="D'Decor" style={{ height: 24, width: 'auto', objectFit: 'contain', display: 'block', filter: isDark ? 'brightness(0) invert(1)' : 'none', }} title="TUESDAY.COM" />
           )}
           {!isNavCollapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
