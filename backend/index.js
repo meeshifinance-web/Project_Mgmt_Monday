@@ -265,6 +265,7 @@ async function start() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_form_fields_form ON form_fields(form_id)`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS item_name_label TEXT DEFAULT 'Item Name'`);
 
     // API Keys table
     await pool.query(`

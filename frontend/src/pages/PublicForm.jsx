@@ -422,7 +422,7 @@ export default function PublicForm() {
             style={{ marginBottom: 24 }}
           >
             <label style={fieldLabel}>
-              Item Name <span style={{ color: '#e2445c' }}>*</span>
+              {form.item_name_label || 'Item Name'} <span style={{ color: '#e2445c' }}>*</span>
             </label>
             <input
               type="text"
@@ -489,7 +489,7 @@ export default function PublicForm() {
       </div>
 
       <div style={{ textAlign: 'center', fontSize: 12, color: '#aaa', paddingBottom: 24 }}>
-        Powered by D'Decor Workboard
+        Powered by <span style={{ fontWeight: 600, color: '#888' }}>Tuesday.com</span>
       </div>
     </div>
   );

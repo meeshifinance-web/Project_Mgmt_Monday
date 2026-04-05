@@ -2,117 +2,148 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getForms, createForm, getForm, updateForm, deleteForm, saveFormFields } from '../api';
 import { useToast } from './Toast';
 
-// Types that should be hidden from forms
+// ── Constants ─────────────────────────────────────────────────────────────────
 const SKIP_TYPES = ['formula', 'creation_log', 'time_tracking'];
+const BASE_URL   = window.location.origin;
 
-const BASE_URL = window.location.origin;
+const ACCENT_PRESETS = [
+  // Vibrant
+  '#0073ea','#00c875','#e2445c','#fdab3d','#a25ddc','#037f4c','#ff5ac4','#0086c0','#ff642e','#333333',
+  // Light / muted
+  '#94a3b8','#a8b8c8','#b0c4b1','#c9b8d8','#f4a96a','#f9c6c6','#b2d8d8','#c8daf4','#d4c5a9','#d9d9d9',
+];
 
-// Works in both HTTP (localhost) and HTTPS environments
+const TYPE_META = {
+  text:         { icon: 'Aa', color: '#6366f1' },
+  long_text:    { icon: '¶',  color: '#8b5cf6' },
+  number:       { icon: '#',  color: '#06b6d4' },
+  email:        { icon: '@',  color: '#3b82f6' },
+  phone:        { icon: '✆',  color: '#10b981' },
+  date:         { icon: '📅', color: '#f59e0b' },
+  status:       { icon: '◉',  color: '#0073ea' },
+  priority:     { icon: '▲',  color: '#e2445c' },
+  dropdown:     { icon: '▾',  color: '#7c3aed' },
+  rating:       { icon: '★',  color: '#f59e0b' },
+  checkbox:     { icon: '✓',  color: '#00c875' },
+  progress:     { icon: '%',  color: '#0073ea' },
+  link:         { icon: '🔗', color: '#3b82f6' },
+  timeline:     { icon: '⟷', color: '#f59e0b' },
+  tags:         { icon: '🏷', color: '#8b5cf6' },
+  location:     { icon: '📍', color: '#ef4444' },
+  person:       { icon: '👤', color: '#64748b' },
+  color_picker: { icon: '🎨', color: '#ec4899' },
+  file:         { icon: '📎', color: '#64748b' },
+};
+
+function getTypeMeta(t) { return TYPE_META[t] || { icon: '—', color: '#94a3b8' }; }
+
+// ── Clipboard helper ──────────────────────────────────────────────────────────
 function copyTextToClipboard(text) {
-  if (navigator.clipboard && window.isSecureContext) {
-    return navigator.clipboard.writeText(text);
-  }
-  // Fallback: create a temporary textarea, select, and execCommand
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
   return new Promise((resolve, reject) => {
-    const el = document.createElement('textarea');
-    el.value = text;
-    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
-    document.body.appendChild(el);
-    el.focus();
-    el.select();
-    try {
-      const ok = document.execCommand('copy');
-      document.body.removeChild(el);
-      ok ? resolve() : reject(new Error('execCommand failed'));
-    } catch (err) {
-      document.body.removeChild(el);
-      reject(err);
-    }
+    const el = Object.assign(document.createElement('textarea'), { value: text, style: 'position:fixed;top:-9999px;opacity:0' });
+    document.body.appendChild(el); el.focus(); el.select();
+    try { document.execCommand('copy') ? resolve() : reject(); } catch (e) { reject(e); } finally { document.body.removeChild(el); }
   });
 }
 
-// ── Live preview of a single field ───────────────────────────────────────────
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+function Toggle({ on, onChange, color = '#0073ea', size = 'md' }) {
+  const w = size === 'sm' ? 32 : 40, h = size === 'sm' ? 18 : 22, d = size === 'sm' ? 12 : 16;
+  return (
+    <div onClick={e => { e.stopPropagation(); onChange(); }}
+      title={on ? 'Visible — click to hide' : 'Hidden — click to show'}
+      style={{
+        width: w, height: h, borderRadius: h / 2,
+        background: on ? color : '#d1d5db',
+        position: 'relative', cursor: 'pointer', flexShrink: 0,
+        transition: 'background 0.2s, box-shadow 0.2s',
+        boxShadow: on ? `0 0 0 3px ${color}28` : 'none',
+      }}>
+      <div style={{
+        position: 'absolute', top: (h - d) / 2, left: on ? w - d - (h - d) / 2 : (h - d) / 2,
+        width: d, height: d, borderRadius: '50%', background: '#fff',
+        transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+      }} />
+    </div>
+  );
+}
+
+// ── Type badge ────────────────────────────────────────────────────────────────
+function TypeBadge({ type }) {
+  const m = getTypeMeta(type);
+  return (
+    <div style={{
+      width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+      background: `${m.color}18`, color: m.color,
+      fontSize: 11, fontWeight: 800,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>{m.icon}</div>
+  );
+}
+
+// ── Preview: single field ─────────────────────────────────────────────────────
 function PreviewField({ field, color }) {
-  const label = field.label || field.column_title;
+  const label    = field.label || field.column_title;
   const required = field.is_required;
-  const type = field.column_type;
+  const type     = field.column_type;
   const settings = (() => {
     try { return typeof field.column_settings === 'string' ? JSON.parse(field.column_settings) : (field.column_settings || {}); }
     catch { return {}; }
   })();
 
-  const inputStyle = {
-    width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 8,
-    padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
-    background: '#fff', color: '#323338',
+  const inputBase = {
+    width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 8,
+    padding: '10px 13px', fontSize: 13, outline: 'none',
+    boxSizing: 'border-box', background: '#f8fafc', color: '#94a3b8',
+    opacity: 0.8,
   };
-
-  const labelEl = (
-    <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 600, color: '#323338' }}>
-      {label}
-      {required && <span style={{ color: '#e2445c', marginLeft: 3 }}>*</span>}
-    </label>
-  );
 
   let input;
   switch (type) {
     case 'long_text':
-      input = <textarea rows={3} disabled placeholder="Long text…" style={{ ...inputStyle, resize: 'vertical', opacity: 0.6 }} />;
+      input = <textarea rows={2} disabled placeholder="Long text…" style={{ ...inputBase, resize: 'none' }} />;
       break;
     case 'number': case 'progress':
-      input = <input type="number" disabled placeholder="0" style={{ ...inputStyle, opacity: 0.6 }} />;
+      input = <input type="number" disabled placeholder="0" style={inputBase} />;
       break;
     case 'email':
-      input = <input type="email" disabled placeholder="email@example.com" style={{ ...inputStyle, opacity: 0.6 }} />;
+      input = <input type="email" disabled placeholder="email@example.com" style={inputBase} />;
       break;
     case 'phone':
-      input = <input type="tel" disabled placeholder="+91 98765 43210" style={{ ...inputStyle, opacity: 0.6 }} />;
+      input = <input type="tel" disabled placeholder="+91 98765 43210" style={inputBase} />;
       break;
     case 'date':
-      input = <input type="date" disabled style={{ ...inputStyle, opacity: 0.6 }} />;
+      input = <input type="date" disabled style={inputBase} />;
       break;
     case 'link':
-      input = <input type="url" disabled placeholder="https://" style={{ ...inputStyle, opacity: 0.6 }} />;
+      input = <input type="url" disabled placeholder="https://" style={inputBase} />;
       break;
     case 'checkbox':
       input = (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 22, height: 22, borderRadius: 5, border: '2px solid #c4c4c4', background: '#fff' }} />
-          <span style={{ fontSize: 13, color: '#888' }}>Unchecked</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.6 }}>
+          <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid #cbd5e1', background: '#fff' }} />
+          <span style={{ fontSize: 12, color: '#94a3b8' }}>Click to check</span>
         </div>
       );
       break;
     case 'rating':
       input = (
-        <div style={{ display: 'flex', gap: 6 }}>
-          {[1,2,3,4,5].map(i => (
-            <span key={i} style={{ fontSize: 24, color: '#c4c4c4' }}>☆</span>
-          ))}
+        <div style={{ display: 'flex', gap: 4, opacity: 0.6 }}>
+          {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: 20, color: '#cbd5e1' }}>☆</span>)}
         </div>
       );
       break;
-    case 'status':
-    case 'priority':
-    case 'dropdown': {
+    case 'status': case 'priority': case 'dropdown': {
       const opts = settings.options || (type === 'priority' ? ['Critical','High','Medium','Low'] : type === 'status' ? ['Not Started','In Progress','Done','Stuck'] : []);
       if (type === 'dropdown') {
-        input = (
-          <select disabled style={{ ...inputStyle, opacity: 0.6 }}>
-            <option>— Select —</option>
-            {opts.map(o => <option key={typeof o === 'string' ? o : o.label}>{typeof o === 'string' ? o : o.label}</option>)}
-          </select>
-        );
+        input = <select disabled style={{ ...inputBase }}><option>— Select —</option></select>;
       } else {
         input = (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, opacity: 0.75 }}>
             {opts.slice(0, 4).map(o => {
               const lbl = typeof o === 'string' ? o : o.label;
-              const clr = typeof o === 'object' ? o.color : '#e0e0e0';
-              return (
-                <div key={lbl} style={{ padding: '5px 12px', borderRadius: 20, background: '#f5f5f5', border: `1.5px solid ${clr || '#e0e0e0'}`, fontSize: 12, color: '#555', cursor: 'default' }}>
-                  {lbl}
-                </div>
-              );
+              return <div key={lbl} style={{ padding: '4px 12px', borderRadius: 99, background: '#f1f5f9', border: '1.5px solid #e2e8f0', fontSize: 11, color: '#64748b', fontWeight: 500 }}>{lbl}</div>;
             })}
           </div>
         );
@@ -121,105 +152,97 @@ function PreviewField({ field, color }) {
     }
     case 'timeline':
       input = (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="date" disabled style={{ ...inputStyle, flex: 1, opacity: 0.6 }} />
-          <span style={{ color: '#888', fontSize: 13 }}>→</span>
-          <input type="date" disabled style={{ ...inputStyle, flex: 1, opacity: 0.6 }} />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', opacity: 0.7 }}>
+          <input type="date" disabled style={{ ...inputBase, flex: 1 }} />
+          <span style={{ color: '#cbd5e1', fontSize: 12 }}>→</span>
+          <input type="date" disabled style={{ ...inputBase, flex: 1 }} />
         </div>
       );
       break;
     default:
-      input = <input type="text" disabled placeholder="Type your answer…" style={{ ...inputStyle, opacity: 0.6 }} />;
+      input = <input type="text" disabled placeholder="Type your answer…" style={inputBase} />;
   }
 
   return (
-    <div style={{ marginBottom: 20 }}>
-      {labelEl}
+    <div style={{ marginBottom: 18 }}>
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
+        {label}{required && <span style={{ color: '#dc2626', marginLeft: 3 }}>*</span>}
+      </label>
       {input}
     </div>
   );
 }
 
-// ── Right-side live preview ───────────────────────────────────────────────────
-function FormPreview({ form, fields }) {
-  const color = form.cover_color || '#0073ea';
-  const visibleFields = fields.filter(f => f.is_visible);
+// ── Live preview panel ────────────────────────────────────────────────────────
+function FormPreview({ form, fields, itemNameLabel, accentColor }) {
+  const color = accentColor || form.cover_color || '#0073ea';
+  const visible = fields.filter(f => f.is_visible);
 
   return (
-    <div style={{
-      background: '#f0f2f5', borderRadius: 12, overflow: 'hidden',
-      boxShadow: '0 2px 16px rgba(0,0,0,0.1)', maxWidth: 480, margin: '0 auto',
-      fontFamily: "'DM Sans', Figtree, sans-serif",
-    }}>
-      {/* Cover banner */}
-      <div style={{ background: color, padding: '32px 28px 20px', position: 'relative' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>
-          {form.title || 'Untitled Form'}
+    <div style={{ fontFamily: "'Inter', sans-serif" }}>
+      {/* Browser chrome mockup */}
+      <div style={{ background: '#e2e8f0', borderRadius: '12px 12px 0 0', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {['#f87171','#fbbf24','#34d399'].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />)}
         </div>
-        {form.description && (
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.82)', marginTop: 6 }}>
-            {form.description}
-          </div>
-        )}
+        <div style={{ flex: 1, background: '#fff', borderRadius: 6, height: 22, padding: '0 10px', display: 'flex', alignItems: 'center', fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {BASE_URL}/form/…
+        </div>
       </div>
 
-      {/* Form body */}
-      <div style={{ background: '#fff', padding: '24px 28px' }}>
-        {/* Item name field always first */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 600, color: '#323338' }}>
-            Item Name <span style={{ color: '#e2445c' }}>*</span>
-          </label>
-          <input type="text" disabled placeholder="Enter a name…" style={{
-            width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 8,
-            padding: '10px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
-            background: '#fff', opacity: 0.6,
-          }} />
+      {/* Page chrome */}
+      <div style={{ background: 'linear-gradient(150deg,#f8fafc,#eef2f7)', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 12px 12px', overflow: 'hidden', maxHeight: 520, overflowY: 'auto' }}>
+        {/* Cover */}
+        <div style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)`, padding: '24px 20px 32px', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{form.title || 'Untitled Form'}</div>
+          {form.description && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 5 }}>{form.description}</div>}
         </div>
 
-        {visibleFields.map(f => (
-          <PreviewField key={f.id || f.column_id} field={f} color={color} />
-        ))}
-
-        {visibleFields.length === 0 && (
-          <div style={{ color: '#aaa', fontSize: 13, padding: '12px 0', textAlign: 'center' }}>
-            Add fields from the left panel
+        {/* Form body */}
+        <div style={{ background: '#fff', margin: '0 12px', borderRadius: '0 0 10px 10px', padding: '20px 18px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', marginBottom: 14 }}>
+          {/* Item name */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', marginBottom: 5, fontSize: 12, fontWeight: 600, color: '#334155' }}>
+              {itemNameLabel || 'Item Name'} <span style={{ color: '#dc2626' }}>*</span>
+            </label>
+            <input type="text" disabled placeholder="Enter a name…" style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 7, padding: '8px 11px', fontSize: 12, outline: 'none', boxSizing: 'border-box', background: '#f8fafc', opacity: 0.7 }} />
           </div>
-        )}
 
-        <button disabled style={{
-          width: '100%', padding: '12px 0', background: color, color: '#fff',
-          borderRadius: 8, fontWeight: 700, fontSize: 15, marginTop: 8, cursor: 'default', opacity: 0.9,
-        }}>Submit</button>
+          {visible.map(f => <PreviewField key={f.id || f.column_id} field={f} color={color} />)}
 
-        <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#aaa' }}>
-          Preview only — submissions go to your board
+          {visible.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '16px 0', color: '#cbd5e1', fontSize: 12, fontWeight: 500 }}>
+              No fields selected yet
+            </div>
+          )}
+
+          <button disabled style={{ width: '100%', padding: '10px 0', background: color, color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, marginTop: 6, opacity: 0.9, cursor: 'default' }}>Submit response →</button>
         </div>
+
+        <div style={{ textAlign: 'center', padding: '8px 0 14px', fontSize: 10, color: '#94a3b8' }}>Powered by Tuesday.com</div>
       </div>
     </div>
   );
 }
 
-// ── Form builder view ─────────────────────────────────────────────────────────
+// ── Form builder ──────────────────────────────────────────────────────────────
 function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
 
-  // Form settings
-  const [title, setTitle]         = useState('Untitled Form');
-  const [description, setDesc]    = useState('');
-  const [coverColor, setColor]    = useState('#0073ea');
-  const [targetGroup, setGroup]   = useState('');
-  const [thankYou, setThankYou]   = useState('Thank you! Your response has been submitted.');
-  const [isActive, setActive]     = useState(true);
-  const [slug, setSlug]           = useState('');
+  const [title,       setTitle]       = useState('Untitled Form');
+  const [description, setDesc]        = useState('');
+  const [coverColor,  setColor]       = useState('#0073ea');
+  const [targetGroup, setGroup]       = useState('');
+  const [thankYou,    setThankYou]    = useState('Thank you! Your response has been submitted.');
+  const [isActive,    setActive]      = useState(true);
+  const [slug,        setSlug]        = useState('');
+  const [itemNameLabel, setItemNameLabel] = useState('Item Name');
+  const [fields,      setFields]      = useState([]);
+  const [activeSection, setSection]   = useState('basic');
 
-  // Fields list: { column_id, column_title, column_type, column_settings, label, is_required, is_visible, position }
-  const [fields, setFields] = useState([]);
-
-  const [activeSection, setActiveSection] = useState('basic'); // basic | fields | share
-
-  // Load form data if editing
+  // Load existing form
   useEffect(() => {
     if (!formId) return;
     getForm(formId).then(r => {
@@ -231,30 +254,26 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
       setThankYou(f.thank_you_message || '');
       setActive(f.is_active !== false);
       setSlug(f.slug || '');
+      setItemNameLabel(f.item_name_label || 'Item Name');
       buildFieldsList(f.fields || []);
     }).catch(() => toast('Failed to load form', 'error'));
   }, [formId]);
 
-  // Build fields list from all board columns merged with saved form_fields
   const buildFieldsList = useCallback((savedFields) => {
-    const usableColumns = columns.filter(c => !SKIP_TYPES.includes(c.type));
+    const usable   = columns.filter(c => !SKIP_TYPES.includes(c.type));
     const savedMap = {};
     savedFields.forEach(f => { savedMap[f.column_id] = f; });
-
-    const list = usableColumns.map((col, idx) => {
+    const list = usable.map((col, idx) => {
       const saved = savedMap[col.id];
       return {
-        column_id: col.id,
-        column_title: col.title,
-        column_type: col.type,
-        column_settings: col.settings,
+        column_id: col.id, column_title: col.title,
+        column_type: col.type, column_settings: col.settings,
         label: saved?.label || col.title,
         is_required: saved?.is_required || false,
         is_visible: saved ? saved.is_visible : false,
         position: saved?.position ?? idx,
       };
     });
-    // Sort: visible first (by position), then invisible
     list.sort((a, b) => {
       if (a.is_visible !== b.is_visible) return a.is_visible ? -1 : 1;
       return a.position - b.position;
@@ -262,7 +281,6 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
     setFields(list);
   }, [columns]);
 
-  // Initialize for new form
   useEffect(() => {
     if (!formId) {
       buildFieldsList([]);
@@ -270,275 +288,268 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
     }
   }, [formId, groups, buildFieldsList]);
 
-  const toggleField = (colId) => {
-    setFields(prev => prev.map(f =>
-      f.column_id === colId ? { ...f, is_visible: !f.is_visible } : f
-    ));
-  };
-
-  const toggleRequired = (colId) => {
-    setFields(prev => prev.map(f =>
-      f.column_id === colId ? { ...f, is_required: !f.is_required } : f
-    ));
-  };
-
-  const updateLabel = (colId, label) => {
-    setFields(prev => prev.map(f =>
-      f.column_id === colId ? { ...f, label } : f
-    ));
-  };
+  const toggleField    = id => setFields(p => p.map(f => f.column_id === id ? { ...f, is_visible: !f.is_visible } : f));
+  const toggleRequired = id => setFields(p => p.map(f => f.column_id === id ? { ...f, is_required: !f.is_required } : f));
+  const updateLabel    = (id, lbl) => setFields(p => p.map(f => f.column_id === id ? { ...f, label: lbl } : f));
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const formData = {
-        title: title.trim() || 'Untitled Form',
-        description,
+      const payload = {
+        title: title.trim() || 'Untitled Form', description,
         cover_color: coverColor,
         target_group_id: targetGroup ? parseInt(targetGroup) : null,
-        thank_you_message: thankYou,
-        is_active: isActive,
+        thank_you_message: thankYou, is_active: isActive,
+        item_name_label: itemNameLabel.trim() || 'Item Name',
       };
+      let saved;
+      if (formId) { const r = await updateForm(formId, payload); saved = r.data; }
+      else { const r = await createForm(boardId, payload); saved = r.data; setSlug(saved.slug); }
 
-      let savedForm;
-      if (formId) {
-        const r = await updateForm(formId, formData);
-        savedForm = r.data;
-      } else {
-        const r = await createForm(boardId, formData);
-        savedForm = r.data;
-        setSlug(savedForm.slug);
-      }
-
-      // Save fields
-      const visibleFields = fields
-        .filter(f => f.is_visible)
-        .map((f, i) => ({
-          column_id: f.column_id,
-          label: f.label || f.column_title,
-          is_required: f.is_required,
-          position: i,
-          is_visible: true,
-        }));
-
-      await saveFormFields(savedForm.id, visibleFields);
+      const visibleFields = fields.filter(f => f.is_visible).map((f, i) => ({
+        column_id: f.column_id, label: f.label || f.column_title,
+        is_required: f.is_required, position: i, is_visible: true,
+      }));
+      await saveFormFields(saved.id, visibleFields);
       toast('Form saved', 'success');
-      onSaved(savedForm);
-    } catch (err) {
-      toast('Failed to save form', 'error');
-    } finally {
-      setSaving(false);
-    }
+      onSaved(saved);
+    } catch { toast('Failed to save form', 'error'); }
+    finally { setSaving(false); }
   };
 
   const publicUrl = slug ? `${BASE_URL}/form/${slug}` : '';
-  const embedCode = slug
-    ? `<iframe src="${BASE_URL}/form/${slug}" width="100%" height="600" frameborder="0" style="border-radius:8px"></iframe>`
-    : '';
-
-  const copyToClipboard = (text, label) => {
-    copyTextToClipboard(text).then(() => toast(`${label} copied!`, 'success')).catch(() => toast('Copy failed', 'error'));
-  };
-
+  const embedCode = slug ? `<iframe src="${BASE_URL}/form/${slug}" width="100%" height="700" frameborder="0" style="border-radius:12px;border:none"></iframe>` : '';
+  const copyToClipboard = (text, lbl) => copyTextToClipboard(text).then(() => toast(`${lbl} copied!`, 'success')).catch(() => toast('Copy failed', 'error'));
   const previewFields = fields.filter(f => f.is_visible);
 
-  const sectionBtn = (key, label) => (
-    <button
-      onClick={() => setActiveSection(key)}
-      style={{
-        padding: '6px 14px', borderRadius: 6, fontSize: 13, fontWeight: activeSection === key ? 700 : 500,
-        border: `1.5px solid ${activeSection === key ? '#0073ea' : '#e0e0e0'}`,
-        background: activeSection === key ? '#e8f0fe' : '#fff',
-        color: activeSection === key ? '#0073ea' : '#555',
-        cursor: 'pointer',
-      }}
-    >{label}</button>
-  );
+  const SECTIONS = [
+    { key: 'basic', icon: '⚙', label: 'Basic Info' },
+    { key: 'fields', icon: '📋', label: 'Fields' },
+    ...(slug ? [{ key: 'share', icon: '🔗', label: 'Share' }] : []),
+  ];
+
+  const visibleCount = fields.filter(f => f.is_visible).length;
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', fontFamily: "'Inter', -apple-system, sans-serif" }}>
 
-      {/* ── Left panel ── */}
-      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid #e6e9ef', background: '#fff', overflow: 'hidden' }}>
+      {/* ── Left: builder panel ── */}
+      <div style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderRight: '1px solid #e2e8f0', overflow: 'hidden' }}>
+
         {/* Header */}
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <button onClick={onBack} style={{ fontSize: 13, color: '#0073ea', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-            ← Back
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
+          <button onClick={onBack}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#0073ea', fontWeight: 600, padding: '5px 0', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="#0073ea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Back
           </button>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Active toggle */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, color: isActive ? '#037f4c' : '#aaa' }}>
-              <div
-                onClick={() => setActive(a => !a)}
-                style={{
-                  width: 36, height: 20, borderRadius: 10, background: isActive ? '#00c875' : '#ddd',
-                  position: 'relative', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0,
-                }}
-              >
-                <div style={{
-                  position: 'absolute', top: 2, left: isActive ? 18 : 2, width: 16, height: 16,
-                  borderRadius: '50%', background: '#fff', transition: 'left 0.2s',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                }} />
-              </div>
-              {isActive ? 'Active' : 'Inactive'}
-            </label>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{ padding: '7px 18px', background: '#0073ea', color: '#fff', borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}
-            >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Toggle on={isActive} onChange={() => setActive(a => !a)} color="#00c875" size="sm" />
+              <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? '#059669' : '#94a3b8' }}>
+                {isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            <button onClick={handleSave} disabled={saving}
+              style={{
+                padding: '7px 18px', background: '#0073ea', color: '#fff', borderRadius: 8,
+                fontWeight: 700, fontSize: 13, cursor: saving ? 'wait' : 'pointer',
+                opacity: saving ? 0.7 : 1, border: 'none',
+                boxShadow: '0 2px 8px rgba(0,115,234,0.3)',
+              }}>
               {saving ? 'Saving…' : formId ? 'Save Changes' : 'Create Form'}
             </button>
           </div>
         </div>
 
         {/* Section tabs */}
-        <div style={{ padding: '10px 18px', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 6, flexShrink: 0 }}>
-          {sectionBtn('basic', '⚙ Basic Info')}
-          {sectionBtn('fields', '📋 Fields')}
-          {slug && sectionBtn('share', '🔗 Share')}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: 4, flexShrink: 0 }}>
+          {SECTIONS.map(s => (
+            <button key={s.key} onClick={() => setSection(s.key)}
+              style={{
+                padding: '7px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: activeSection === s.key ? 700 : 500,
+                border: `1.5px solid ${activeSection === s.key ? '#0073ea' : '#e2e8f0'}`,
+                background: activeSection === s.key ? '#eff6ff' : '#fff',
+                color: activeSection === s.key ? '#0073ea' : '#64748b',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                transition: 'all 0.15s',
+              }}>
+              <span>{s.icon}</span> {s.label}
+              {s.key === 'fields' && visibleCount > 0 && (
+                <span style={{ background: '#0073ea', color: '#fff', borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 800, marginLeft: 2 }}>{visibleCount}</span>
+              )}
+            </button>
+          ))}
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
+        {/* Section body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
 
-          {/* ── Section A: Basic Info ── */}
+          {/* ── Basic Info ── */}
           {activeSection === 'basic' && (
-            <div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={lbl}>Form Title</label>
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Customer Request Form"
-                  style={inp} onFocus={e => e.target.style.borderColor = '#0073ea'} onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={lbl}>Description</label>
-                <textarea value={description} onChange={e => setDesc(e.target.value)} placeholder="Brief description of this form…" rows={3}
-                  style={{ ...inp, resize: 'vertical' }}
-                  onFocus={e => e.target.style.borderColor = '#0073ea'} onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={lbl}>Cover Accent Color</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <Field label="Form Title">
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. IT Onboarding Form"
+                  style={inp} onFocus={foc} onBlur={blr} />
+              </Field>
+
+              <Field label="Description">
+                <textarea value={description} onChange={e => setDesc(e.target.value)} rows={3}
+                  placeholder="Brief description shown to respondents…"
+                  style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} onFocus={foc} onBlur={blr} />
+              </Field>
+
+              <Field label="Cover Color">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <input type="color" value={coverColor} onChange={e => setColor(e.target.value)}
-                    style={{ width: 48, height: 36, border: '1.5px solid #e0e0e0', borderRadius: 6, cursor: 'pointer', padding: 2 }} />
-                  <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace' }}>{coverColor}</span>
-                  <div style={{ display: 'flex', gap: 5 }}>
-                    {['#0073ea','#00c875','#e2445c','#fdab3d','#a25ddc','#037f4c','#ff5ac4'].map(c => (
-                      <div key={c} onClick={() => setColor(c)} style={{ width: 20, height: 20, borderRadius: '50%', background: c, cursor: 'pointer', border: c === coverColor ? '3px solid #323338' : '2px solid transparent' }} />
+                    style={{ width: 44, height: 44, borderRadius: 8, border: '2px solid #e2e8f0', cursor: 'pointer', padding: 3, boxSizing: 'border-box' }} />
+                  <span style={{ fontSize: 12, color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>{coverColor}</span>
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    {ACCENT_PRESETS.map(c => (
+                      <div key={c} onClick={() => setColor(c)}
+                        style={{
+                          width: 22, height: 22, borderRadius: '50%', background: c, cursor: 'pointer',
+                          border: c === coverColor ? '3px solid #0f172a' : '1.5px solid #d1d5db',
+                          boxShadow: c === coverColor ? '0 0 0 1px #fff inset' : 'none',
+                          transition: 'transform 0.15s',
+                        }}
+                        onMouseEnter={e => e.target.style.transform = 'scale(1.2)'}
+                        onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+                      />
                     ))}
                   </div>
                 </div>
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={lbl}>Target Group (where items go)</label>
-                <select value={targetGroup} onChange={e => setGroup(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+              </Field>
+
+              <Field label="Target Group">
+                <select value={targetGroup} onChange={e => setGroup(e.target.value)} style={{ ...inp, cursor: 'pointer' }} onFocus={foc} onBlur={blr}>
                   <option value="">— First group (default) —</option>
                   {groups.map(g => <option key={g.id} value={String(g.id)}>{g.name}</option>)}
                 </select>
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={lbl}>Thank-you Message</label>
+              </Field>
+
+              <Field label="Thank-you Message">
                 <textarea value={thankYou} onChange={e => setThankYou(e.target.value)} rows={3}
-                  style={{ ...inp, resize: 'vertical' }}
-                  onFocus={e => e.target.style.borderColor = '#0073ea'} onBlur={e => e.target.style.borderColor = '#e0e0e0'} />
-              </div>
+                  style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} onFocus={foc} onBlur={blr} />
+              </Field>
             </div>
           )}
 
-          {/* ── Section B: Fields ── */}
+          {/* ── Fields ── */}
           {activeSection === 'fields' && (
             <div>
-              <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
-                Check the columns you want to include in this form. "Item Name" is always included.
+              <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 14, lineHeight: 1.5 }}>
+                Toggle fields on/off and rename them for your respondents. <strong style={{ color: '#64748b' }}>Item Name</strong> is always included.
               </p>
 
-              {/* Item name — always on, always required */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: '#e8f0fe', marginBottom: 8, border: '1.5px solid #b3d1ff' }}>
-                <span style={{ fontSize: 16 }}>☑</span>
-                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#0073ea' }}>Item Name</span>
-                <span style={{ fontSize: 11, color: '#e2445c', fontWeight: 700 }}>Required</span>
+              {/* Item Name — always on */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#eff6ff', marginBottom: 10, border: '1.5px solid #bfdbfe' }}>
+                <Toggle on size="sm" onChange={() => {}} color="#0073ea" />
+                <div style={{ width: 28, height: 28, borderRadius: 7, background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#3b82f6', fontWeight: 800, flexShrink: 0 }}>Aa</div>
+                <input
+                  value={itemNameLabel}
+                  onChange={e => setItemNameLabel(e.target.value)}
+                  style={{ flex: 1, border: '1.5px solid #bfdbfe', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontWeight: 600, color: '#1d4ed8', background: '#fff', outline: 'none', minWidth: 0 }}
+                  onFocus={e => e.target.style.borderColor = '#0073ea'}
+                  onBlur={e => e.target.style.borderColor = '#bfdbfe'}
+                />
+                <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 700, letterSpacing: 0.3, flexShrink: 0 }}>REQUIRED</span>
               </div>
 
+              {/* Field list */}
               {fields.map(f => (
                 <div key={f.column_id} style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
-                  borderRadius: 8, marginBottom: 6,
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+                  borderRadius: 10, marginBottom: 7,
                   background: f.is_visible ? '#fff' : '#fafafa',
-                  border: `1.5px solid ${f.is_visible ? '#e0e0e0' : '#f0f0f0'}`,
-                  opacity: f.is_visible ? 1 : 0.6,
+                  border: `1.5px solid ${f.is_visible ? '#e2e8f0' : '#f1f5f9'}`,
+                  transition: 'all 0.15s',
+                  opacity: f.is_visible ? 1 : 0.55,
                 }}>
-                  <input
-                    type="checkbox"
-                    checked={f.is_visible}
-                    onChange={() => toggleField(f.column_id)}
-                    style={{ cursor: 'pointer', accentColor: '#0073ea', width: 16, height: 16, flexShrink: 0 }}
-                  />
+                  <Toggle on={f.is_visible} onChange={() => toggleField(f.column_id)} color="#0073ea" size="sm" />
+                  <TypeBadge type={f.column_type} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <input
                       value={f.label}
                       onChange={e => updateLabel(f.column_id, e.target.value)}
                       disabled={!f.is_visible}
                       style={{
-                        border: 'none', background: 'transparent', fontSize: 13, fontWeight: 500,
-                        color: f.is_visible ? '#323338' : '#aaa', width: '100%',
-                        outline: 'none', padding: 0,
+                        border: 'none', background: 'transparent', fontSize: 13, fontWeight: 600,
+                        color: f.is_visible ? '#0f172a' : '#94a3b8', width: '100%',
+                        outline: 'none', padding: '1px 0',
                       }}
-                      onFocus={e => { e.target.style.borderBottom = '1px solid #0073ea'; }}
+                      onFocus={e => { e.target.style.borderBottom = '1.5px solid #0073ea'; }}
                       onBlur={e => { e.target.style.borderBottom = 'none'; }}
                     />
-                    <div style={{ fontSize: 11, color: '#aaa', marginTop: 1 }}>{f.column_type}</div>
+                    <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 1, fontWeight: 500, letterSpacing: 0.3 }}>{f.column_type}</div>
                   </div>
                   {f.is_visible && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 11, flexShrink: 0 }}>
-                      <input
-                        type="checkbox"
-                        checked={f.is_required}
-                        onChange={() => toggleRequired(f.column_id)}
-                        style={{ cursor: 'pointer', accentColor: '#e2445c' }}
-                      />
-                      <span style={{ color: f.is_required ? '#e2445c' : '#aaa', fontWeight: 600 }}>Required</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', flexShrink: 0 }}>
+                      <input type="checkbox" checked={f.is_required} onChange={() => toggleRequired(f.column_id)}
+                        style={{ cursor: 'pointer', accentColor: '#dc2626', width: 13, height: 13 }} />
+                      <span style={{ fontSize: 10, color: f.is_required ? '#dc2626' : '#cbd5e1', fontWeight: 700, letterSpacing: 0.3 }}>REQ</span>
                     </label>
                   )}
                 </div>
               ))}
+
+              {fields.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#cbd5e1', fontSize: 13 }}>
+                  No columns found on this board.
+                </div>
+              )}
             </div>
           )}
 
-          {/* ── Section C: Share ── */}
+          {/* ── Share ── */}
           {activeSection === 'share' && slug && (
-            <div>
-              <div style={{ marginBottom: 20 }}>
-                <label style={lbl}>Public Form URL</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input readOnly value={publicUrl} style={{ ...inp, flex: 1, background: '#f5f5f5', fontSize: 12, cursor: 'text' }} />
-                  <button onClick={() => copyToClipboard(publicUrl, 'Link')} style={copyBtn}>Copy Link</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Status badge */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: isActive ? '#f0fdf4' : '#f8fafc', border: `1.5px solid ${isActive ? '#bbf7d0' : '#e2e8f0'}` }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? '#22c55e' : '#94a3b8', animation: isActive ? 'pulse 2s infinite' : 'none' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? '#15803d' : '#64748b' }}>
+                  {isActive ? 'Form is active and accepting responses' : 'Form is inactive — toggle Active to enable'}
+                </span>
+              </div>
+
+              <Field label="Public URL">
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input readOnly value={publicUrl} style={{ ...inp, flex: 1, background: '#f8fafc', fontSize: 12, color: '#64748b', cursor: 'text' }} />
+                  <button onClick={() => copyToClipboard(publicUrl, 'URL')} style={shareBtn('#0073ea')}>Copy</button>
+                  <button onClick={() => window.open(`/form/${slug}`, '_blank')} style={shareBtn('#64748b')} title="Open in new tab">↗</button>
                 </div>
-              </div>
+              </Field>
 
-              <div style={{ marginBottom: 16 }}>
-                <label style={lbl}>Embed Code</label>
+              <Field label="Embed Code">
                 <textarea readOnly value={embedCode} rows={4}
-                  style={{ ...inp, background: '#f5f5f5', fontSize: 11, fontFamily: 'monospace', resize: 'none', cursor: 'text' }} />
-                <button onClick={() => copyToClipboard(embedCode, 'Embed code')} style={{ ...copyBtn, marginTop: 8 }}>Copy Embed Code</button>
-              </div>
+                  style={{ ...inp, background: '#f8fafc', fontSize: 11, fontFamily: 'monospace', resize: 'none', color: '#64748b', cursor: 'text', lineHeight: 1.6 }} />
+                <button onClick={() => copyToClipboard(embedCode, 'Embed code')} style={{ ...shareBtn('#64748b'), marginTop: 8, width: '100%', justifyContent: 'center' }}>Copy Embed Code</button>
+              </Field>
 
-              <div style={{ background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: '#7a5a00' }}>
-                💡 Replace <code>localhost:5173</code> with your production domain when deploying.
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.55, display: 'flex', gap: 8 }}>
+                <span style={{ flexShrink: 0 }}>💡</span>
+                <span>Replace <code style={{ background: '#fef3c7', padding: '1px 4px', borderRadius: 4 }}>localhost:5173</code> with your production domain when deploying.</span>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Right panel: live preview ── */}
-      <div style={{ flex: 1, background: '#f0f2f5', overflowY: 'auto', padding: '24px' }}>
+      {/* ── Right: live preview ── */}
+      <div style={{ flex: 1, background: '#f1f5f9', overflowY: 'auto', padding: '28px 32px' }}>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', fontSize: 12, color: '#aaa', marginBottom: 12, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-            Live Preview
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, justifyContent: 'center' }}>
+            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>Live Preview</span>
+            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
           </div>
           <FormPreview
             form={{ title, description, cover_color: coverColor, thank_you_message: thankYou }}
             fields={previewFields}
+            itemNameLabel={itemNameLabel}
+            accentColor={coverColor}
           />
         </div>
       </div>
@@ -546,192 +557,184 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
   );
 }
 
-// ── Forms list view ───────────────────────────────────────────────────────────
+// ── Shared input helpers ──────────────────────────────────────────────────────
+const inp = {
+  width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '9px 12px',
+  fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#0f172a',
+  transition: 'border-color 0.15s, box-shadow 0.15s',
+};
+const foc = e => { e.target.style.borderColor = '#0073ea'; e.target.style.boxShadow = '0 0 0 3px rgba(0,115,234,0.12)'; };
+const blr = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; };
+
+const shareBtn = (color) => ({
+  padding: '8px 14px', background: color === '#0073ea' ? '#eff6ff' : '#f8fafc',
+  color, border: `1.5px solid ${color === '#0073ea' ? '#bfdbfe' : '#e2e8f0'}`,
+  borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+  whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+});
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+// ── Forms list ────────────────────────────────────────────────────────────────
 function FormsList({ boardId, onOpenBuilder }) {
-  const [forms, setForms] = useState([]);
+  const [forms, setForms]   = useState([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
   const load = useCallback(() => {
     setLoading(true);
-    getForms(boardId)
-      .then(r => setForms(r.data))
-      .catch(() => toast('Failed to load forms', 'error'))
-      .finally(() => setLoading(false));
+    getForms(boardId).then(r => setForms(r.data)).catch(() => toast('Failed to load forms', 'error')).finally(() => setLoading(false));
   }, [boardId]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async id => {
     if (!confirm('Delete this form? This cannot be undone.')) return;
-    try {
-      await deleteForm(id);
-      setForms(f => f.filter(x => x.id !== id));
-      toast('Form deleted');
-    } catch { toast('Failed to delete form', 'error'); }
+    try { await deleteForm(id); setForms(f => f.filter(x => x.id !== id)); toast('Form deleted'); }
+    catch { toast('Failed to delete form', 'error'); }
   };
 
-  const handleCreate = () => {
-    onOpenBuilder(null); // null = new form
-  };
-
-  const copyLink = (slug) => {
-    const url = `${BASE_URL}/form/${slug}`;
-    copyTextToClipboard(url).then(() => toast('Link copied!', 'success')).catch(() => toast('Copy failed', 'error'));
-  };
-
-  const copyEmbed = (slug) => {
-    const code = `<iframe src="${BASE_URL}/form/${slug}" width="100%" height="600" frameborder="0" style="border-radius:8px"></iframe>`;
-    copyTextToClipboard(code).then(() => toast('Embed code copied!', 'success')).catch(() => toast('Copy failed', 'error'));
-  };
+  const copyLink  = slug => { const url = `${BASE_URL}/form/${slug}`; copyTextToClipboard(url).then(() => toast('Link copied!', 'success')).catch(() => toast('Copy failed', 'error')); };
+  const copyEmbed = slug => { const code = `<iframe src="${BASE_URL}/form/${slug}" width="100%" height="700" frameborder="0" style="border-radius:12px;border:none"></iframe>`; copyTextToClipboard(code).then(() => toast('Embed copied!', 'success')).catch(() => toast('Copy failed', 'error')); };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* List header */}
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <div>
-          <div style={{ fontSize: 14, color: '#888' }}>Create shareable forms that add items directly to your board</div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'Inter', -apple-system, sans-serif" }}>
+      {/* Header */}
+      <div style={{ padding: '16px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
+        <div style={{ fontSize: 13, color: '#64748b' }}>
+          Create shareable forms that add items directly to your board
         </div>
-        <button
-          onClick={handleCreate}
-          style={{ padding: '8px 18px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-        >+ Create Form</button>
+        <button onClick={() => onOpenBuilder(null)}
+          style={{ padding: '8px 18px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', boxShadow: '0 2px 8px rgba(0,115,234,0.3)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Create Form
+        </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: '#aaa' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>Loading…
+          <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#0073ea', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
+            Loading forms…
           </div>
         ) : forms.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#aaa' }}>
-            <div style={{ fontSize: 52, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>No forms yet</div>
-            <div style={{ fontSize: 13, marginBottom: 20 }}>Create a form to collect submissions directly into this board</div>
-            <button onClick={handleCreate}
-              style={{ padding: '10px 24px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8', maxWidth: 360, margin: '0 auto' }}>
+            <div style={{ fontSize: 56, marginBottom: 16 }}>📋</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#334155', marginBottom: 8 }}>No forms yet</div>
+            <div style={{ fontSize: 13, marginBottom: 28, lineHeight: 1.6 }}>Create a form to collect submissions directly into this board — no account needed for respondents.</div>
+            <button onClick={() => onOpenBuilder(null)}
+              style={{ padding: '11px 28px', background: '#0073ea', color: '#fff', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', border: 'none', boxShadow: '0 4px 14px rgba(0,115,234,0.35)' }}>
               + Create Your First Form
             </button>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
             {forms.map(form => (
-              <div key={form.id} style={{
-                background: '#fff', borderRadius: 12, overflow: 'hidden',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #e6e9ef',
-              }}>
-                {/* Color banner */}
-                <div style={{ height: 8, background: form.cover_color || '#0073ea' }} />
-                <div style={{ padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#323338', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {form.title}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
-                        → {form.target_group_name || 'First group'}
-                      </div>
-                    </div>
-                    <span style={{
-                      padding: '2px 10px', borderRadius: 12, fontSize: 11, fontWeight: 700, flexShrink: 0, marginLeft: 8,
-                      background: form.is_active ? '#e8f7ee' : '#f5f5f5',
-                      color: form.is_active ? '#037f4c' : '#aaa',
-                      border: `1px solid ${form.is_active ? '#b7e4ca' : '#e0e0e0'}`,
-                    }}>
-                      {form.is_active ? '● Active' : '○ Inactive'}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-                    <button onClick={() => onOpenBuilder(form.id)}
-                      style={{ padding: '5px 12px', background: '#0073ea', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                      Open Builder
-                    </button>
-                    <button onClick={() => copyLink(form.slug)}
-                      style={{ padding: '5px 12px', border: '1px solid #e0e0e0', borderRadius: 6, fontSize: 12, color: '#555', cursor: 'pointer' }}>
-                      🔗 Copy Link
-                    </button>
-                    <button onClick={() => copyEmbed(form.slug)}
-                      style={{ padding: '5px 12px', border: '1px solid #e0e0e0', borderRadius: 6, fontSize: 12, color: '#555', cursor: 'pointer' }}>
-                      &lt;/&gt; Embed
-                    </button>
-                    <button onClick={() => window.open(`/form/${form.slug}`, '_blank')}
-                      style={{ padding: '5px 12px', border: '1px solid #e0e0e0', borderRadius: 6, fontSize: 12, color: '#555', cursor: 'pointer' }}>
-                      👁 Preview
-                    </button>
-                    <button onClick={() => handleDelete(form.id)}
-                      style={{ padding: '5px 12px', border: '1px solid #ffd6db', borderRadius: 6, fontSize: 12, color: '#e2445c', cursor: 'pointer', marginLeft: 'auto' }}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <FormCard key={form.id} form={form}
+                onEdit={() => onOpenBuilder(form.id)}
+                onCopyLink={() => copyLink(form.slug)}
+                onCopyEmbed={() => copyEmbed(form.slug)}
+                onPreview={() => window.open(`/form/${form.slug}`, '_blank')}
+                onDelete={() => handleDelete(form.id)}
+              />
             ))}
           </div>
         )}
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
+    </div>
+  );
+}
+
+function FormCard({ form, onEdit, onCopyLink, onCopyEmbed, onPreview, onDelete }) {
+  const color = form.cover_color || '#0073ea';
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0', transition: 'transform 0.2s, box-shadow 0.2s' }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.11)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.07)'; }}
+    >
+      {/* Color bar */}
+      <div style={{ height: 6, background: `linear-gradient(90deg, ${color}, ${color}99)` }} />
+      <div style={{ padding: '14px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+              {form.title}
+            </div>
+            <div style={{ fontSize: 11.5, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>→</span> {form.target_group_name || 'First group'}
+            </div>
+          </div>
+          <span style={{
+            padding: '3px 10px', borderRadius: 99, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
+            background: form.is_active ? '#f0fdf4' : '#f8fafc',
+            color: form.is_active ? '#15803d' : '#94a3b8',
+            border: `1px solid ${form.is_active ? '#bbf7d0' : '#e2e8f0'}`,
+          }}>
+            {form.is_active ? '● Active' : '○ Inactive'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+          <button onClick={onEdit} style={cardBtn(color, true)}>Open Builder</button>
+          <button onClick={onCopyLink} style={cardBtn()}>🔗 Copy Link</button>
+          <button onClick={onCopyEmbed} style={cardBtn()}>&lt;/&gt; Embed</button>
+          <button onClick={onPreview} style={cardBtn()}>↗ Preview</button>
+          <button onClick={onDelete} style={{ ...cardBtn(), color: '#dc2626', borderColor: '#fecaca', marginLeft: 'auto' }}>Delete</button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
-const lbl = { fontSize: 11, fontWeight: 700, color: '#888', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 };
-const inp = { width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 7, padding: '8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff' };
-const copyBtn = { padding: '7px 14px', background: '#f0f6ff', color: '#0073ea', border: '1.5px solid #b3d1ff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' };
+function cardBtn(color, primary) {
+  return {
+    padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+    background: primary ? color : '#f8fafc',
+    color: primary ? '#fff' : '#64748b',
+    border: `1.5px solid ${primary ? color : '#e2e8f0'}`,
+    transition: 'all 0.15s',
+  };
+}
 
-// ── Main panel ────────────────────────────────────────────────────────────────
+// ── Main panel wrapper ────────────────────────────────────────────────────────
 export default function FormsPanel({ boardId, groups, columns, onClose }) {
-  const [view, setView] = useState('list'); // 'list' | 'builder'
-  const [editingFormId, setEditingFormId] = useState(null);
-  const [savedFormId, setSavedFormId] = useState(null);
+  const [view, setView]               = useState('list');
+  const [editingFormId, setEditingId] = useState(null);
+  const [savedFormId, setSavedId]     = useState(null);
 
-  const openBuilder = (formId) => {
-    setEditingFormId(formId);
-    setSavedFormId(formId);
-    setView('builder');
-  };
-
-  const handleSaved = (savedForm) => {
-    setSavedFormId(savedForm.id);
-    setEditingFormId(savedForm.id);
-  };
-
-  const handleBack = () => {
-    setView('list');
-    setEditingFormId(null);
-    setSavedFormId(null);
-  };
+  const openBuilder = id => { setEditingId(id); setSavedId(id); setView('builder'); };
+  const handleSaved = f  => { setSavedId(f.id); setEditingId(f.id); };
+  const handleBack  = () => { setView('list'); setEditingId(null); setSavedId(null); };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 400,
-      display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
-    }} onClick={onClose}>
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          width: view === 'builder' ? '90vw' : 720,
-          maxWidth: '100vw',
-          background: '#f8f9fb',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '-4px 0 32px rgba(0,0,0,0.15)',
-          overflow: 'hidden',
-        }}
-      >
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 400, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }}
+      onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ width: view === 'builder' ? '90vw' : 720, maxWidth: '100vw', background: '#f8fafc', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 48px rgba(0,0,0,0.18)', overflow: 'hidden', fontFamily: "'Inter', sans-serif" }}>
+
         {/* Panel header */}
-        <div style={{
-          background: '#fff', borderBottom: '1px solid #e6e9ef',
-          padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexShrink: 0,
-        }}>
+        <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#323338' }}>📋 Forms</h2>
-            <p style={{ fontSize: 12, color: '#888', margin: '2px 0 0' }}>
+            <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 7, letterSpacing: -0.2 }}>
+              <span style={{ fontSize: 18 }}>📋</span> Forms
+            </h2>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0', fontWeight: 500 }}>
               {view === 'builder' ? 'Design your form and manage fields' : 'Collect data from anyone — no account needed'}
             </p>
           </div>
-          <button onClick={onClose} style={{ fontSize: 22, color: '#888', lineHeight: 1, cursor: 'pointer' }}>×</button>
+          <button onClick={onClose}
+            style={{ width: 32, height: 32, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#64748b', transition: 'background 0.15s' }}
+            onMouseEnter={e => e.target.style.background = '#e2e8f0'}
+            onMouseLeave={e => e.target.style.background = '#f1f5f9'}>
+            ×
+          </button>
         </div>
 
         {/* Content */}
