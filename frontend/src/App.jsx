@@ -1,3 +1,4 @@
+import { useThemeContext } from './context/ThemeContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -284,6 +285,8 @@ function MainApp() {
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cloneTargetBoard, setCloneTargetBoard] = useState(null);
+  const { resolvedTheme } = useThemeContext();
+  const isDark = resolvedTheme === 'dark';
 
   const toggleNav = () => setIsNavCollapsed(v => {
     const next = !v;
@@ -638,9 +641,9 @@ function MainApp() {
               <img
                 src="/ddecor-logo.png"
                 alt="D'Decor"
-                style={{ height: 64, width: 'auto', objectFit: 'contain', display: 'block' }}
+                style={{ height: 64, width: 'auto', objectFit: 'contain', display: 'block', filter: isDark ? 'brightness(0) invert(1)' : 'none', }}
               />
-              <div style={{ fontSize: 14, color: '#000000', marginTop: 4, letterSpacing: 0.3, fontWeight: 1600, textAlign: 'center' }}>
+              <div style={{ fontSize: 14, color: 'var(--sidebar-text)', marginTop: 4, letterSpacing: 0.3, fontWeight: 1600, textAlign: 'center' }}>
                 TUESDAY.COM
               </div>
             </div>

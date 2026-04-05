@@ -164,8 +164,8 @@ export default function LoginPage() {
                   gap: '12px',
                   width: '100%',
                   height: '52px',
-                  background: '#ffffff',
-                  border: '1.5px solid #e6e9ef',
+                  background: isDark ? 'var(--input-bg)' : '#ffffff',
+                  border: '1.5px solid var(--border-color)',
                   borderRadius: '10px',
                   cursor: 'pointer',
                   boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
@@ -190,7 +190,7 @@ export default function LoginPage() {
                   <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
                   <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
                 </svg>
-                <span style={{ fontSize: '15px', fontWeight: 500, color: '#323338' }}>Sign in with Microsoft</span>
+                <span style={{ fontSize: '15px', fontWeight: 500, color: 'var(--text-primary)' }}>Sign in with Microsoft</span>
               </a>
 
               {/* OR divider */}
