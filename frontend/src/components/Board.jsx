@@ -346,7 +346,7 @@ function InlineEdit({ value, onSave, style, placeholder, singleClick = false }) 
 // ── Column header ─────────────────────────────────────────────────────────────
 const NO_DEFAULT_TYPES = ['formula', 'creation_log'];
 
-function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onToggleVisibility, isManager }) {
+function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onToggleVisibility, isManager, sortConfig, onSort }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
@@ -456,7 +456,11 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onT
           cursor: 'default', userSelect: 'none',
           fontStyle: renaming ? 'italic' : 'normal',
         }}
-      >{col.title}</span>
+      >{col.title}{sortConfig?.colId === col.id && (
+        <span style={{ marginLeft: 3, fontSize: 10, color: '#0073ea', fontWeight: 900 }}>
+          {sortConfig.dir === 'asc' ? '↑' : '↓'}
+        </span>
+      )}</span>
 
       {/* Floating rename panel — fixed position, readable size, never clipped */}
       {renaming && (
@@ -563,6 +567,11 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onT
             handleSetDefault,
             <>⚡ Default Value{(col.settings?.defaultValue !== undefined && col.settings?.defaultValue !== null && String(col.settings.defaultValue) !== '') ? <span style={{ color: '#0073ea', marginLeft: 4 }}>✓</span> : null}</>
           )}
+
+          <div style={{ borderTop: '1px solid #f0f1f4', margin: '4px 0' }} />
+          {menuItem(() => { setMenuOpen(false); onSort(col.id, 'asc'); }, <><span style={{fontSize:12}}>↑</span> Sort A → Z</>)}
+          {menuItem(() => { setMenuOpen(false); onSort(col.id, 'desc'); }, <><span style={{fontSize:12}}>↓</span> Sort Z → A</>)}
+          {sortConfig?.colId === col.id && menuItem(() => { setMenuOpen(false); onSort(null); }, <><span style={{fontSize:12}}>✕</span> Clear Sort</>)}
 
           {isManager && (
             <>
@@ -2957,6 +2966,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   };
 
   // ── Column drag-to-reorder ────────────────────────────────────────────────
+  const [boardSearch, setBoardSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState(null);
   const [colDragSrc, setColDragSrc] = useState(null);
   const [colDragOver, setColDragOver] = useState(null);
 
@@ -3115,7 +3126,28 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       .filter(g => g.items.length > 0);
   }, [activeFilters]);
 
-  const filteredGroups = applyViewFilters(applyFilters(groups));
+  const searchedGroups = boardSearch.trim()
+    ? applyViewFilters(applyFilters(groups)).map(g => ({
+        ...g,
+        items: (g.items || []).filter(item => {
+          const q = boardSearch.toLowerCase();
+          if (item.name.toLowerCase().includes(q)) return true;
+          return Object.values(item.values || {}).some(v => String(v).toLowerCase().includes(q));
+        }),
+      })).filter(g => g.items.length > 0)
+    : applyViewFilters(applyFilters(groups));
+
+  const filteredGroups = sortConfig
+    ? searchedGroups.map(g => ({
+        ...g,
+        items: [...(g.items || [])].sort((a, b) => {
+          const aVal = sortConfig.colId === '_name' ? a.name : (a.values?.[sortConfig.colId] || '');
+          const bVal = sortConfig.colId === '_name' ? b.name : (b.values?.[sortConfig.colId] || '');
+          const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+          return sortConfig.dir === 'asc' ? cmp : -cmp;
+        }),
+      }))
+    : searchedGroups;
 
   // Counts for "Showing X of Y" display
   const totalItems      = groups.reduce((s, g) => s + (g.items?.length || 0), 0);
@@ -3213,6 +3245,48 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               </button>
             );
           })()}
+
+          {/* Board Search */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{ position: 'absolute', left: 8, fontSize: 12, color: '#9699a6', pointerEvents: 'none' }}>🔍</span>
+            <input
+              type="text"
+              value={boardSearch}
+              onChange={e => setBoardSearch(e.target.value)}
+              placeholder="Search board…"
+              style={{
+                paddingLeft: 26, paddingRight: boardSearch ? 22 : 8,
+                paddingTop: 5, paddingBottom: 5,
+                border: `1.5px solid ${boardSearch ? '#0073ea' : '#e6e9ef'}`,
+                borderRadius: 6, fontSize: 12, fontWeight: 500,
+                color: 'var(--text-primary)', background: 'var(--bg-primary)',
+                outline: 'none', width: 180, transition: 'border-color 0.15s, width 0.2s',
+                fontFamily: 'inherit',
+              }}
+              onFocus={e => e.target.style.width = '240px'}
+              onBlur={e => e.target.style.width = '180px'}
+            />
+            {boardSearch && (
+              <span
+                onClick={() => setBoardSearch('')}
+                style={{ position: 'absolute', right: 6, fontSize: 14, color: '#9699a6', cursor: 'pointer', lineHeight: 1, fontWeight: 700 }}
+              >×</span>
+            )}
+          </div>
+
+          {sortConfig && (
+            <button
+              onClick={() => setSortConfig(null)}
+              style={{
+                padding: '5px 10px', border: '1.5px solid #0073ea', borderRadius: 6,
+                fontSize: 12, fontWeight: 600, color: '#0073ea', background: '#e8f0fe',
+                display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+              }}
+              title="Clear sort"
+            >
+              {sortConfig.dir === 'asc' ? '↑' : '↓'} Sorted · ×
+            </button>
+          )}
 
           {/* Export / Import */}
           <button onClick={handleExport} style={{
@@ -3414,6 +3488,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                       onSetDefault={(c, anchorRect) => setDefaultEditor({ col: c, anchorRect })}
                       onToggleVisibility={handleColumnToggleVisibility}
                       isManager={isManager}
+                      sortConfig={sortConfig}
+                      onSort={(colId, dir) => colId ? setSortConfig({ colId, dir }) : setSortConfig(null)}
                     />
                     <ResizeHandle onMouseDown={e => startResize(e, col.id, getColWidth(col))} />
                   </th>
