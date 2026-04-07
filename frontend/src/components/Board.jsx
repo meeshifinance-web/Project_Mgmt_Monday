@@ -21,7 +21,7 @@ import { useAuth } from '../context/AuthContext';
 
 const ActivityLogPanel = lazy(() => import('./ActivityLogPanel'));
 
-const GROUP_COLORS = ['#0073ea','#00c875','#fdab3d','#e2445c','#a25ddc','#037f4c','#ff5ac4','#784bd1'];
+const GROUP_COLORS = ['#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1'];
 
 // Simple CSV parser: returns array of objects keyed by header row
 function parseCSV(text) {
@@ -76,17 +76,17 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
   // Classify every CSV header
   const mapping = headers.map(h => {
     const lh = h.toLowerCase();
-    if (lh === 'group')                          return { header: h, kind: 'special', label: 'Swimlane / Group' };
-    if (lh === 'item name' || lh === 'name')     return { header: h, kind: 'special', label: 'Item Name (required)' };
+    if (lh === 'group') return { header: h, kind: 'special', label: 'Swimlane / Group' };
+    if (lh === 'item name' || lh === 'name') return { header: h, kind: 'special', label: 'Item Name (required)' };
     const col = colByTitle[lh];
     const isDup = titleCount[lh] > 1;
     const isSkipped = col && SKIP_TYPES.has(col.type);
     return { header: h, kind: col ? (isSkipped ? 'skipped' : 'matched') : 'unmatched', col, isDup };
   });
 
-  const unmatchedHeaders  = mapping.filter(m => m.kind === 'unmatched');
-  const dupHeaders        = mapping.filter(m => m.kind === 'matched' && m.isDup);
-  const hasItemName       = headers.some(h => ['item name', 'name'].includes(h.toLowerCase()));
+  const unmatchedHeaders = mapping.filter(m => m.kind === 'unmatched');
+  const dupHeaders = mapping.filter(m => m.kind === 'matched' && m.isDup);
+  const hasItemName = headers.some(h => ['item name', 'name'].includes(h.toLowerCase()));
 
   // Board columns absent from the CSV
   const missingBoardCols = boardColumns.filter(
@@ -110,25 +110,25 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
   const preview = csvRows.slice(0, 4);
 
   const S = {
-    overlay: { position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center' },
-    modal:   { background:'#fff', borderRadius:10, width:720, maxWidth:'96vw', maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'0 8px 40px rgba(0,0,0,0.22)' },
-    header:  { padding:'18px 24px 14px', borderBottom:'1px solid #e6e9ef', display:'flex', alignItems:'center', justifyContent:'space-between' },
-    body:    { padding:'18px 24px', overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:18 },
-    footer:  { padding:'14px 24px', borderTop:'1px solid #e6e9ef', display:'flex', justifyContent:'flex-end', gap:10 },
-    section: { display:'flex', flexDirection:'column', gap:8 },
-    sectionTitle: { fontSize:12, fontWeight:700, color:'#676879', letterSpacing:'0.5px', textTransform:'uppercase' },
-    badge: (color, bg) => ({ display:'inline-block', padding:'2px 8px', borderRadius:12, fontSize:11, fontWeight:600, color, background:bg }),
-    table: { width:'100%', borderCollapse:'collapse', fontSize:12 },
-    th:   { padding:'6px 10px', background:'#f5f6f8', borderBottom:'1px solid #e6e9ef', textAlign:'left', fontWeight:700, color:'#676879', fontSize:11 },
-    td:   { padding:'6px 10px', borderBottom:'1px solid #f0f1f4', verticalAlign:'top' },
-    alertBox: (color, bg) => ({ padding:'10px 14px', borderRadius:7, background:bg, border:`1px solid ${color}`, display:'flex', gap:10, alignItems:'flex-start', fontSize:13 }),
+    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+    modal: { background: '#fff', borderRadius: 10, width: 720, maxWidth: '96vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.22)' },
+    header: { padding: '18px 24px 14px', borderBottom: '1px solid #e6e9ef', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+    body: { padding: '18px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 18 },
+    footer: { padding: '14px 24px', borderTop: '1px solid #e6e9ef', display: 'flex', justifyContent: 'flex-end', gap: 10 },
+    section: { display: 'flex', flexDirection: 'column', gap: 8 },
+    sectionTitle: { fontSize: 12, fontWeight: 700, color: '#676879', letterSpacing: '0.5px', textTransform: 'uppercase' },
+    badge: (color, bg) => ({ display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, color, background: bg }),
+    table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+    th: { padding: '6px 10px', background: '#f5f6f8', borderBottom: '1px solid #e6e9ef', textAlign: 'left', fontWeight: 700, color: '#676879', fontSize: 11 },
+    td: { padding: '6px 10px', borderBottom: '1px solid #f0f1f4', verticalAlign: 'top' },
+    alertBox: (color, bg) => ({ padding: '10px 14px', borderRadius: 7, background: bg, border: `1px solid ${color}`, display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13 }),
     btn: (primary) => ({
-      padding:'7px 20px', borderRadius:6, fontWeight:600, fontSize:13, cursor:'pointer',
+      padding: '7px 20px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer',
       border: primary ? 'none' : '1.5px solid #e6e9ef',
       background: primary ? '#0073ea' : '#fff',
       color: primary ? '#fff' : '#676879',
     }),
-    btnDanger: { padding:'7px 20px', borderRadius:6, fontWeight:600, fontSize:13, cursor:'pointer', border:'none', background:'#e2445c', color:'#fff' },
+    btnDanger: { padding: '7px 20px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer', border: 'none', background: '#e2445c', color: '#fff' },
   };
 
   return (
@@ -137,10 +137,10 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
 
         {/* Header */}
         <div style={S.header}>
-          <span style={{ fontWeight:700, fontSize:16 }}>Import Preview</span>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <span style={{ fontSize:13, color:'#676879' }}>{csvRows.length} row{csvRows.length !== 1 ? 's' : ''} detected</span>
-            <button onClick={onCancel} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#676879', lineHeight:1 }}>×</button>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>Import Preview</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13, color: '#676879' }}>{csvRows.length} row{csvRows.length !== 1 ? 's' : ''} detected</span>
+            <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#676879', lineHeight: 1 }}>×</button>
           </div>
         </div>
 
@@ -150,7 +150,7 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
           {/* ── Blockers ── */}
           {!hasItemName && (
             <div style={S.alertBox('#c9372c', '#fff5f4')}>
-              <span style={{ fontSize:16 }}>🚫</span>
+              <span style={{ fontSize: 16 }}>🚫</span>
               <div>
                 <strong>Blocked:</strong> The CSV has no <em>"Item Name"</em> column.
                 Please add a column header named exactly <code>Item Name</code> and re-upload.
@@ -172,27 +172,27 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
               <tbody>
                 {mapping.map((m, i) => (
                   <tr key={i}>
-                    <td style={S.td}><code style={{ background:'#f5f6f8', padding:'1px 6px', borderRadius:4 }}>{m.header}</code></td>
+                    <td style={S.td}><code style={{ background: '#f5f6f8', padding: '1px 6px', borderRadius: 4 }}>{m.header}</code></td>
                     <td style={S.td}>
-                      {m.kind === 'special' ? <em style={{ color:'#676879' }}>{m.label}</em>
-                      : m.kind === 'matched' || m.kind === 'skipped' ? <span>{m.col.title} <span style={{ color:'#676879', fontSize:11 }}>({m.col.type})</span></span>
-                      : <span style={{ color:'#888' }}>—</span>}
+                      {m.kind === 'special' ? <em style={{ color: '#676879' }}>{m.label}</em>
+                        : m.kind === 'matched' || m.kind === 'skipped' ? <span>{m.col.title} <span style={{ color: '#676879', fontSize: 11 }}>({m.col.type})</span></span>
+                          : <span style={{ color: '#888' }}>—</span>}
                     </td>
                     <td style={S.td}>
                       {m.kind === 'special' && (
-                        <span style={S.badge('#037f4c','#e8f7ee')}>✓ Required field</span>
+                        <span style={S.badge('#037f4c', '#e8f7ee')}>✓ Required field</span>
                       )}
                       {m.kind === 'skipped' && (
-                        <span style={S.badge('#676879','#f0f1f4')}>⊘ Not imported ({m.col.type} columns are set manually)</span>
+                        <span style={S.badge('#676879', '#f0f1f4')}>⊘ Not imported ({m.col.type} columns are set manually)</span>
                       )}
                       {m.kind === 'matched' && !m.isDup && (
-                        <span style={S.badge('#037f4c','#e8f7ee')}>✓ Matched</span>
+                        <span style={S.badge('#037f4c', '#e8f7ee')}>✓ Matched</span>
                       )}
                       {m.kind === 'matched' && m.isDup && (
-                        <span style={S.badge('#b05e00','#fff4e5')}>⚠ Matched (duplicate title on board)</span>
+                        <span style={S.badge('#b05e00', '#fff4e5')}>⚠ Matched (duplicate title on board)</span>
                       )}
                       {m.kind === 'unmatched' && (
-                        <span style={S.badge('#c9372c','#fff5f4')}>✗ No matching column — will be ignored</span>
+                        <span style={S.badge('#c9372c', '#fff5f4')}>✗ No matching column — will be ignored</span>
                       )}
                     </td>
                   </tr>
@@ -204,11 +204,11 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
           {/* ── Board columns absent from CSV ── */}
           {missingBoardCols.length > 0 && (
             <div style={S.alertBox('#c9a227', '#fffbe6')}>
-              <span style={{ fontSize:16 }}>⚠️</span>
+              <span style={{ fontSize: 16 }}>⚠️</span>
               <div>
                 <strong>{missingBoardCols.length} board column{missingBoardCols.length > 1 ? 's' : ''} not in CSV</strong>
                 {' — '}these will be imported as <em>empty</em>:{' '}
-                {missingBoardCols.map(c => <code key={c.id} style={{ background:'#fff3cd', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{c.title}</code>)}
+                {missingBoardCols.map(c => <code key={c.id} style={{ background: '#fff3cd', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{c.title}</code>)}
               </div>
             </div>
           )}
@@ -216,10 +216,10 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
           {/* ── Duplicate board column titles ── */}
           {dupBoardTitles.length > 0 && (
             <div style={S.alertBox('#c9a227', '#fffbe6')}>
-              <span style={{ fontSize:16 }}>⚠️</span>
+              <span style={{ fontSize: 16 }}>⚠️</span>
               <div>
                 <strong>Duplicate column titles on this board:</strong>{' '}
-                {dupBoardTitles.map(t => <code key={t} style={{ background:'#fff3cd', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{t}</code>)}.
+                {dupBoardTitles.map(t => <code key={t} style={{ background: '#fff3cd', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{t}</code>)}.
                 Only the first column with each title will receive imported values.
               </div>
             </div>
@@ -228,11 +228,11 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
           {/* ── Unmatched CSV headers ── */}
           {unmatchedHeaders.length > 0 && (
             <div style={S.alertBox('#e6e9ef', '#f8f8fa')}>
-              <span style={{ fontSize:16 }}>ℹ️</span>
+              <span style={{ fontSize: 16 }}>ℹ️</span>
               <div>
                 <strong>{unmatchedHeaders.length} CSV header{unmatchedHeaders.length > 1 ? 's' : ''} don't match any board column</strong>
                 {' — '}their data will be <em>skipped</em>:{' '}
-                {unmatchedHeaders.map(m => <code key={m.header} style={{ background:'#eee', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{m.header}</code>)}
+                {unmatchedHeaders.map(m => <code key={m.header} style={{ background: '#eee', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{m.header}</code>)}
               </div>
             </div>
           )}
@@ -240,11 +240,11 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
           {/* ── New groups that will be auto-created ── */}
           {newGroups.length > 0 && (
             <div style={S.alertBox('#0073ea33', '#e8f0fe')}>
-              <span style={{ fontSize:16 }}>🆕</span>
+              <span style={{ fontSize: 16 }}>🆕</span>
               <div>
                 <strong>{newGroups.length} new group{newGroups.length > 1 ? 's' : ''} will be created</strong>
                 {' (not found on board): '}
-                {newGroups.map(g => <code key={g} style={{ background:'#d0e4ff', padding:'1px 5px', borderRadius:3, marginRight:4 }}>{g}</code>)}
+                {newGroups.map(g => <code key={g} style={{ background: '#d0e4ff', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{g}</code>)}
               </div>
             </div>
           )}
@@ -252,7 +252,7 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
           {/* ── Data preview ── */}
           <div style={S.section}>
             <div style={S.sectionTitle}>Data Preview (first {preview.length} rows)</div>
-            <div style={{ overflowX:'auto' }}>
+            <div style={{ overflowX: 'auto' }}>
               <table style={{ ...S.table, minWidth: 400 }}>
                 <thead>
                   <tr>
@@ -263,8 +263,8 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
                   {preview.map((row, i) => (
                     <tr key={i}>
                       {headers.map(h => (
-                        <td key={h} style={{ ...S.td, maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                          {row[h] || <span style={{ color:'#c5c7d0' }}>—</span>}
+                        <td key={h} style={{ ...S.td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {row[h] || <span style={{ color: '#c5c7d0' }}>—</span>}
                         </td>
                       ))}
                     </tr>
@@ -273,7 +273,7 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
               </table>
             </div>
             {csvRows.length > 4 && (
-              <div style={{ fontSize:12, color:'#676879' }}>…and {csvRows.length - 4} more row{csvRows.length - 4 !== 1 ? 's' : ''}</div>
+              <div style={{ fontSize: 12, color: '#676879' }}>…and {csvRows.length - 4} more row{csvRows.length - 4 !== 1 ? 's' : ''}</div>
             )}
           </div>
 
@@ -348,22 +348,22 @@ function InlineEdit({ value, onSave, style, placeholder, singleClick = false }) 
 const NO_DEFAULT_TYPES = ['formula', 'creation_log'];
 
 const CHANGEABLE_TYPES = [
-  { value: 'text',         label: 'Text',          icon: '📝' },
-  { value: 'long_text',    label: 'Long Text',      icon: '📄' },
-  { value: 'number',       label: 'Number',         icon: '🔢' },
-  { value: 'email',        label: 'Email',          icon: '✉️' },
-  { value: 'phone',        label: 'Phone',          icon: '📞' },
-  { value: 'link',         label: 'Link',           icon: '🔗' },
-  { value: 'date',         label: 'Date',           icon: '📅' },
-  { value: 'checkbox',     label: 'Checkbox',       icon: '☑️' },
-  { value: 'rating',       label: 'Rating',         icon: '⭐' },
-  { value: 'status',       label: 'Status',         icon: '🔵' },
-  { value: 'dropdown',     label: 'Dropdown',       icon: '▼' },
-  { value: 'progress',     label: 'Progress',       icon: '📊' },
-  { value: 'tags',         label: 'Tags',           icon: '🏷️' },
-  { value: 'timeline',     label: 'Timeline',       icon: '📆' },
-  { value: 'color_picker', label: 'Color',          icon: '🎨' },
-  { value: 'formula',      label: 'Formula',        icon: '🧮' },
+  { value: 'text', label: 'Text', icon: '📝' },
+  { value: 'long_text', label: 'Long Text', icon: '📄' },
+  { value: 'number', label: 'Number', icon: '🔢' },
+  { value: 'email', label: 'Email', icon: '✉️' },
+  { value: 'phone', label: 'Phone', icon: '📞' },
+  { value: 'link', label: 'Link', icon: '🔗' },
+  { value: 'date', label: 'Date', icon: '📅' },
+  { value: 'checkbox', label: 'Checkbox', icon: '☑️' },
+  { value: 'rating', label: 'Rating', icon: '⭐' },
+  { value: 'status', label: 'Status', icon: '🔵' },
+  { value: 'dropdown', label: 'Dropdown', icon: '▼' },
+  { value: 'progress', label: 'Progress', icon: '📊' },
+  { value: 'tags', label: 'Tags', icon: '🏷️' },
+  { value: 'timeline', label: 'Timeline', icon: '📆' },
+  { value: 'color_picker', label: 'Color', icon: '🎨' },
+  { value: 'formula', label: 'Formula', icon: '🧮' },
 ];
 
 function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, onChangeType, onSetDefault, onToggleVisibility, isManager, sortConfig, onSort }) {
@@ -381,7 +381,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
     if (!menuOpen) return;
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target) &&
-          btnRef.current && !btnRef.current.contains(e.target)) {
+        btnRef.current && !btnRef.current.contains(e.target)) {
         setMenuOpen(false);
         setShowTypePicker(false);
       }
@@ -547,8 +547,8 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
             background: menuOpen ? '#dce9ff' : 'transparent',
             transition: 'color 0.12s, background 0.12s',
           }}
-          onMouseEnter={e => { if (!menuOpen) { e.currentTarget.style.color = '#323338'; e.currentTarget.style.background = '#e6e9ef'; }}}
-          onMouseLeave={e => { if (!menuOpen) { e.currentTarget.style.color = '#9699a6'; e.currentTarget.style.background = 'transparent'; }}}
+          onMouseEnter={e => { if (!menuOpen) { e.currentTarget.style.color = '#323338'; e.currentTarget.style.background = '#e6e9ef'; } }}
+          onMouseLeave={e => { if (!menuOpen) { e.currentTarget.style.color = '#9699a6'; e.currentTarget.style.background = 'transparent'; } }}
         >▾</button>
       )}
 
@@ -644,9 +644,9 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
           )}
 
           <div style={{ borderTop: '1px solid #f0f1f4', margin: '4px 0' }} />
-          {menuItem(() => { setMenuOpen(false); onSort(col.id, 'asc'); }, <><span style={{fontSize:12}}>↑</span> Sort A → Z</>)}
-          {menuItem(() => { setMenuOpen(false); onSort(col.id, 'desc'); }, <><span style={{fontSize:12}}>↓</span> Sort Z → A</>)}
-          {sortConfig?.colId === col.id && menuItem(() => { setMenuOpen(false); onSort(null); }, <><span style={{fontSize:12}}>✕</span> Clear Sort</>)}
+          {menuItem(() => { setMenuOpen(false); onSort(col.id, 'asc'); }, <><span style={{ fontSize: 12 }}>↑</span> Sort A → Z</>)}
+          {menuItem(() => { setMenuOpen(false); onSort(col.id, 'desc'); }, <><span style={{ fontSize: 12 }}>↓</span> Sort Z → A</>)}
+          {sortConfig?.colId === col.id && menuItem(() => { setMenuOpen(false); onSort(null); }, <><span style={{ fontSize: 12 }}>✕</span> Clear Sort</>)}
 
           {isManager && (
             <>
@@ -700,10 +700,10 @@ function colWidth(col) {
 
 // ── Item row ──────────────────────────────────────────────────────────────────
 function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
-                   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
-                   isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand }) {
+  onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
+  isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand }) {
   const [hovered, setHovered] = useState(false);
-  const rowBg = isSelected ? '#e8f0fe' : hovered ? '#f5f6f8' : '#fff';
+  const rowBg = isSelected ? 'rgba(0,115,234,0.1)' : hovered ? 'var(--hover-bg)' : 'var(--bg-primary)';
   return (
     <tr
       draggable
@@ -711,22 +711,22 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
       onDragEnd={onDragEnd}
       onDragOver={e => onDragOver(e, group.id, item.id)}
       onDrop={e => onDrop(e, group.id, item.id)}
-      style={{ borderBottom: '1px solid #e6e9ef', background: rowBg, height: 40, cursor: 'grab', transition: 'background 0.1s' }}
+      style={{ borderBottom: '1px solid var(--border-color)', background: rowBg, height: 40, cursor: 'grab', transition: 'background 0.1s' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Color stripe */}
       <td style={{ width: 6, padding: 0, background: group.color, position: 'sticky', left: 0, zIndex: 2 }} />
       {/* Drag handle / checkbox */}
-      <td style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid #e6e9ef', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
+      <td style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
         {hovered || isSelected
           ? <input
-              type="checkbox"
-              checked={!!isSelected}
-              onChange={e => { e.stopPropagation(); onToggleSelect?.(item.id); }}
-              onClick={e => e.stopPropagation()}
-              style={{ cursor: 'pointer', accentColor: group.color }}
-            />
+            type="checkbox"
+            checked={!!isSelected}
+            onChange={e => { e.stopPropagation(); onToggleSelect?.(item.id); }}
+            onClick={e => e.stopPropagation()}
+            style={{ cursor: 'pointer', accentColor: group.color }}
+          />
           : <span style={{ color: '#c5c7d0', fontSize: 16, cursor: 'grab', userSelect: 'none', display: 'block', textAlign: 'center' }} title="Drag to reorder">⠿</span>
         }
       </td>
@@ -760,7 +760,7 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
           )}
           {canEdit
             ? <InlineEdit value={item.name} onSave={name => onItemUpdate(item.id, name)} singleClick
-                style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }} />
+              style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }} />
             : <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', padding: '0 4px' }}>{item.name}</span>
           }
           {/* Subitem count badge */}
@@ -779,7 +779,12 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
       </td>
       {/* Data columns */}
       {columns.map(col => (
-        <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef' }}>
+        // <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef' }}>
+        <td key={col.id} style={{
+          padding: (col.type === 'status' || col.type === 'priority') ? 0 : '3px 6px',
+          borderRight: '1px solid var(--border-color)',
+          height: 34,
+        }}>
           <ColumnCell
             column={col}
             value={item.values?.[col.id] || ''}
@@ -791,7 +796,7 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
         </td>
       ))}
       {/* Copy + Delete */}
-      <td style={{ width: 64, textAlign: 'center', borderRight: '1px solid #e6e9ef', whiteSpace: 'nowrap' }}>
+      <td style={{ width: 64, textAlign: 'center', borderRight: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>
         {canEdit && hovered && (
           <button
             onClick={e => { e.stopPropagation(); onItemCopy?.(item.id); }}
@@ -815,17 +820,17 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
 // ── Subitem row ────────────────────────────────────────────────────────────────
 function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange, canEdit, isManager, onOpenDetail }) {
   const [hovered, setHovered] = useState(false);
-  const rowBg = hovered ? '#f0f4fb' : '#f7f8fc';
+  const rowBg = hovered ? 'var(--hover-bg)' : 'var(--bg-secondary)';
   return (
     <tr
-      style={{ borderBottom: '1px solid #e6e9ef', background: rowBg, height: 36, transition: 'background 0.1s' }}
+      style={{ borderBottom: '1px solid var(--border-color)', background: rowBg, height: 36, transition: 'background 0.1s' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Color stripe (faded) */}
       <td style={{ width: 6, padding: 0, background: group.color, opacity: 0.3, position: 'sticky', left: 0, zIndex: 2 }} />
       {/* Indent marker */}
-      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid #e6e9ef', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
+      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
         <span style={{
           display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
           border: '1.5px solid #c5c7d0', verticalAlign: 'middle',
@@ -848,21 +853,27 @@ function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange
           )}
           {canEdit
             ? <InlineEdit value={subitem.name} onSave={name => onUpdate(subitem.id, name)} singleClick
-                style={{ fontSize: 12, color: 'var(--text-primary)' }} />
+              style={{ fontSize: 12, color: 'var(--text-primary)' }} />
             : <span style={{ fontSize: 12, color: 'var(--text-primary)', padding: '0 4px' }}>{subitem.name}</span>
           }
         </div>
       </td>
       {/* Data columns */}
       {columns.map(col => (
-        <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef', background: rowBg }}>
+        //  <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef', background: rowBg }}>
+        <td key={col.id} style={{
+          padding: (col.type === 'status' || col.type === 'priority') ? 0 : '3px 6px',
+          borderRight: '1px solid var(--border-color)',
+          background: rowBg,
+          height: 34,
+        }}>
           <ColumnCell
             column={col}
             value={subitem.values?.[col.id] || ''}
             onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager))
               ? undefined
               : val => onValueChange(subitem.id, col.id, val)}
-            onEditSettings={() => {}}
+            onEditSettings={() => { }}
             item={subitem}
           />
         </td>
@@ -1034,12 +1045,12 @@ function BulkActionBar({ count, groups, onMove, onDelete, onClear }) {
 
 // ── Group rows (returns a fragment for tbody) ─────────────────────────────────
 function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupDelete,
-                     onItemCreate, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
-                     onEditSettings, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, onOpenDetail,
-                     isGroupDragSrc, isGroupDropOver,
-                     onGroupDragStart, onGroupDragEnd, onGroupDragOver, onGroupDrop,
-                     selectedItems, onToggleSelect,
-                     onSubitemCreate, onSubitemUpdate, onSubitemDelete, onSubitemValueChange }) {
+  onItemCreate, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
+  onEditSettings, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, onOpenDetail,
+  isGroupDragSrc, isGroupDropOver,
+  onGroupDragStart, onGroupDragEnd, onGroupDragOver, onGroupDrop,
+  selectedItems, onToggleSelect,
+  onSubitemCreate, onSubitemUpdate, onSubitemDelete, onSubitemValueChange }) {
   const [collapsed, setCollapsed] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState('');
@@ -1383,7 +1394,7 @@ function VisibilityBadge({ visibility, onChange, isManager }) {
 
 // ── Mobile Card View (renders one group as cards) ─────────────────────────────
 function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onItemUpdate,
-                          onItemDelete, onValueChange, onEditSettings, onOpenDetail }) {
+  onItemDelete, onValueChange, onEditSettings, onOpenDetail }) {
   const [collapsed, setCollapsed] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState('');
@@ -1448,11 +1459,11 @@ function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onIt
             />
             {canEdit
               ? <InlineEdit
-                  value={item.name}
-                  onSave={name => onItemUpdate(item.id, name)}
-                  singleClick
-                  style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}
-                />
+                value={item.name}
+                onSave={name => onItemUpdate(item.id, name)}
+                singleClick
+                style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}
+              />
               : <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{item.name}</span>
             }
             <button
@@ -1552,9 +1563,9 @@ function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onIt
 
 // ── More bottom sheet (mobile toolbar) ────────────────────────────────────────
 function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, importing,
-                           onClose, onAutomations, onForms, onFilter, filtersActive,
-                           onExport, onImport, onMembers, onActivity, onTrash,
-                           boardMembersCount }) {
+  onClose, onAutomations, onForms, onFilter, filtersActive,
+  onExport, onImport, onMembers, onActivity, onTrash,
+  boardMembersCount }) {
   const options = [];
   if (isManager) {
     options.push({ icon: '⚡', label: `Automations${activeAutoCount > 0 ? ` (${activeAutoCount} active)` : ''}`, action: onAutomations });
@@ -1622,9 +1633,9 @@ function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, impo
 
 // ── Avatar helpers (used by AdvancedFilterBar) ────────────────────────────────
 const _AVATAR_COLORS = [
-  '#0073ea','#00c875','#fdab3d','#e2445c',
-  '#a25ddc','#037f4c','#ff642e','#784bd1',
-  '#ff5ac4','#0099cc','#bb3354','#666666',
+  '#0073ea', '#00c875', '#fdab3d', '#e2445c',
+  '#a25ddc', '#037f4c', '#ff642e', '#784bd1',
+  '#ff5ac4', '#0099cc', '#bb3354', '#666666',
 ];
 function nameToColor(name) {
   const n = name || '';
@@ -1655,23 +1666,23 @@ function FilterHoverRow({ selected, onClick, children }) {
 // ── Advanced filter bar constants ─────────────────────────────────────────────
 const FILTER_PRIORITY_OPTIONS = [
   { label: 'Critical', color: '#e2445c' },
-  { label: 'High',     color: '#ff642e' },
-  { label: 'Medium',   color: '#fdab3d' },
-  { label: 'Low',      color: '#00c875' },
+  { label: 'High', color: '#ff642e' },
+  { label: 'Medium', color: '#fdab3d' },
+  { label: 'Low', color: '#00c875' },
 ];
 const FILTER_DUE_DATE_OPTIONS = [
-  { value: 'overdue',   label: 'Overdue' },
-  { value: 'today',     label: 'Due Today' },
-  { value: 'week',      label: 'Due This Week' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'today', label: 'Due Today' },
+  { value: 'week', label: 'Due This Week' },
   { value: 'next_week', label: 'Due Next Week' },
-  { value: 'none',      label: 'No Due Date' },
-  { value: 'has_date',  label: 'Has Due Date' },
+  { value: 'none', label: 'No Due Date' },
+  { value: 'has_date', label: 'Has Due Date' },
 ];
 const FILTER_DEFAULT_STATUS = [
   { label: 'Not Started', color: '#c4c4c4' },
   { label: 'In Progress', color: '#fdab3d' },
-  { label: 'Done',        color: '#00c875' },
-  { label: 'Stuck',       color: '#e2445c' },
+  { label: 'Done', color: '#00c875' },
+  { label: 'Stuck', color: '#e2445c' },
 ];
 
 function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols }) {
@@ -2044,38 +2055,38 @@ function conditionsFor(colType) {
     case 'priority':
     case 'dropdown':
       return [
-        { value: 'is',            label: 'is' },
-        { value: 'is_not',        label: 'is not' },
-        { value: 'is_empty',      label: 'is empty' },
-        { value: 'is_not_empty',  label: 'is not empty' },
+        { value: 'is', label: 'is' },
+        { value: 'is_not', label: 'is not' },
+        { value: 'is_empty', label: 'is empty' },
+        { value: 'is_not_empty', label: 'is not empty' },
       ];
     case 'person':
       return [
-        { value: 'is',            label: 'is' },
-        { value: 'is_not',        label: 'is not' },
-        { value: 'is_empty',      label: 'is empty' },
-        { value: 'is_not_empty',  label: 'is not empty' },
+        { value: 'is', label: 'is' },
+        { value: 'is_not', label: 'is not' },
+        { value: 'is_empty', label: 'is empty' },
+        { value: 'is_not_empty', label: 'is not empty' },
       ];
     case 'date':
       return [
-        { value: 'overdue',       label: 'overdue' },
-        { value: 'today',         label: 'due today' },
-        { value: 'this_week',     label: 'due this week' },
-        { value: 'next_week',     label: 'due next week' },
-        { value: 'before',        label: 'before' },
-        { value: 'after',         label: 'after' },
-        { value: 'is',            label: 'is (exact)' },
-        { value: 'is_empty',      label: 'is empty' },
-        { value: 'is_not_empty',  label: 'is not empty' },
+        { value: 'overdue', label: 'overdue' },
+        { value: 'today', label: 'due today' },
+        { value: 'this_week', label: 'due this week' },
+        { value: 'next_week', label: 'due next week' },
+        { value: 'before', label: 'before' },
+        { value: 'after', label: 'after' },
+        { value: 'is', label: 'is (exact)' },
+        { value: 'is_empty', label: 'is empty' },
+        { value: 'is_not_empty', label: 'is not empty' },
       ];
     default: // text, email, number, etc.
       return [
-        { value: 'contains',      label: 'contains' },
-        { value: 'not_contains',  label: 'does not contain' },
-        { value: 'is',            label: 'is (exact)' },
-        { value: 'is_not',        label: 'is not' },
-        { value: 'is_empty',      label: 'is empty' },
-        { value: 'is_not_empty',  label: 'is not empty' },
+        { value: 'contains', label: 'contains' },
+        { value: 'not_contains', label: 'does not contain' },
+        { value: 'is', label: 'is (exact)' },
+        { value: 'is_not', label: 'is not' },
+        { value: 'is_empty', label: 'is empty' },
+        { value: 'is_not_empty', label: 'is not empty' },
       ];
   }
 }
@@ -2620,8 +2631,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
   // Load trash count + active automation count when board changes
   useEffect(() => {
-    getTrashItems(board.id).then(r => setTrashCount(r.data.length)).catch(() => {});
-    getAutomations(board.id).then(r => setActiveAutoCount(r.data.filter(a => a.enabled).length)).catch(() => {});
+    getTrashItems(board.id).then(r => setTrashCount(r.data.length)).catch(() => { });
+    getAutomations(board.id).then(r => setActiveAutoCount(r.data.filter(a => a.enabled).length)).catch(() => { });
   }, [board.id]);
 
   // Load views on board mount / board change
@@ -2631,7 +2642,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       setActiveViewId(data[0]?.id ?? null);
       setActiveFilters(data[0]?.filters ?? []);
       setUnsavedChanges(false);
-    }).catch(() => {});
+    }).catch(() => { });
   }, [board.id]);
 
   // Track viewport for mobile layout
@@ -3281,30 +3292,30 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
   const searchedGroups = boardSearch.trim()
     ? applyViewFilters(applyFilters(groups)).map(g => ({
-        ...g,
-        items: (g.items || []).filter(item => {
-          const q = boardSearch.toLowerCase();
-          if (item.name.toLowerCase().includes(q)) return true;
-          return Object.values(item.values || {}).some(v => String(v).toLowerCase().includes(q));
-        }),
-      })).filter(g => g.items.length > 0)
+      ...g,
+      items: (g.items || []).filter(item => {
+        const q = boardSearch.toLowerCase();
+        if (item.name.toLowerCase().includes(q)) return true;
+        return Object.values(item.values || {}).some(v => String(v).toLowerCase().includes(q));
+      }),
+    })).filter(g => g.items.length > 0)
     : applyViewFilters(applyFilters(groups));
 
   const filteredGroups = sortConfig
     ? searchedGroups.map(g => ({
-        ...g,
-        items: [...(g.items || [])].sort((a, b) => {
-          const aVal = sortConfig.colId === '_name' ? a.name : (a.values?.[sortConfig.colId] || '');
-          const bVal = sortConfig.colId === '_name' ? b.name : (b.values?.[sortConfig.colId] || '');
-          const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
-          return sortConfig.dir === 'asc' ? cmp : -cmp;
-        }),
-      }))
+      ...g,
+      items: [...(g.items || [])].sort((a, b) => {
+        const aVal = sortConfig.colId === '_name' ? a.name : (a.values?.[sortConfig.colId] || '');
+        const bVal = sortConfig.colId === '_name' ? b.name : (b.values?.[sortConfig.colId] || '');
+        const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+        return sortConfig.dir === 'asc' ? cmp : -cmp;
+      }),
+    }))
     : searchedGroups;
 
   // Counts for "Showing X of Y" display
-  const totalItems      = groups.reduce((s, g) => s + (g.items?.length || 0), 0);
-  const filteredItems   = filteredGroups.reduce((s, g) => s + (g.items?.length || 0), 0);
+  const totalItems = groups.reduce((s, g) => s + (g.items?.length || 0), 0);
+  const filteredItems = filteredGroups.reduce((s, g) => s + (g.items?.length || 0), 0);
   const activeFilterCount = activeFilters.filter(f => f.column_id && f.condition).length;
 
   return (
@@ -3595,19 +3606,19 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
             {/* ── Sticky header ── */}
             <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
-              <tr style={{ background: '#f5f6f8', borderBottom: '2px solid #e6e9ef' }}>
-                <th style={{ padding: 0, background: '#f5f6f8', width: 6, position: 'sticky', left: 0, zIndex: 30 }} />
-                <th style={{ padding: '0 8px', textAlign: 'center', background: '#f5f6f8', borderRight: '1px solid #e6e9ef', position: 'sticky', left: 6, zIndex: 30 }}>
+              <tr style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border-color)' }}>
+                <th style={{ padding: 0, background: 'var(--bg-secondary)', width: 6, position: 'sticky', left: 0, zIndex: 30 }} />
+                <th style={{ padding: '0 8px', textAlign: 'center', background: 'var(--bg-secondary)', borderRight: '1px solid var(--border-color)', position: 'sticky', left: 6, zIndex: 30 }}>
                   <input type="checkbox" title="Select all" style={{ cursor: 'pointer' }} />
                 </th>
-                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: '#676879', background: '#f5f6f8', borderRight: 'none', letterSpacing: '0.3px', position: 'sticky', left: 42, zIndex: 30, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
+                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRight: 'none', letterSpacing: '0.3px', position: 'sticky', left: 42, zIndex: 30, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
                     {isManager
                       ? <InlineEdit
-                          value={board.item_name || 'Item'}
-                          onSave={handleItemNameRename}
-                          style={{ fontSize: 12, fontWeight: 700, color: '#676879', flex: 1 }}
-                        />
+                        value={board.item_name || 'Item'}
+                        onSave={handleItemNameRename}
+                        style={{ fontSize: 12, fontWeight: 700, color: '#676879', flex: 1 }}
+                      />
                       : <span style={{ fontSize: 12, fontWeight: 700, color: '#676879' }}>{board.item_name || 'Item'}</span>
                     }
                     <ResizeHandle onMouseDown={e => startResize(e, '_name', getNameWidth())} />
