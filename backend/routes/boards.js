@@ -88,31 +88,80 @@ router.get('/:id', requireAuth, async (req, res) => {
     board.columns = colsRes.rows;
 
     const groupsRes = await pool.query('SELECT * FROM groups WHERE board_id=$1 ORDER BY position', [id]);
-    for (const group of groupsRes.rows) {
-      const itemsRes = await pool.query(
-        'SELECT * FROM items WHERE group_id=$1 AND parent_item_id IS NULL ORDER BY position',
-        [group.id]
-      );
-      for (const item of itemsRes.rows) {
-        const valsRes = await pool.query('SELECT * FROM column_values WHERE item_id=$1', [item.id]);
-        const commentsRes = await pool.query('SELECT COUNT(*) AS count FROM comments WHERE item_id=$1', [item.id]);
-        item.comment_count = parseInt(commentsRes.rows[0].count) || 0;
-        item.values = {};
-        for (const v of valsRes.rows) item.values[v.column_id] = v.value;
-        // Load subitems for each item
-        const subRes = await pool.query(
-          'SELECT * FROM items WHERE parent_item_id=$1 ORDER BY position',
-          [item.id]
-        );
-        for (const sub of subRes.rows) {
-          const svRes = await pool.query('SELECT * FROM column_values WHERE item_id=$1', [sub.id]);
-          sub.values = {};
-          for (const sv of svRes.rows) sub.values[sv.column_id] = sv.value;
-          sub.subitems = [];
-        }
-        item.subitems = subRes.rows;
+    const groupIds = groupsRes.rows.map(g => g.id);
+
+    // ── Batch load all items for all groups in ONE query ─────────────────────
+    const allItemsRes = groupIds.length > 0
+      ? await pool.query(
+          'SELECT * FROM items WHERE group_id = ANY($1) AND parent_item_id IS NULL ORDER BY position',
+          [groupIds]
+        )
+      : { rows: [] };
+
+    const allItemIds = allItemsRes.rows.map(i => i.id);
+
+    // ── Batch load all column values, comments, subitems ─────────────────────
+    const [allValsRes, allCommentsRes, allSubitemsRes] = await Promise.all([
+      allItemIds.length > 0
+        ? pool.query('SELECT * FROM column_values WHERE item_id = ANY($1)', [allItemIds])
+        : Promise.resolve({ rows: [] }),
+      allItemIds.length > 0
+        ? pool.query(
+            'SELECT item_id, COUNT(*) AS count FROM comments WHERE item_id = ANY($1) GROUP BY item_id',
+            [allItemIds]
+          )
+        : Promise.resolve({ rows: [] }),
+      allItemIds.length > 0
+        ? pool.query(
+            'SELECT * FROM items WHERE parent_item_id = ANY($1) ORDER BY position',
+            [allItemIds]
+          )
+        : Promise.resolve({ rows: [] }),
+    ]);
+
+    const allSubitemIds = allSubitemsRes.rows.map(s => s.id);
+    const allSubValsRes = allSubitemIds.length > 0
+      ? await pool.query('SELECT * FROM column_values WHERE item_id = ANY($1)', [allSubitemIds])
+      : { rows: [] };
+
+    // ── Build lookup maps ─────────────────────────────────────────────────────
+    const valsByItem = {};
+    for (const v of allValsRes.rows) {
+      if (!valsByItem[v.item_id]) valsByItem[v.item_id] = {};
+      valsByItem[v.item_id][v.column_id] = v.value;
+    }
+    const commentsByItem = {};
+    for (const c of allCommentsRes.rows) {
+      commentsByItem[c.item_id] = parseInt(c.count) || 0;
+    }
+    const subitemsByParent = {};
+    for (const s of allSubitemsRes.rows) {
+      if (!subitemsByParent[s.parent_item_id]) subitemsByParent[s.parent_item_id] = [];
+      subitemsByParent[s.parent_item_id].push(s);
+    }
+    const subValsByItem = {};
+    for (const v of allSubValsRes.rows) {
+      if (!subValsByItem[v.item_id]) subValsByItem[v.item_id] = {};
+      subValsByItem[v.item_id][v.column_id] = v.value;
+    }
+
+    // ── Assemble items into groups ────────────────────────────────────────────
+    const itemsByGroup = {};
+    for (const item of allItemsRes.rows) {
+      item.values = valsByItem[item.id] || {};
+      item.comment_count = commentsByItem[item.id] || 0;
+      const subs = subitemsByParent[item.id] || [];
+      for (const sub of subs) {
+        sub.values = subValsByItem[sub.id] || {};
+        sub.subitems = [];
       }
-      group.items = itemsRes.rows;
+      item.subitems = subs;
+      if (!itemsByGroup[item.group_id]) itemsByGroup[item.group_id] = [];
+      itemsByGroup[item.group_id].push(item);
+    }
+
+    for (const group of groupsRes.rows) {
+      group.items = itemsByGroup[group.id] || [];
     }
 
     // ── Item-level visibility filter ────────────────────────────────────────
