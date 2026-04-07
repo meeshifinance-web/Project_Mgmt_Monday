@@ -663,15 +663,16 @@ function MainApp() {
                 title="Close navigation"
                 aria-label="Close navigation"
               >×</button>
-              {/* Desktop collapse button */}
+              {/* Desktop collapse button — hidden until sidebar is hovered */}
               <button
+                className="sidebar-collapse-btn"
                 onClick={toggleNav}
                 title="Collapse sidebar"
                 style={{
                   width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                   background: 'var(--sidebar-btn-bg)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--sidebar-text)', fontSize: 14, transition: 'background 0.15s',
+                  color: 'var(--sidebar-text)', fontSize: 14,
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-btn-hover)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'var(--sidebar-btn-bg)'}

@@ -6,30 +6,30 @@ const STAR = '★';
 const STAR_E = '☆';
 
 const STATUS_PALETTE = [
-  '#c4c4c4','#00c875','#e2445c','#fdab3d','#0073ea',
-  '#a25ddc','#037f4c','#ff5ac4','#784bd1','#ffcb00',
-  '#ff642e','#9aadbd','#66ccff','#bb3354','#333333',
+  '#c4c4c4', '#00c875', '#e2445c', '#fdab3d', '#0073ea',
+  '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1', '#ffcb00',
+  '#ff642e', '#9aadbd', '#66ccff', '#bb3354', '#333333',
 ];
 
 const DEFAULT_STATUS_OPTIONS = [
   { label: 'Not Started', color: '#c4c4c4' },
   { label: 'In Progress', color: '#fdab3d' },
-  { label: 'Done',        color: '#00c875' },
-  { label: 'Stuck',       color: '#e2445c' },
+  { label: 'Done', color: '#00c875' },
+  { label: 'Stuck', color: '#e2445c' },
 ];
 
 const DEFAULT_PRIORITY_OPTIONS = [
   { label: 'Critical', color: '#e2445c' },
-  { label: 'High',     color: '#ff642e' },
-  { label: 'Medium',   color: '#fdab3d' },
-  { label: 'Low',      color: '#00c875' },
+  { label: 'High', color: '#ff642e' },
+  { label: 'Medium', color: '#fdab3d' },
+  { label: 'Low', color: '#00c875' },
 ];
 
 const PRIORITY_ICONS = {
   Critical: '🔴',
-  High:     '🟠',
-  Medium:   '🟡',
-  Low:      '🟢',
+  High: '🟠',
+  Medium: '🟡',
+  Low: '🟢',
 };
 
 function SwatchPicker({ current, onChange }) {
@@ -133,22 +133,22 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
       setSaving(false);
     }
   };
-
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
         onClick={() => { setOpen(o => !o); setEditMode(false); setOpenPickerIdx(null); }}
         title={value || ''}
         style={{
           background: bg, color: '#fff', fontWeight: 600,
-          padding: '4px 8px', borderRadius: 4, cursor: 'pointer',
-          textAlign: 'center', fontSize: 12, userSelect: 'none',
-          minHeight: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden',
+          padding: '0 8px', borderRadius: 0, cursor: 'pointer',
+          textAlign: 'center', fontSize: 13, userSelect: 'none',
+          height: '100%', minHeight: 34,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden', width: '100%',
         }}
       >
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {iconMap && value && iconMap[value] ? `${iconMap[value]} ${value}` : (value || '—')}
+          {iconMap && value && iconMap[value] ? `${iconMap[value]} ${value}` : (value || '')}
         </span>
       </div>
 
@@ -316,7 +316,7 @@ function RatingCell({ value, onChange }) {
   const num = parseInt(value) || 0;
   return (
     <div style={{ display: 'flex', gap: 2 }}>
-      {[1,2,3,4,5].map(i => (
+      {[1, 2, 3, 4, 5].map(i => (
         <span
           key={i}
           onClick={() => onChange(i === num ? '' : String(i))}
@@ -521,16 +521,16 @@ function TextCell({ value, onChange, multiline, type }) {
     >
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value || '—'}</span>
       {saveStatus === 'saving' && <span style={{ fontSize: 10, color: '#aaa', flexShrink: 0 }}>●</span>}
-      {saveStatus === 'saved'  && <span style={{ fontSize: 10, color: '#00c875', flexShrink: 0 }}>✓</span>}
+      {saveStatus === 'saved' && <span style={{ fontSize: 10, color: '#00c875', flexShrink: 0 }}>✓</span>}
     </div>
   );
 }
 
 // ── Deterministic avatar colour from a display name ───────────────────────────
 const AVATAR_COLORS = [
-  '#0073ea','#00c875','#fdab3d','#e2445c',
-  '#a25ddc','#037f4c','#ff642e','#784bd1',
-  '#ff5ac4','#0099cc','#bb3354','#666666',
+  '#0073ea', '#00c875', '#fdab3d', '#e2445c',
+  '#a25ddc', '#037f4c', '#ff642e', '#784bd1',
+  '#ff5ac4', '#0099cc', '#bb3354', '#666666',
 ];
 function nameToColor(name) {
   const n = name || '';
@@ -553,9 +553,9 @@ function CreationLogCell({ item }) {
   }
 
   const creatorName = item.created_by_user_name || 'Unknown';
-  const initials    = nameToInitials(creatorName);
+  const initials = nameToInitials(creatorName);
   const avatarColor = nameToColor(creatorName);
-  const dt          = new Date(item.created_at);
+  const dt = new Date(item.created_at);
 
   const dateStr = dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const timeStr = dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -744,7 +744,7 @@ function FileCell({ value, onChange }) {
     const entry = files[index];
     const next = files.filter((_, i) => i !== index);
     onChange(next.length > 0 ? JSON.stringify(next) : '');
-    if (entry?.name) deleteFile(entry.name).catch(() => {});
+    if (entry?.name) deleteFile(entry.name).catch(() => { });
   };
 
   const fmt = (bytes) => {
@@ -805,7 +805,7 @@ function FormulaCell({ column, item, columns }) {
   if (!formula.trim()) {
     return (
       <div style={{ padding: '3px 6px', color: '#c5c7d0', fontSize: 11, fontStyle: 'italic' }}
-           title="No formula set — click column header ▸ Edit Formula">
+        title="No formula set — click column header ▸ Edit Formula">
         formula…
       </div>
     );

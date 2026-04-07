@@ -4,8 +4,8 @@
 :root,
 [data-theme="light"] {
   --bg-primary: #ffffff;
-  --bg-secondary: #f6f7fb;
-  --bg-sidebar: #ffffff;
+  --bg-secondary: #f0f2f8;
+  --bg-sidebar: #f6f7fb;
   --text-primary: #323338;
   --text-secondary: #676879;
   --border-color: #e6e9ef;
@@ -154,9 +154,15 @@ select {
 }
 
 /* Group color stripe (first-child td) keeps its group.color background */
-[data-theme="dark"] td:not(:first-child) {
+/* Sticky-positioned tds are excluded so they keep their opaque backgrounds */
+[data-theme="dark"] td:not(:first-child):not([style*="sticky"]) {
   background-color: transparent !important;
   color: var(--text-primary) !important;
+}
+
+/* Sticky cells must have opaque backgrounds in dark mode to cover scrolling content */
+[data-theme="dark"] td:not(:first-child)[style*="sticky"] {
+  background-color: var(--bg-primary) !important;
 }
 
 /* Text inside table cells — override hardcoded dark colors */
@@ -244,6 +250,16 @@ select {
   min-height: unset !important;
   height: auto !important;
   padding: 0 !important;
+}
+
+/* ── Sidebar collapse button — hidden until sidebar is hovered ───────────── */
+.sidebar-collapse-btn {
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s !important;
+}
+
+.app-sidebar:hover .sidebar-collapse-btn {
+  opacity: 1;
 }
 
 /* ── Desktop defaults for mobile-specific elements ───────────────────────── */
