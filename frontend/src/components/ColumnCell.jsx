@@ -765,7 +765,22 @@ function FileCell({ value, onChange }) {
   };
 
   return (
-    <div style={{ padding: '4px 2px' }}>
+    <div
+      className="file-chip-row"
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        flexWrap: 'nowrap',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        gap: 4,
+        alignItems: 'center',
+        maxHeight: 34,
+        padding: '0 4px',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
+      }}
+    >
       {files.map((f, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
           <span style={{ fontSize: 13 }}>{icon(f.mimeType)}</span>
