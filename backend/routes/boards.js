@@ -47,9 +47,9 @@ async function syncOwnerColumn(client, boardId) {
 const DEFAULT_STATUS_OPTIONS = [
   { label: 'Not Started', color: '#c4c4c4' },
   { label: 'In Progress', color: '#fdab3d' },
-  { label: 'Done',        color: '#00c875' },
-  { label: 'Stuck',       color: '#e2445c' },
-  { label: 'Review',      color: '#a25ddc' },
+  { label: 'Done', color: '#00c875' },
+  { label: 'Stuck', color: '#e2445c' },
+  { label: 'Review', color: '#a25ddc' },
 ];
 
 // ── GET all accessible boards ─────────────────────────────────────────────────
@@ -95,6 +95,8 @@ router.get('/:id', requireAuth, async (req, res) => {
       );
       for (const item of itemsRes.rows) {
         const valsRes = await pool.query('SELECT * FROM column_values WHERE item_id=$1', [item.id]);
+        const commentsRes = await pool.query('SELECT COUNT(*) AS count FROM comments WHERE item_id=$1', [item.id]);
+        item.comment_count = parseInt(commentsRes.rows[0].count) || 0;
         item.values = {};
         for (const v of valsRes.rows) item.values[v.column_id] = v.value;
         // Load subitems for each item
