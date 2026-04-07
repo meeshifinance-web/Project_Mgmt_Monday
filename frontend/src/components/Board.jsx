@@ -699,7 +699,7 @@ function colWidth(col) {
 }
 
 // ── Item row ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
+const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
   isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand }) {
   const [hovered, setHovered] = useState(false);
@@ -830,7 +830,16 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
       <td />
     </tr >
   );
-}
+}, (prev, next) => {
+  return (
+    prev.item === next.item &&
+    prev.isSelected === next.isSelected &&
+    prev.isExpanded === next.isExpanded &&
+    prev.columns === next.columns &&
+    prev.canEdit === next.canEdit &&
+    prev.subitems === next.subitems
+  );
+});
 
 // ── Subitem row ────────────────────────────────────────────────────────────────
 function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange, canEdit, isManager, onOpenDetail }) {
@@ -2844,24 +2853,24 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     } catch { toast('Failed to create group', 'error'); }
   };
 
-  const handleGroupDelete = async (id) => {
+  const handleGroupDelete = useCallback(async (id) => {
     if (!confirm('Delete this group and all its items?')) return;
     try {
       await deleteGroup(id);
       updateLocalBoard(b => ({ groups: b.groups.filter(g => g.id !== id) }));
       toast('Group deleted');
     } catch { toast('Failed to delete group', 'error'); }
-  };
+  }, [updateLocalBoard, toast]);
 
   // ── Items ─────────────────────────────────────────────────────────────────
-  const handleItemCreate = async (groupId, name) => {
+  const handleItemCreate = useCallback(async (groupId, name) => {
     const r = await createItem({ group_id: groupId, name });
     updateLocalBoard(b => ({ groups: b.groups.map(g => g.id === groupId ? { ...g, items: [...(g.items || []), r.data] } : g) }));
     if (r.data.triggeredAutomations?.length) fireAutomations(r.data.triggeredAutomations, toast);
     return r.data;
-  };
+  }, [updateLocalBoard, toast]);
 
-  const handleItemUpdate = async (id, name) => {
+  const handleItemUpdate = useCallback(async (id, name) => {
     try {
       await updateItem(id, { name });
       updateLocalBoard(b => ({
@@ -2877,18 +2886,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         })),
       }));
     } catch { toast('Failed to rename item', 'error'); }
-  };
+  }, [updateLocalBoard, toast]);
 
-  const handleItemDelete = async (id) => {
+  const handleItemDelete = useCallback(async (id) => {
     try {
       await deleteItem(id);
       updateLocalBoard(b => ({ groups: b.groups.map(g => ({ ...g, items: g.items.filter(i => i.id !== id) })) }));
       setTrashCount(c => c + 1);
       toast('Item moved to Trash — restore it within 15 days');
     } catch { toast('Failed to delete item', 'error'); }
-  };
+  }, [updateLocalBoard, setTrashCount, toast]);
 
-  const handleItemCopy = async (id) => {
+  const handleItemCopy = useCallback(async (id) => {
     try {
       const r = await copyItem(id);
       const newItem = { ...r.data, subitems: [] };
@@ -2902,7 +2911,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       }));
       toast('Item duplicated', 'success');
     } catch { toast('Failed to duplicate item', 'error'); }
-  };
+  }, [updateLocalBoard, toast]);
 
   const handleBulkDelete = async () => {
     const itemIds = [...selectedItems];
@@ -2931,7 +2940,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   };
 
   // ── Subitems ──────────────────────────────────────────────────────────────
-  const handleSubitemCreate = async (parentItemId, groupId, name) => {
+  const handleSubitemCreate = useCallback(async (parentItemId, groupId, name) => {
     const r = await createItem({ group_id: groupId, name, parent_item_id: parentItemId });
     updateLocalBoard(b => ({
       groups: b.groups.map(g => ({
@@ -2943,7 +2952,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       })),
     }));
     return r.data;
-  };
+  }, [updateLocalBoard]);
 
   const handleSubitemUpdate = async (subitemId, parentItemId, name) => {
     try {
@@ -2976,7 +2985,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     } catch { toast('Failed to delete subitem', 'error'); }
   };
 
-  const handleSubitemValueChange = async (subitemId, parentItemId, columnId, value) => {
+  const handleSubitemValueChange = useCallback(async (subitemId, parentItemId, columnId, value) => {
     try {
       await upsertColumnValue({ item_id: subitemId, column_id: columnId, value });
       updateLocalBoard(b => ({
@@ -2989,10 +2998,10 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         })),
       }));
     } catch { toast('Failed to save value', 'error'); }
-  };
+  }, [updateLocalBoard, toast]);
 
   // ── Column values ─────────────────────────────────────────────────────────
-  const handleValueChange = async (itemId, columnId, value) => {
+  const handleValueChange = useCallback(async (itemId, columnId, value) => {
     try {
       const r = await upsertColumnValue({ item_id: itemId, column_id: columnId, value });
       updateLocalBoard(b => {
@@ -3035,7 +3044,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       if (r.data.triggeredAutomations?.length) fireAutomations(r.data.triggeredAutomations, toast);
       if (r.data.movedItem) toast('Item moved by automation', 'success');
     } catch { toast('Failed to save value', 'error'); }
-  };
+  }, [updateLocalBoard, toast]);
 
   // ── Columns ───────────────────────────────────────────────────────────────
   const handleColumnAdd = async ({ title, type }) => {
