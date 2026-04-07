@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'; // lazy/Suspense kept for ActivityLogPanel
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react'; // lazy/Suspense kept for ActivityLogPanel
+import { useVirtualizer } from '@tanstack/react-virtual';
 import ColumnCell, { parseOwners } from './ColumnCell';
 import AddColumnModal from './AddColumnModal';
 import StatusOptionsEditor from './StatusOptionsEditor';
@@ -2508,8 +2509,232 @@ function matchesFilter(item, rule) {
   }
 }
 
+
+// ── VirtualisedGroups — renders all groups with row-level virtualisation ──────
+function VirtualisedGroups({
+  filteredGroups, cols, isManager, canEdit, scrollContainerRef,
+  dropTarget, groupDragSrc, groupDropOver, selectedItems,
+  handleGroupUpdate, handleGroupDelete, handleItemCreate, handleItemUpdate,
+  handleItemDelete, handleItemCopy, handleValueChange, handleColumnSettingsSave,
+  handleDragStart, handleDragEnd, handleDragOver, handleDrop, setDetailItemId,
+  handleGroupDragStart, handleGroupDragEnd, handleGroupDragOver, handleGroupDrop,
+  handleToggleSelect, handleSubitemCreate, handleSubitemUpdate,
+  handleSubitemDelete, handleSubitemValueChange,
+}) {
+  // Track collapsed groups and expanded subitems locally
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const [expandedItems, setExpandedItems] = useState(new Set());
+  const [addingInGroup, setAddingInGroup] = useState(null);
+  const [newItemName, setNewItemName] = useState('');
+  const toast = useToast();
+
+  const toggleGroup = (gid) => setCollapsedGroups(prev => {
+    const n = new Set(prev); n.has(gid) ? n.delete(gid) : n.add(gid); return n;
+  });
+  const toggleExpand = (iid) => setExpandedItems(prev => {
+    const n = new Set(prev); n.has(iid) ? n.delete(iid) : n.add(iid); return n;
+  });
+
+  // Flatten all groups into a single list of virtual rows
+  const flatRows = useMemo(() => {
+    const rows = [];
+    for (const group of filteredGroups) {
+      rows.push({ type: 'group-header', group, id: `gh-${group.id}` });
+      if (collapsedGroups.has(group.id)) continue;
+      for (const item of (group.items || [])) {
+        rows.push({ type: 'item', item, group, id: `item-${item.id}` });
+        if (expandedItems.has(item.id)) {
+          for (const sub of (item.subitems || [])) {
+            rows.push({ type: 'subitem', subitem: sub, item, group, id: `sub-${sub.id}` });
+          }
+          rows.push({ type: 'add-subitem', item, group, id: `add-sub-${item.id}` });
+        }
+      }
+      rows.push({ type: 'add-item', group, id: `add-${group.id}` });
+    }
+    return rows;
+  }, [filteredGroups, collapsedGroups, expandedItems]);
+
+  const ROW_HEIGHT = 40;
+
+  const virtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 15,
+  });
+
+  const handleAddItem = async (group) => {
+    if (!newItemName.trim()) return;
+    try {
+      await handleItemCreate(group.id, newItemName.trim());
+      setNewItemName('');
+      setAddingInGroup(null);
+    } catch { toast('Failed to add item', 'error'); }
+  };
+
+  const spanAll = cols.length + 5;
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
+  return (
+    <tbody>
+      {/* Top padding row */}
+      {virtualItems.length > 0 && virtualItems[0].start > 0 && (
+        <tr><td colSpan={spanAll} style={{ height: virtualItems[0].start, padding: 0, border: 'none' }} /></tr>
+      )}
+
+      {virtualItems.map(vRow => {
+        const row = flatRows[vRow.index];
+        if (!row) return null;
+
+        // ── Group header ──
+        if (row.type === 'group-header') {
+          const { group } = row;
+          const collapsed = collapsedGroups.has(group.id);
+          return (
+            <tr key={row.id} style={{ height: ROW_HEIGHT, background: groupDropOver === group.id ? '#e8f0fe' : 'var(--bg-primary)', borderTop: groupDropOver === group.id ? '3px solid #0073ea' : '6px solid var(--bg-secondary)', cursor: isManager ? 'grab' : 'default' }}
+              draggable={isManager}
+              onDragStart={isManager ? e => handleGroupDragStart(e, group.id) : undefined}
+              onDragEnd={isManager ? handleGroupDragEnd : undefined}
+              onDragOver={e => handleGroupDragOver(e, group.id)}
+              onDrop={e => handleGroupDrop(e, group.id)}
+            >
+              <td colSpan={spanAll} style={{ padding: '0 8px 0 12px', borderLeft: `4px solid ${group.color}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => toggleGroup(group.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: group.color, transition: 'transform 0.15s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</button>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: group.color }}>{group.name}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: group.color, borderRadius: 10, padding: '1px 7px', opacity: 0.85 }}>{group.items?.length || 0}</span>
+                  {isManager && (
+                    <button
+                      onClick={() => { if (confirm('Delete this group and all its items?')) handleGroupDelete(group.id); }}
+                      style={{ marginLeft: 8, color: '#c5c7d0', fontSize: 12, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#e2445c'; e.currentTarget.style.borderColor = '#e2445c'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#c5c7d0'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
+                    >Delete group</button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        }
+
+        // ── Item row ──
+        if (row.type === 'item') {
+          const { item, group } = row;
+          const isDropTarget = dropTarget?.groupId === group.id && dropTarget?.beforeItemId === item.id;
+          return (
+            <React.Fragment key={row.id}>
+              {isDropTarget && <tr><td colSpan={spanAll} style={{ height: 3, background: '#0073ea', padding: 0 }} /></tr>}
+              <ItemRow
+                item={item}
+                group={group}
+                columns={cols}
+                canEdit={canEdit}
+                isManager={isManager}
+                onItemUpdate={handleItemUpdate}
+                onItemDelete={handleItemDelete}
+                onItemCopy={handleItemCopy}
+                onValueChange={handleValueChange}
+                onEditSettings={handleColumnSettingsSave}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onOpenDetail={setDetailItemId}
+                isSelected={selectedItems?.has(item.id)}
+                onToggleSelect={handleToggleSelect}
+                subitems={item.subitems || []}
+                isExpanded={expandedItems.has(item.id)}
+                onToggleExpand={() => toggleExpand(item.id)}
+              />
+            </React.Fragment>
+          );
+        }
+
+        // ── Subitem row ──
+        if (row.type === 'subitem') {
+          const { subitem, item, group } = row;
+          return (
+            <SubitemRow
+              key={row.id}
+              subitem={subitem}
+              group={group}
+              columns={cols}
+              canEdit={canEdit}
+              isManager={isManager}
+              onUpdate={(id, name) => handleSubitemUpdate(id, item.id, name)}
+              onDelete={(id) => handleSubitemDelete(id, item.id)}
+              onValueChange={(id, colId, val) => handleSubitemValueChange(id, item.id, colId, val)}
+              onOpenDetail={setDetailItemId}
+            />
+          );
+        }
+
+        // ── Add subitem ──
+        if (row.type === 'add-subitem') {
+          const { item, group } = row;
+          return (
+            <tr key={row.id} style={{ height: 32 }}>
+              <td colSpan={spanAll} style={{ paddingLeft: 60 }}>
+                {canEdit && (
+                  <button onClick={() => handleSubitemCreate(item.id, group.id, 'New subitem')}
+                    style={{ fontSize: 12, color: '#0073ea', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    + Add subitem
+                  </button>
+                )}
+              </td>
+            </tr>
+          );
+        }
+
+        // ── Add item row ──
+        if (row.type === 'add-item') {
+          const { group } = row;
+          return (
+            <tr key={row.id} style={{ height: 36, background: 'var(--bg-primary)' }}>
+              <td colSpan={spanAll} style={{ paddingLeft: 16, borderLeft: `4px solid ${group.color}` }}>
+                {canEdit && (
+                  addingInGroup === group.id ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        autoFocus
+                        value={newItemName}
+                        onChange={e => setNewItemName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddItem(group); if (e.key === 'Escape') { setAddingInGroup(null); setNewItemName(''); } }}
+                        onBlur={() => { if (newItemName.trim()) handleAddItem(group); else { setAddingInGroup(null); setNewItemName(''); } }}
+                        placeholder="Item name…"
+                        style={{ border: '1.5px solid #0073ea', borderRadius: 4, padding: '3px 8px', fontSize: 13, outline: 'none', background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                  ) : (
+                    <button onClick={() => { setAddingInGroup(group.id); setNewItemName(''); }}
+                      style={{ fontSize: 13, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}>
+                      + Add Item
+                    </button>
+                  )
+                )}
+              </td>
+            </tr>
+          );
+        }
+
+        return null;
+      })}
+
+      {/* Bottom padding row */}
+      {virtualItems.length > 0 && (() => {
+        const last = virtualItems[virtualItems.length - 1];
+        const bottom = totalSize - last.end;
+        return bottom > 0 ? <tr><td colSpan={spanAll} style={{ height: bottom, padding: 0, border: 'none' }} /></tr> : null;
+      })()}
+    </tbody>
+  );
+}
+
 // ── Main Board ────────────────────────────────────────────────────────────────
 export default function Board({ board, onBoardChange, openItemId, onOpenItemDone }) {
+  const scrollContainerRef = useRef(null);
   const [showAddColumn, setShowAddColumn] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
@@ -3584,7 +3809,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       )}
 
       {/* ── Board Content ── */}
-      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {groups.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: 52, marginBottom: 14 }}>📋</div>
@@ -3704,44 +3929,40 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               </tr>
             </thead>
 
-            {/* ── Groups ── */}
-            <tbody>
-              {filteredGroups.map(group => (
-                <GroupRows
-                  key={group.id}
-                  group={group}
-                  columns={cols}
-                  isManager={isManager}
-                  canEdit={canEdit}
-                  onGroupUpdate={handleGroupUpdate}
-                  onGroupDelete={handleGroupDelete}
-                  onItemCreate={handleItemCreate}
-                  onItemUpdate={handleItemUpdate}
-                  onItemDelete={handleItemDelete}
-                  onItemCopy={handleItemCopy}
-                  onValueChange={handleValueChange}
-                  onEditSettings={handleColumnSettingsSave}
-                  dropTarget={dropTarget}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                  onOpenDetail={setDetailItemId}
-                  isGroupDragSrc={groupDragSrc === group.id}
-                  isGroupDropOver={groupDropOver === group.id}
-                  onGroupDragStart={e => handleGroupDragStart(e, group.id)}
-                  onGroupDragEnd={handleGroupDragEnd}
-                  onGroupDragOver={e => handleGroupDragOver(e, group.id)}
-                  onGroupDrop={e => handleGroupDrop(e, group.id)}
-                  selectedItems={selectedItems}
-                  onToggleSelect={handleToggleSelect}
-                  onSubitemCreate={handleSubitemCreate}
-                  onSubitemUpdate={handleSubitemUpdate}
-                  onSubitemDelete={handleSubitemDelete}
-                  onSubitemValueChange={handleSubitemValueChange}
-                />
-              ))}
-            </tbody>
+            {/* ── Groups (virtualised) ── */}
+            <VirtualisedGroups
+              filteredGroups={filteredGroups}
+              cols={cols}
+              isManager={isManager}
+              canEdit={canEdit}
+              scrollContainerRef={scrollContainerRef}
+              dropTarget={dropTarget}
+              groupDragSrc={groupDragSrc}
+              groupDropOver={groupDropOver}
+              selectedItems={selectedItems}
+              handleGroupUpdate={handleGroupUpdate}
+              handleGroupDelete={handleGroupDelete}
+              handleItemCreate={handleItemCreate}
+              handleItemUpdate={handleItemUpdate}
+              handleItemDelete={handleItemDelete}
+              handleItemCopy={handleItemCopy}
+              handleValueChange={handleValueChange}
+              handleColumnSettingsSave={handleColumnSettingsSave}
+              handleDragStart={handleDragStart}
+              handleDragEnd={handleDragEnd}
+              handleDragOver={handleDragOver}
+              handleDrop={handleDrop}
+              setDetailItemId={setDetailItemId}
+              handleGroupDragStart={handleGroupDragStart}
+              handleGroupDragEnd={handleGroupDragEnd}
+              handleGroupDragOver={handleGroupDragOver}
+              handleGroupDrop={handleGroupDrop}
+              handleToggleSelect={handleToggleSelect}
+              handleSubitemCreate={handleSubitemCreate}
+              handleSubitemUpdate={handleSubitemUpdate}
+              handleSubitemDelete={handleSubitemDelete}
+              handleSubitemValueChange={handleSubitemValueChange}
+            />
           </table>
         )}
       </div>

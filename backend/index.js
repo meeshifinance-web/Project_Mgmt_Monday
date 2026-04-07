@@ -12,10 +12,10 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:     ["'self'", 'data:', 'https:'],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
     },
   },
@@ -39,6 +39,7 @@ app.use(session({
 // ── Rate limiter for API key requests ────────────────────────────────────────
 // Only active on requests that carry an X-API-Key header.
 // JWT-authenticated browser traffic is skipped entirely.
+app.set('trust proxy', 1);
 const rateLimit = require('express-rate-limit');
 const apiKeyRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -51,7 +52,7 @@ const apiKeyRateLimiter = rateLimit({
   keyGenerator: (req) => req.headers['x-api-key'] || req.ip,
   message: { error: 'Rate limit exceeded. See X-RateLimit-Limit header.' },
   standardHeaders: true,
-  legacyHeaders:   false,
+  legacyHeaders: false,
   skip: (req) => !req.headers['x-api-key'],
 });
 app.use('/api/', apiKeyRateLimiter);
@@ -74,13 +75,13 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api', require('./routes/forms'));
 app.use('/api/boards', require('./routes/exportImport'));
 app.use('/api/folders', require('./routes/folders'));
-app.use('/api/items',        require('./routes/itemEmails'));
+app.use('/api/items', require('./routes/itemEmails'));
 app.use('/api/global-trash', require('./routes/globalTrash'));
-app.use('/api/views',       require('./routes/views'));
-app.use('/api/keys',        require('./routes/apiKeys'));
-app.use('/api/files',       require('./routes/files'));
-app.use('/api/search',     require('./routes/search'));
-app.use('/api/my-work',   require('./routes/myWork'));
+app.use('/api/views', require('./routes/views'));
+app.use('/api/keys', require('./routes/apiKeys'));
+app.use('/api/files', require('./routes/files'));
+app.use('/api/search', require('./routes/search'));
+app.use('/api/my-work', require('./routes/myWork'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
