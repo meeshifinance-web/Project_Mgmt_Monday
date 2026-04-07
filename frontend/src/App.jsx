@@ -17,6 +17,7 @@ import PublicForm from './pages/PublicForm';
 import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, cloneBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
 import ApiKeysPanel from './components/ApiKeysPanel';
+import MyWorkPanel from './components/MyWorkPanel';
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 
@@ -281,6 +282,7 @@ function MainApp() {
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const [showGlobalTrash, setShowGlobalTrash] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
+  const [showMyWork, setShowMyWork] = useState(false);
   const [boardMenuId, setBoardMenuId] = useState(null);
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -697,6 +699,41 @@ const { resolvedTheme } = useThemeContext();
         )}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+          {/* My Work */}
+          {isNavCollapsed ? (
+            <div
+              onClick={() => setShowMyWork(true)}
+              title="My Work"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: 36, cursor: 'pointer',
+                background: showMyWork ? 'var(--sidebar-active-bg)' : 'transparent',
+                borderLeft: showMyWork ? '3px solid #0073ea' : '3px solid transparent',
+              }}
+              onMouseEnter={e => { if (!showMyWork) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = showMyWork ? 'var(--sidebar-active-bg)' : 'transparent'; }}
+            >
+              <span style={{ fontSize: 15 }}>👤</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowMyWork(true)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 16px', cursor: 'pointer', textAlign: 'left',
+                background: showMyWork ? 'var(--sidebar-active-bg)' : 'transparent',
+                borderLeft: showMyWork ? '3px solid #0073ea' : '3px solid transparent',
+                color: showMyWork ? 'var(--primary-blue)' : 'var(--sidebar-text)',
+                fontWeight: showMyWork ? 600 : 400, fontSize: 13,
+              }}
+              onMouseEnter={e => { if (!showMyWork) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = showMyWork ? 'var(--sidebar-active-bg)' : 'transparent'; }}
+            >
+              <span style={{ fontSize: 15, flexShrink: 0 }}>👤</span>
+              My Work
+            </button>
+          )}
+
           {/* Header row */}
           {!isNavCollapsed && (
             <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -977,6 +1014,17 @@ const { resolvedTheme } = useThemeContext();
           </div>
         )}
       </div>
+
+      {/* My Work panel */}
+      {showMyWork && (
+        <MyWorkPanel
+          onClose={() => setShowMyWork(false)}
+          onNavigateToBoard={(boardId) => {
+            loadBoard(boardId);
+            navigate(`/board/${boardId}`, { replace: true });
+          }}
+        />
+      )}
 
       {/* Global trash panel — boards + folders */}
       {showGlobalTrash && (

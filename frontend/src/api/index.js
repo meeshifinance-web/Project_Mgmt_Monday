@@ -152,6 +152,9 @@ export const generateApiKey = (data)     => api.post('/keys', data).then(r => r.
 export const revokeApiKey  = (id)        => api.delete(`/keys/${id}`).then(r => r.data);
 export const renameApiKey  = (id, name)  => api.put(`/keys/${id}/rename`, { name }).then(r => r.data);
 
+// ── My Work ───────────────────────────────────────────────────────────────────
+export const getMyWork = () => api.get('/my-work').then(r => r.data);
+
 // ── Files ──────────────────────────────────────────────────────────────────────
 export const uploadFile = (file) => {
   const fd = new FormData();
