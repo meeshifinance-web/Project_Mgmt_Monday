@@ -287,7 +287,7 @@ function MainApp() {
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cloneTargetBoard, setCloneTargetBoard] = useState(null);
-const { resolvedTheme } = useThemeContext();
+  const { resolvedTheme } = useThemeContext();
   const isDark = resolvedTheme === 'dark';
 
   const toggleNav = () => setIsNavCollapsed(v => {
@@ -626,7 +626,7 @@ const { resolvedTheme } = useThemeContext();
           flexShrink: 0,
           transition: 'width 0.2s ease',
           overflow: 'hidden',
-          borderRight: '1px solid var(--border-color)',
+          borderRight: '1px solid var(--sidebar-border)',
         }}
       >
         <div style={{
@@ -985,7 +985,7 @@ const { resolvedTheme } = useThemeContext();
               👁 Admin view
             </span>
           )}
-<NotificationBell onOpenItem={handleOpenItem} />
+          <NotificationBell onOpenItem={handleOpenItem} />
           <UserMenu />
         </div>
 

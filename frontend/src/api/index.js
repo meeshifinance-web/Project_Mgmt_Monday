@@ -48,6 +48,7 @@ export const reorderGroups = (boardId, orderedIds) => api.patch('/groups/reorder
 export const createItem = (data) => api.post('/items', data);
 export const updateItem = (id, data) => api.put(`/items/${id}`, data);
 export const deleteItem = (id) => api.delete(`/items/${id}`);
+export const copyItem   = (id) => api.post(`/items/${id}/copy`);
 export const moveItem   = (id, data) => api.patch(`/items/${id}/move`, data);
 
 // ── Columns ───────────────────────────────────────────────────────────────────

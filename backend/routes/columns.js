@@ -51,20 +51,28 @@ router.post('/', ...canWrite, async (req, res) => {
   }
 });
 
-// ── PUT /:id — update column title / settings ─────────────────────────────────
+// ── PUT /:id — update column title / settings / type ─────────────────────────
 router.put('/:id', ...canWrite, async (req, res) => {
-  const { title, settings } = req.body;
+  const { title, settings, type } = req.body;
   try {
-    // Resolve board so we can verify membership
     const colRes = await pool.query('SELECT board_id FROM columns WHERE id=$1', [req.params.id]);
     if (!colRes.rows.length) return res.status(404).json({ error: 'Column not found' });
 
     if (!(await canAccessBoard(colRes.rows[0].board_id, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
 
+    // Build update dynamically so callers can omit fields they don't want changed
+    const fields = [];
+    const params = [];
+    if (title    !== undefined) { fields.push(`title=$${params.push(title)}`); }
+    if (settings !== undefined) { fields.push(`settings=$${params.push(JSON.stringify(settings || {}))}`); }
+    if (type     !== undefined) { fields.push(`type=$${params.push(type)}`); }
+    if (!fields.length) return res.status(400).json({ error: 'Nothing to update' });
+    params.push(req.params.id);
+
     const { rows } = await pool.query(
-      'UPDATE columns SET title=$1, settings=$2 WHERE id=$3 RETURNING *',
-      [title, JSON.stringify(settings || {}), req.params.id]
+      `UPDATE columns SET ${fields.join(', ')} WHERE id=$${params.length} RETURNING *`,
+      params
     );
     res.json(rows[0]);
   } catch (err) {

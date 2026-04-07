@@ -6,9 +6,10 @@ import TrashPanel from './TrashPanel';
 import BoardMembersPanel from './BoardMembersPanel';
 import DefaultValueEditor from './DefaultValueEditor';
 import ItemDetailPanel from './ItemDetailPanel';
+import FormulaEditor from './FormulaEditor';
 import {
   createGroup, updateGroup, deleteGroup, reorderGroups,
-  createItem, updateItem, deleteItem, moveItem,
+  createItem, updateItem, deleteItem, copyItem, moveItem,
   createColumn, updateColumn, deleteColumn, reorderColumns,
   upsertColumnValue, updateBoard, updateBoardEmailSettings,
   getTrashItems, getAutomations,
@@ -346,8 +347,28 @@ function InlineEdit({ value, onSave, style, placeholder, singleClick = false }) 
 // ── Column header ─────────────────────────────────────────────────────────────
 const NO_DEFAULT_TYPES = ['formula', 'creation_log'];
 
-function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onToggleVisibility, isManager, sortConfig, onSort }) {
+const CHANGEABLE_TYPES = [
+  { value: 'text',         label: 'Text',          icon: '📝' },
+  { value: 'long_text',    label: 'Long Text',      icon: '📄' },
+  { value: 'number',       label: 'Number',         icon: '🔢' },
+  { value: 'email',        label: 'Email',          icon: '✉️' },
+  { value: 'phone',        label: 'Phone',          icon: '📞' },
+  { value: 'link',         label: 'Link',           icon: '🔗' },
+  { value: 'date',         label: 'Date',           icon: '📅' },
+  { value: 'checkbox',     label: 'Checkbox',       icon: '☑️' },
+  { value: 'rating',       label: 'Rating',         icon: '⭐' },
+  { value: 'status',       label: 'Status',         icon: '🔵' },
+  { value: 'dropdown',     label: 'Dropdown',       icon: '▼' },
+  { value: 'progress',     label: 'Progress',       icon: '📊' },
+  { value: 'tags',         label: 'Tags',           icon: '🏷️' },
+  { value: 'timeline',     label: 'Timeline',       icon: '📆' },
+  { value: 'color_picker', label: 'Color',          icon: '🎨' },
+  { value: 'formula',      label: 'Formula',        icon: '🧮' },
+];
+
+function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, onChangeType, onSetDefault, onToggleVisibility, isManager, sortConfig, onSort }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showTypePicker, setShowTypePicker] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -362,6 +383,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onT
       if (menuRef.current && !menuRef.current.contains(e.target) &&
           btnRef.current && !btnRef.current.contains(e.target)) {
         setMenuOpen(false);
+        setShowTypePicker(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -558,7 +580,60 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onSetDefault, onT
           </div>
 
           {isManager && menuItem(startRename, '✏️ Rename')}
+          {isManager && !['creation_log', 'person'].includes(col.type) && (
+            <div>
+              <div
+                onClick={() => setShowTypePicker(v => !v)}
+                style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: '#323338', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}
+              >
+                <span>🔄 Change Type</span>
+                <span style={{ fontSize: 10, color: '#9699a6' }}>{showTypePicker ? '▲' : '▼'}</span>
+              </div>
+              {showTypePicker && (
+                <div style={{ padding: '6px 10px 10px', borderTop: '1px solid #f0f0f0', borderBottom: '1px solid #f0f0f0', background: '#fafbfd' }}>
+                  <div style={{ fontSize: 10, color: '#9699a6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                    Select new type
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                    {CHANGEABLE_TYPES.map(t => {
+                      const isCurrent = col.type === t.value;
+                      return (
+                        <div
+                          key={t.value}
+                          onClick={() => {
+                            if (isCurrent) return;
+                            setMenuOpen(false);
+                            setShowTypePicker(false);
+                            onChangeType?.(col, t.value);
+                          }}
+                          title={t.label}
+                          style={{
+                            padding: '5px 4px', borderRadius: 6, textAlign: 'center',
+                            cursor: isCurrent ? 'default' : 'pointer',
+                            border: `1.5px solid ${isCurrent ? '#0073ea' : '#e0e3e8'}`,
+                            background: isCurrent ? '#e3f0ff' : '#fff',
+                            opacity: isCurrent ? 1 : 0.85,
+                          }}
+                          onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = '#f0f6ff'; }}
+                          onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = '#fff'; }}
+                        >
+                          <div style={{ fontSize: 14 }}>{t.icon}</div>
+                          <div style={{ fontSize: 9, marginTop: 2, color: isCurrent ? '#0073ea' : '#676879', fontWeight: isCurrent ? 700 : 400, lineHeight: 1.2 }}>{t.label}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#9699a6', marginTop: 7, lineHeight: 1.4 }}>
+                    Existing cell values are kept as-is.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {col.type === 'status' && menuItem(handleEditStatus, '🏷️ Edit Labels')}
+          {col.type === 'formula' && isManager && menuItem(() => { setMenuOpen(false); onEditFormula?.(col); }, '🧮 Edit Formula')}
           {col.type === 'person' && isManager && menuItem(
             handleToggleVisibility,
             col.settings?.isOwnerColumn ? '🔒 Visibility: ON' : '🔓 Visibility: OFF'
@@ -624,7 +699,7 @@ function colWidth(col) {
 }
 
 // ── Item row ──────────────────────────────────────────────────────────────────
-function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChange,
+function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
                    onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
                    isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand }) {
   const [hovered, setHovered] = useState(false);
@@ -644,15 +719,15 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChan
       <td style={{ width: 6, padding: 0, background: group.color, position: 'sticky', left: 0, zIndex: 2 }} />
       {/* Drag handle / checkbox */}
       <td style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid #e6e9ef', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
-        {hovered && !isSelected
-          ? <span style={{ color: '#c5c7d0', fontSize: 16, cursor: 'grab', userSelect: 'none', display: 'block', textAlign: 'center' }} title="Drag to reorder">⠿</span>
-          : <input
+        {hovered || isSelected
+          ? <input
               type="checkbox"
               checked={!!isSelected}
               onChange={e => { e.stopPropagation(); onToggleSelect?.(item.id); }}
               onClick={e => e.stopPropagation()}
               style={{ cursor: 'pointer', accentColor: group.color }}
             />
+          : <span style={{ color: '#c5c7d0', fontSize: 16, cursor: 'grab', userSelect: 'none', display: 'block', textAlign: 'center' }} title="Drag to reorder">⠿</span>
         }
       </td>
       {/* Item name */}
@@ -711,11 +786,21 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onValueChan
             onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager)) ? undefined : val => onValueChange(item.id, col.id, val, col.title)}
             onEditSettings={onEditSettings}
             item={item}
+            columns={columns}
           />
         </td>
       ))}
-      {/* Delete */}
-      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid #e6e9ef' }}>
+      {/* Copy + Delete */}
+      <td style={{ width: 64, textAlign: 'center', borderRight: '1px solid #e6e9ef', whiteSpace: 'nowrap' }}>
+        {canEdit && hovered && (
+          <button
+            onClick={e => { e.stopPropagation(); onItemCopy?.(item.id); }}
+            style={{ color: '#c5c7d0', fontSize: 13, lineHeight: 1, marginRight: 6, transition: 'color 0.15s' }}
+            title="Duplicate item"
+            onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+            onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
+          >⧉</button>
+        )}
         {canEdit && (
           <button onClick={() => onItemDelete(item.id)}
             style={{ color: hovered ? '#e2445c' : '#c5c7d0', fontSize: 18, lineHeight: 1, transition: 'color 0.15s' }}
@@ -858,7 +943,7 @@ function DropLine({ colSpan }) {
 }
 
 // ── Bulk action bar ───────────────────────────────────────────────────────────
-function BulkActionBar({ count, groups, onMove, onClear }) {
+function BulkActionBar({ count, groups, onMove, onDelete, onClear }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -923,6 +1008,20 @@ function BulkActionBar({ count, groups, onMove, onClear }) {
         )}
       </div>
 
+      {/* Delete selected */}
+      <button
+        onClick={onDelete}
+        style={{
+          background: 'transparent', border: '1px solid #3d5166', color: '#e2445c',
+          borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(226,68,92,0.15)'; e.currentTarget.style.borderColor = '#e2445c'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#3d5166'; }}
+      >
+        🗑 Delete
+      </button>
+
       <button
         onClick={onClear}
         style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #3d5166', color: '#c5c7d0', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer' }}
@@ -935,7 +1034,7 @@ function BulkActionBar({ count, groups, onMove, onClear }) {
 
 // ── Group rows (returns a fragment for tbody) ─────────────────────────────────
 function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupDelete,
-                     onItemCreate, onItemUpdate, onItemDelete, onValueChange,
+                     onItemCreate, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
                      onEditSettings, dropTarget, onDragStart, onDragEnd, onDragOver, onDrop, onOpenDetail,
                      isGroupDragSrc, isGroupDropOver,
                      onGroupDragStart, onGroupDragEnd, onGroupDragOver, onGroupDrop,
@@ -1056,6 +1155,7 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
             isManager={isManager}
             onItemUpdate={onItemUpdate}
             onItemDelete={onItemDelete}
+            onItemCopy={onItemCopy}
             onValueChange={onValueChange}
             onEditSettings={onEditSettings}
             onDragStart={onDragStart}
@@ -2384,6 +2484,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const [showTrash, setShowTrash] = useState(false);
   const [trashCount, setTrashCount] = useState(0);
   const [editingStatusCol, setEditingStatusCol] = useState(null);
+  const [editingFormulaCol, setEditingFormulaCol] = useState(null);
   const [defaultEditor, setDefaultEditor] = useState(null); // { col, anchorRect }
   const toast = useToast();
   const { isManager, canEdit } = useAuth();
@@ -2761,6 +2862,39 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     } catch { toast('Failed to delete item', 'error'); }
   };
 
+  const handleItemCopy = async (id) => {
+    try {
+      const r = await copyItem(id);
+      const newItem = { ...r.data, subitems: [] };
+      // Append copy at the end of the same group
+      updateLocalBoard(b => ({
+        groups: b.groups.map(g =>
+          g.items.some(i => i.id === id)
+            ? { ...g, items: [...g.items, newItem] }
+            : g
+        ),
+      }));
+      toast('Item duplicated', 'success');
+    } catch { toast('Failed to duplicate item', 'error'); }
+  };
+
+  const handleBulkDelete = async () => {
+    const itemIds = [...selectedItems];
+    if (!confirm(`Delete ${itemIds.length} selected item${itemIds.length !== 1 ? 's' : ''}? They will be moved to Trash.`)) return;
+    // Optimistic update
+    updateLocalBoard(b => ({
+      groups: b.groups.map(g => ({ ...g, items: g.items.filter(i => !itemIds.includes(i.id)) })),
+    }));
+    setSelectedItems(new Set());
+    setTrashCount(c => c + itemIds.length);
+    try {
+      await Promise.all(itemIds.map(id => deleteItem(id)));
+      toast(`${itemIds.length} item${itemIds.length !== 1 ? 's' : ''} moved to Trash`);
+    } catch {
+      toast('Some items could not be deleted', 'error');
+    }
+  };
+
   const handleTrashRestore = ({ item, group_id }) => {
     updateLocalBoard(b => ({
       groups: b.groups.map(g =>
@@ -2933,6 +3067,15 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     } catch { toast('Failed to delete column', 'error'); }
   };
 
+  const handleColumnTypeChange = async (col, newType) => {
+    if (col.type === newType) return;
+    try {
+      const r = await updateColumn(col.id, { type: newType });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === col.id ? r.data : c) }));
+      toast(`Column type changed to ${newType}`, 'success');
+    } catch { toast('Failed to change column type', 'error'); }
+  };
+
   const handleStatusOptionsSave = async (options) => {
     if (!editingStatusCol) return;
     try {
@@ -2944,6 +3087,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       setEditingStatusCol(null);
       toast('Status options saved', 'success');
     } catch { toast('Failed to save options', 'error'); }
+  };
+
+  const handleFormulaSave = async (newSettings) => {
+    if (!editingFormulaCol) return;
+    try {
+      const r = await updateColumn(editingFormulaCol.id, { title: editingFormulaCol.title, settings: newSettings });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === editingFormulaCol.id ? r.data : c) }));
+      setEditingFormulaCol(null);
+      toast('Formula saved', 'success');
+    } catch { toast('Failed to save formula', 'error'); }
   };
 
   // Called by StatusCell inline editor after a successful PUT /api/columns/:id
@@ -3485,6 +3638,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                       onRename={handleColumnRename}
                       onDelete={handleColumnDelete}
                       onEditStatus={setEditingStatusCol}
+                      onEditFormula={setEditingFormulaCol}
+                      onChangeType={handleColumnTypeChange}
                       onSetDefault={(c, anchorRect) => setDefaultEditor({ col: c, anchorRect })}
                       onToggleVisibility={handleColumnToggleVisibility}
                       isManager={isManager}
@@ -3528,6 +3683,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                   onItemCreate={handleItemCreate}
                   onItemUpdate={handleItemUpdate}
                   onItemDelete={handleItemDelete}
+                  onItemCopy={handleItemCopy}
                   onValueChange={handleValueChange}
                   onEditSettings={handleColumnSettingsSave}
                   dropTarget={dropTarget}
@@ -3561,6 +3717,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           count={selectedItems.size}
           groups={groups}
           onMove={handleBulkMove}
+          onDelete={handleBulkDelete}
           onClear={() => setSelectedItems(new Set())}
         />
       )}
@@ -3631,6 +3788,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           column={editingStatusCol}
           onSave={handleStatusOptionsSave}
           onClose={() => setEditingStatusCol(null)}
+        />
+      )}
+
+      {editingFormulaCol && (
+        <FormulaEditor
+          column={editingFormulaCol}
+          columns={board.columns || []}
+          previewItem={board.groups?.[0]?.items?.[0] || null}
+          onSave={handleFormulaSave}
+          onClose={() => setEditingFormulaCol(null)}
         />
       )}
 

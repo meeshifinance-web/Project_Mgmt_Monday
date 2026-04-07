@@ -261,6 +261,85 @@ router.delete('/:id', requireAuth, requireScope('full'), async (req, res) => {
   }
 });
 
+// ── POST /:id/copy — duplicate item with its column values ───────────────────
+router.post('/:id/copy', requireAuth, requireScope('write'), async (req, res) => {
+  if (READ_ONLY_ROLES.includes(req.user.role))
+    return res.status(403).json({ error: 'Read-only access — you cannot copy items' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Fetch source item + board
+    const srcRes = await client.query(
+      `SELECT i.*, g.board_id FROM items i JOIN groups g ON g.id = i.group_id WHERE i.id = $1`,
+      [req.params.id]
+    );
+    if (!srcRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    const src = srcRes.rows[0];
+
+    if (!(await canAccessBoard(src.board_id, req.user, pool))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Position: append at the end of the group (avoid fractional position on INT column)
+    const posRes = await client.query(
+      'SELECT COALESCE(MAX(position), 0) + 1 AS pos FROM items WHERE group_id = $1 AND parent_item_id IS NULL',
+      [src.group_id]
+    );
+    const newPos = posRes.rows[0].pos;
+
+    // Create copied item
+    const newItemRes = await client.query(
+      `INSERT INTO items (group_id, name, position, created_by_user_id, created_by_user_name, parent_item_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [src.group_id, `Copy of ${src.name}`, newPos,
+       req.user.id, req.user.name, src.parent_item_id || null]
+    );
+    const newItem = newItemRes.rows[0];
+
+    // Copy column values — skip creation_log type columns
+    const cvRes = await client.query(
+      `SELECT cv.column_id, cv.value
+       FROM column_values cv
+       JOIN columns c ON c.id = cv.column_id AND c.type <> 'creation_log'
+       WHERE cv.item_id = $1`,
+      [src.id]
+    );
+    newItem.values = {};
+    for (const cv of cvRes.rows) {
+      await client.query(
+        `INSERT INTO column_values (item_id, column_id, value) VALUES ($1, $2, $3)`,
+        [newItem.id, cv.column_id, cv.value]
+      );
+      newItem.values[cv.column_id] = cv.value;
+    }
+
+    await logActivity(client, {
+      board_id: src.board_id,
+      user_id: req.user.id,
+      user_name: req.user.name,
+      item_id: newItem.id,
+      item_name: newItem.name,
+      action: 'item_created',
+    });
+
+    await client.query('COMMIT');
+    newItem.subitems = [];
+    res.status(201).json(newItem);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
 // ── PATCH /:id/move — drag between groups / reorder ──────────────────────────
 router.patch('/:id/move', requireAuth, async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
