@@ -80,6 +80,7 @@ app.use('/api/views',       require('./routes/views'));
 app.use('/api/keys',        require('./routes/apiKeys'));
 app.use('/api/files',       require('./routes/files'));
 app.use('/api/search',     require('./routes/search'));
+app.use('/api/my-work',   require('./routes/myWork'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

@@ -48,6 +48,7 @@ export const reorderGroups = (boardId, orderedIds) => api.patch('/groups/reorder
 export const createItem = (data) => api.post('/items', data);
 export const updateItem = (id, data) => api.put(`/items/${id}`, data);
 export const deleteItem = (id) => api.delete(`/items/${id}`);
+export const copyItem   = (id) => api.post(`/items/${id}/copy`);
 export const moveItem   = (id, data) => api.patch(`/items/${id}/move`, data);
 
 // ── Columns ───────────────────────────────────────────────────────────────────
@@ -151,6 +152,9 @@ export const getApiKeys    = ()           => api.get('/keys').then(r => r.data);
 export const generateApiKey = (data)     => api.post('/keys', data).then(r => r.data);
 export const revokeApiKey  = (id)        => api.delete(`/keys/${id}`).then(r => r.data);
 export const renameApiKey  = (id, name)  => api.put(`/keys/${id}/rename`, { name }).then(r => r.data);
+
+// ── My Work ───────────────────────────────────────────────────────────────────
+export const getMyWork = () => api.get('/my-work').then(r => r.data);
 
 // ── Files ──────────────────────────────────────────────────────────────────────
 export const uploadFile = (file) => {

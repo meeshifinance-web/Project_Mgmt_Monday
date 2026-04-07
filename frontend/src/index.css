@@ -1,7 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap');
 
 /* ── CSS Variables — Light Theme (default) ───────────────────────────────── */
-:root, [data-theme="light"] {
+:root,
+[data-theme="light"] {
   --bg-primary: #ffffff;
   --bg-secondary: #f6f7fb;
   --bg-sidebar: #ffffff;
@@ -11,7 +12,7 @@
   --card-bg: #ffffff;
   --input-bg: #ffffff;
   --hover-bg: #f0f2f8;
-  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   --primary-blue: #0073ea;
   --primary-blue-hover: #0060c0;
   --success-green: #00c875;
@@ -22,50 +23,56 @@
 
   /* Sidebar-specific */
   --sidebar-text: #323338;
-  --sidebar-text-muted: rgba(50,51,56,0.45);
-  --sidebar-border: rgba(0,0,0,0.09);
-  --sidebar-hover: rgba(0,0,0,0.04);
-  --sidebar-active-bg: rgba(0,115,234,0.08);
-  --sidebar-input-bg: rgba(0,0,0,0.05);
-  --sidebar-input-border: rgba(0,0,0,0.18);
-  --sidebar-btn-bg: rgba(0,0,0,0.07);
-  --sidebar-btn-hover: rgba(0,0,0,0.13);
+  --sidebar-text-muted: rgba(50, 51, 56, 0.45);
+  --sidebar-border: rgba(255, 255, 255, 0.10);
+  --sidebar-hover: rgba(0, 0, 0, 0.04);
+  --sidebar-active-bg: rgba(0, 115, 234, 0.08);
+  --sidebar-input-bg: rgba(0, 0, 0, 0.05);
+  --sidebar-input-border: rgba(0, 0, 0, 0.18);
+  --sidebar-btn-bg: rgba(0, 0, 0, 0.07);
+  --sidebar-btn-hover: rgba(0, 0, 0, 0.13);
 }
 
 /* ── CSS Variables — Dark Theme ──────────────────────────────────────────── */
 [data-theme="dark"] {
-  --bg-primary: #1a1f2e;
-  --bg-secondary: #151929;
-  --bg-sidebar: #151929;
-  --text-primary: #e8eaf0;
-  --text-secondary: #9ba5b4;
-  --border-color: #2d3548;
-  --card-bg: #1f2840;
-  --input-bg: #252d42;
-  --hover-bg: #252d42;
-  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+  --bg-primary: #22254b;
+  --bg-secondary: #1b1e3d;
+  --bg-sidebar: #1b1e3d;
+  --text-primary: #d5d8f0;
+  --text-secondary: #7c85c0;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --card-bg: #2a2e57;
+  --input-bg: #2a2e57;
+  --hover-bg: rgba(255, 255, 255, 0.06);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   --primary-blue: #0073ea;
   --primary-blue-hover: #0060c0;
   --success-green: #00c875;
   --warning-orange: #fdab3d;
   --error-red: #e2445c;
   --purple: #a358df;
-  --text-muted: #c5cdd8;
+  --text-muted: #4a5180;
 
   /* Sidebar-specific */
-  --sidebar-text: #e8eaf0;
-  --sidebar-text-muted: rgba(232,234,240,0.4);
-  --sidebar-border: rgba(255,255,255,0.08);
-  --sidebar-hover: rgba(255,255,255,0.05);
-  --sidebar-active-bg: rgba(0,115,234,0.18);
-  --sidebar-input-bg: rgba(255,255,255,0.08);
-  --sidebar-input-border: rgba(255,255,255,0.2);
-  --sidebar-btn-bg: rgba(255,255,255,0.08);
-  --sidebar-btn-hover: rgba(255,255,255,0.16);
+  --sidebar-text: #d5d8f0;
+  --sidebar-text-muted: rgba(213, 216, 240, 0.4);
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-active-bg: rgba(0, 115, 234, 0.20);
+  --sidebar-input-bg: rgba(255, 255, 255, 0.07);
+  --sidebar-input-border: rgba(255, 255, 255, 0.15);
+  --sidebar-btn-bg: rgba(255, 255, 255, 0.07);
+  --sidebar-btn-hover: rgba(255, 255, 255, 0.13);
 }
 
 /* ── Base Reset ───────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 html {
   transition: background-color 0.2s, color 0.2s;
@@ -80,61 +87,107 @@ body {
   transition: background-color 0.2s, color 0.2s;
 }
 
-button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; }
-input, textarea, select { font-family: inherit; font-size: inherit; }
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+}
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #c4c4c4; border-radius: 3px; }
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c4c4c4;
+  border-radius: 3px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #3a3f6e;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DARK THEME — CSS !important overrides for hardcoded inline styles
-   (CSS !important beats inline style that has no !important)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Table structure ──────────────────────────────────────────────────────── */
 [data-theme="dark"] table {
   background-color: var(--bg-primary) !important;
 }
+
 [data-theme="dark"] thead tr,
 [data-theme="dark"] th {
   background-color: var(--bg-secondary) !important;
   border-color: var(--border-color) !important;
   color: var(--text-secondary) !important;
 }
+
 [data-theme="dark"] tbody tr {
   background-color: var(--bg-primary) !important;
   border-color: var(--border-color) !important;
 }
+
 [data-theme="dark"] tbody tr:hover {
   background-color: var(--hover-bg) !important;
 }
+
 [data-theme="dark"] td {
   border-color: var(--border-color) !important;
 }
+
 /* Group color stripe (first-child td) keeps its group.color background */
 [data-theme="dark"] td:not(:first-child) {
   background-color: transparent !important;
   color: var(--text-primary) !important;
 }
+
 /* Text inside table cells — override hardcoded dark colors */
 [data-theme="dark"] tbody td span,
 [data-theme="dark"] tbody td div,
 [data-theme="dark"] tbody td label {
   color: var(--text-primary) !important;
 }
+
 [data-theme="dark"] tbody td input:not([type="checkbox"]) {
   color: var(--text-primary) !important;
   background-color: var(--input-bg) !important;
 }
-/* Preserve colored pill/chip text (status cells keep their explicit white/colored text) */
+
+/* Preserve colored pill/chip text */
 [data-theme="dark"] thead th span,
 [data-theme="dark"] thead th div {
   color: var(--text-secondary) !important;
 }
 
+/* ── Modals & cards ───────────────────────────────────────────────────────── */
+[data-theme="dark"] .modal,
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:white"],
+[data-theme="dark"] [style*="background: white"] {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
 /* ── Inputs & form elements ───────────────────────────────────────────────── */
-/* Cover all input types, including those without an explicit type attribute  */
 [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]),
 [data-theme="dark"] textarea,
 [data-theme="dark"] select {
@@ -142,43 +195,81 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
 }
+
 [data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"])::placeholder,
 [data-theme="dark"] textarea::placeholder {
   color: var(--text-secondary) !important;
   opacity: 1;
 }
 
+/* ── Dropdown menus & popups ─────────────────────────────────────────────── */
+[data-theme="dark"] [style*="background:'#fff'"],
+[data-theme="dark"] [style*='background:"#fff"'] {
+  background-color: var(--card-bg) !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MOBILE RESPONSIVE — Phase 1
-   All desktop layout is driven by inline styles; these rules add mobile
-   behaviour on top with !important where needed to beat inline styles.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Login Page ──────────────────────────────────────────────────────────── */
 @keyframes loginFadeIn {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.login-left-panel   { display: flex; flex-direction: column; }
-.login-mobile-logo  { display: none !important; }
-.login-pwd-toggle   { min-height: unset !important; height: auto !important; padding: 0 !important; }
+.login-left-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-mobile-logo {
+  display: none !important;
+}
+
+.login-pwd-toggle {
+  min-height: unset !important;
+  height: auto !important;
+  padding: 0 !important;
+}
 
 /* ── Desktop defaults for mobile-specific elements ───────────────────────── */
-.mobile-hamburger   { display: none; }
-.sidebar-close-btn  { display: none; }
-.sidebar-overlay    { display: none; }
+.mobile-hamburger {
+  display: none;
+}
+
+.sidebar-close-btn {
+  display: none;
+}
+
+.sidebar-overlay {
+  display: none;
+}
 
 /* ── Mobile breakpoint ───────────────────────────────────────────────────── */
 @media (max-width: 768px) {
 
   /* Base resets */
-  * { -webkit-tap-highlight-color: transparent; }
-  body { overflow-x: hidden; }
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
 
   /* ── Sidebar drawer ────────────────────────────────────────────────────── */
   .app-sidebar {
@@ -194,6 +285,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     overflow-y: auto !important;
     overflow-x: hidden !important;
   }
+
   .app-sidebar.sidebar-open {
     transform: translateX(0) !important;
   }
@@ -221,7 +313,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     background: var(--sidebar-btn-bg);
     transition: background 0.15s;
   }
-  .sidebar-close-btn:active { background: var(--sidebar-btn-hover); }
+
+  .sidebar-close-btn:active {
+    background: var(--sidebar-btn-hover);
+  }
 
   /* ── Hamburger button ──────────────────────────────────────────────────── */
   .mobile-hamburger {
@@ -237,7 +332,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     color: var(--text-primary);
     transition: background 0.15s;
   }
-  .mobile-hamburger:active { background: var(--hover-bg); }
+
+  .mobile-hamburger:active {
+    background: var(--hover-bg);
+  }
 
   /* ── Top bar adjustments ───────────────────────────────────────────────── */
   .app-topbar {
@@ -255,11 +353,20 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   }
 
   /* Touch targets — all interactive elements at least 44px tall */
-  button, a, [role="button"] { min-height: 44px; }
+  button,
+  a,
+  [role="button"] {
+    min-height: 44px;
+  }
 
   /* ── Login page responsive ─────────────────────────────────────────────── */
-  .login-left-panel  { display: none !important; }
-  .login-mobile-logo { display: flex !important; }
+  .login-left-panel {
+    display: none !important;
+  }
+
+  .login-mobile-logo {
+    display: flex !important;
+  }
 
   /* Prevent iOS auto-zoom on inputs */
   input[type="text"],

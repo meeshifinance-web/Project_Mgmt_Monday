@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { updateColumn, uploadFile, deleteFile } from '../api';
+import { evaluateFormula } from '../utils/formulaEngine';
 
 const STAR = '★';
 const STAR_E = '☆';
@@ -798,7 +799,36 @@ function FileCell({ value, onChange }) {
   );
 }
 
-export default function ColumnCell({ column, value, onChange, onEditSettings, item }) {
+// ── Formula cell — computed read-only display ─────────────────────────────────
+function FormulaCell({ column, item, columns }) {
+  const formula = column?.settings?.formula || '';
+  if (!formula.trim()) {
+    return (
+      <div style={{ padding: '3px 6px', color: '#c5c7d0', fontSize: 11, fontStyle: 'italic' }}
+           title="No formula set — click column header ▸ Edit Formula">
+        formula…
+      </div>
+    );
+  }
+  const result = evaluateFormula(formula, item, columns);
+  const isErr = result.startsWith('#');
+  return (
+    <div
+      title={isErr ? result : formula}
+      style={{
+        padding: '3px 6px', fontSize: 12,
+        color: isErr ? '#e2445c' : 'var(--text-primary)',
+        fontFamily: isErr ? 'monospace' : 'inherit',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        maxWidth: 200,
+      }}
+    >
+      {result || <span style={{ color: '#c5c7d0' }}>—</span>}
+    </div>
+  );
+}
+
+export default function ColumnCell({ column, value, onChange, onEditSettings, item, columns }) {
   const { type, settings } = column;
 
   switch (type) {
@@ -841,7 +871,7 @@ export default function ColumnCell({ column, value, onChange, onEditSettings, it
         </div>
       );
     case 'formula':
-      return <div style={{ padding: '3px 4px', color: '#7b7e8f', fontStyle: 'italic', fontSize: 12 }}>{value || '—'}</div>;
+      return <FormulaCell column={column} item={item} columns={columns || []} />;
     case 'person':
       return <PersonCell value={value} settings={settings} onChange={onChange} />;
     case 'file':
