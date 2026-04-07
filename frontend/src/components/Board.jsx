@@ -731,7 +731,7 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
         }
       </td>
       {/* Item name */}
-      <td style={{ padding: '4px 8px 4px 8px', borderRight: 'none', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
+      <td style={{ padding: '4px 8px 4px 8px', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {/* Expand/collapse toggle for subitems */}
           <button
@@ -746,18 +746,31 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
               border: 'none', background: 'transparent', cursor: 'pointer',
             }}
           >▶</button>
-          {hovered && (
-            <button
-              onClick={e => { e.stopPropagation(); onOpenDetail(item.id); }}
-              title="Open detail panel"
-              style={{
-                flexShrink: 0, width: 20, height: 20, borderRadius: 4,
-                background: '#0073ea', color: '#fff', fontSize: 11,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: 'none', cursor: 'pointer',
-              }}
-            >⊡</button>
-          )}
+          <button
+            onClick={e => { e.stopPropagation(); onOpenDetail(item.id); }}
+            title={item.comment_count > 0 ? `${item.comment_count} comment${item.comment_count !== 1 ? 's' : ''}` : 'Open updates'}
+            style={{
+              flexShrink: 0, position: 'relative',
+              width: 22, height: 22, borderRadius: 4,
+              background: hovered ? 'var(--hover-bg)' : 'transparent',
+              color: item.comment_count > 0 ? '#0073ea' : (hovered ? '#676879' : 'transparent'),
+              fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: 'none', cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
+            }}
+          >
+            💬
+            {item.comment_count > 0 && (
+              <span style={{
+                position: 'absolute', top: -4, right: -4,
+                background: '#0073ea', color: '#fff',
+                fontSize: 9, fontWeight: 700,
+                borderRadius: 8, padding: '1px 4px',
+                lineHeight: 1.4, minWidth: 14, textAlign: 'center',
+              }}>
+                {item.comment_count > 99 ? '99+' : item.comment_count}
+              </span>
+            )}
+          </button>
           {canEdit
             ? <InlineEdit value={item.name} onSave={name => onItemUpdate(item.id, name)} singleClick
               style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }} />
@@ -778,23 +791,25 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
         </div>
       </td>
       {/* Data columns */}
-      {columns.map(col => (
-        // <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef' }}>
-        <td key={col.id} style={{
-          padding: (col.type === 'status' || col.type === 'priority') ? 0 : '3px 6px',
-          borderRight: '1px solid var(--border-color)',
-          height: 34,
-        }}>
-          <ColumnCell
-            column={col}
-            value={item.values?.[col.id] || ''}
-            onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager)) ? undefined : val => onValueChange(item.id, col.id, val, col.title)}
-            onEditSettings={onEditSettings}
-            item={item}
-            columns={columns}
-          />
-        </td>
-      ))}
+      {
+        columns.map(col => (
+          // <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef' }}>
+          <td key={col.id} style={{
+            padding: (col.type === 'status' || col.type === 'priority') ? 0 : '3px 6px',
+            borderRight: '1px solid var(--border-color)',
+            height: 34,
+          }}>
+            <ColumnCell
+              column={col}
+              value={item.values?.[col.id] || ''}
+              onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager)) ? undefined : val => onValueChange(item.id, col.id, val, col.title)}
+              onEditSettings={onEditSettings}
+              item={item}
+              columns={columns}
+            />
+          </td>
+        ))
+      }
       {/* Copy + Delete */}
       <td style={{ width: 64, textAlign: 'center', borderRight: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>
         {canEdit && hovered && (
@@ -813,7 +828,7 @@ function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy,
         )}
       </td>
       <td />
-    </tr>
+    </tr >
   );
 }
 
@@ -1138,7 +1153,7 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
             {isManager && (
               <button
                 onClick={() => onGroupDelete(group.id)}
-                style={{ marginLeft: 8, color: '#c5c7d0', fontSize: 12, padding: '2px 8px', borderRadius: 4, border: '1px solid #e6e9ef', background: '#fff' }}
+                style={{ marginLeft: 8, color: '#c5c7d0', fontSize: 12, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#e2445c'; e.currentTarget.style.borderColor = '#e2445c'; }}
                 onMouseLeave={e => { e.currentTarget.style.color = '#c5c7d0'; e.currentTarget.style.borderColor = '#e6e9ef'; }}
               >Delete group</button>
@@ -1382,7 +1397,7 @@ function VisibilityBadge({ visibility, onChange, isManager }) {
         padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
         border: `1.5px solid ${isPrivate ? '#a25ddc' : '#00c875'}`,
         color: isPrivate ? '#a25ddc' : '#037f4c',
-        background: isPrivate ? '#f5eeff' : '#e8f7ee',
+        background: isPrivate ? 'rgba(162,93,220,0.15)' : 'rgba(0,200,117,0.15)',
         cursor: isManager ? 'pointer' : 'default',
       }}
       title={isManager ? `Click to make ${isPrivate ? 'Org-wide' : 'Private'}` : undefined}
@@ -1727,18 +1742,18 @@ function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols })
   }));
 
   const filterBtn = (label, isActive) => ({
-    border: `1px solid ${isActive ? '#0073ea' : '#c8dfff'}`,
+    border: `1px solid ${isActive ? '#0073ea' : 'var(--border-color)'}`,
     borderRadius: 20, padding: '5px 12px', fontSize: 13,
-    background: isActive ? '#e8f0fe' : '#fff',
-    color: isActive ? '#0073ea' : '#323338',
+    background: isActive ? '#e8f0fe' : 'var(--bg-primary)',
+    color: isActive ? '#0073ea' : 'var(--text-primary)',
     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
   });
 
   const dropdownBase = {
     position: 'absolute', top: 'calc(100% + 6px)', left: 0,
-    background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+    background: 'var(--card-bg)', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
     zIndex: 100, minWidth: 200, maxHeight: 280, overflowY: 'auto',
-    border: '1px solid #e0e3e8',
+    border: '1px solid var(--border-color)',
   };
 
 
@@ -3399,10 +3414,10 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             const isActive = filterPanelOpen || totalCount > 0;
             return (
               <button onClick={() => setFilterPanelOpen(f => !f)} style={{
-                padding: '5px 12px', border: `1.5px solid ${isActive ? '#0073ea' : '#e6e9ef'}`,
+                padding: '5px 12px', border: `1.5px solid ${isActive ? '#0073ea' : 'var(--border-color)'}`,
                 borderRadius: 6, fontSize: 12, fontWeight: 600,
                 color: isActive ? '#0073ea' : '#676879',
-                background: isActive ? '#e8f0fe' : '#fff',
+                background: isActive ? '#e8f0fe' : 'var(--bg-primary)',
                 display: 'flex', alignItems: 'center', gap: 5,
               }}>
                 🔽 Filter{totalCount > 0 ? ` (${totalCount})` : ''}
@@ -3455,7 +3470,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           {/* Export / Import */}
           <button onClick={handleExport} style={{
             padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-            fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+            fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
             display: 'flex', alignItems: 'center', gap: 5,
           }}>⬇️ Export</button>
 
@@ -3466,7 +3481,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                 disabled={importing}
                 style={{
                   padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-                  fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+                  fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
                   display: 'flex', alignItems: 'center', gap: 5,
                   opacity: importing ? 0.6 : 1, cursor: importing ? 'not-allowed' : 'pointer',
                 }}
@@ -3495,12 +3510,12 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
             <button onClick={() => setShowMembers(true)} style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-              fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+              padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
+              fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
             }}>👥 {board.members?.length || 0} Members</button>
             <button onClick={() => setShowActivityLog(true)} style={{
-              padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-              fontSize: 12, fontWeight: 600, color: '#676879', background: '#fff',
+              padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
+              fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
             }}>📋 Activity</button>
             <button
               onClick={() => setShowTrash(true)}
@@ -3508,7 +3523,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                 padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                 border: `1.5px solid ${trashCount > 0 ? '#e2445c' : '#e6e9ef'}`,
                 color: trashCount > 0 ? '#e2445c' : '#676879',
-                background: trashCount > 0 ? '#fff5f7' : '#fff',
+                background: trashCount > 0 ? '#fff5f7' : 'var(--bg-primary)',
                 display: 'flex', alignItems: 'center', gap: 5,
               }}
             >

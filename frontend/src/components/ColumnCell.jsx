@@ -655,7 +655,7 @@ function PersonCell({ value, settings, onChange }) {
           ? <span style={{ color: '#ccc', fontSize: 12 }}>—</span>
           : null}
         {!readOnly && options.length > 0 && (
-          <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#999' }}>+</div>
+          <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: 'var(--text-secondary)' }}>+</div>
         )}
       </div>
 
