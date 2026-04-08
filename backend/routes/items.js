@@ -384,30 +384,38 @@ router.patch('/:id/move', requireAuth, async (req, res) => {
     if (oldGroupId === newGroupId) {
       // ── Reorder within same group ──────────────────────────────────────────
       const { rows } = await client.query(
-        'SELECT id FROM items WHERE group_id=$1 ORDER BY position', [newGroupId]
+        'SELECT id FROM items WHERE group_id=$1 ORDER BY position FOR UPDATE', [newGroupId]
       );
       const ids = rows.map(r => r.id).filter(id => id !== parseInt(req.params.id));
       ids.splice(Math.min(newPos, ids.length), 0, parseInt(req.params.id));
-      for (let i = 0; i < ids.length; i++) {
-        await client.query('UPDATE items SET position=$1 WHERE id=$2', [i, ids[i]]);
+      // Build position map then update in ascending ID order to prevent deadlocks
+      const posMap = new Map(ids.map((id, i) => [id, i]));
+      for (const id of [...ids].sort((a, b) => a - b)) {
+        await client.query('UPDATE items SET position=$1 WHERE id=$2', [posMap.get(id), id]);
       }
     } else {
       // ── Move to different group ────────────────────────────────────────────
       const { rows: src } = await client.query(
-        'SELECT id FROM items WHERE group_id=$1 AND id!=$2 ORDER BY position',
-        [oldGroupId, req.params.id]
+        'SELECT id FROM items WHERE group_id=$1 ORDER BY position FOR UPDATE',
+        [oldGroupId]
       );
-      for (let i = 0; i < src.length; i++) {
-        await client.query('UPDATE items SET position=$1 WHERE id=$2', [i, src[i].id]);
-      }
       const { rows: tgt } = await client.query(
-        'SELECT id FROM items WHERE group_id=$1 ORDER BY position', [newGroupId]
+        'SELECT id FROM items WHERE group_id=$1 ORDER BY position FOR UPDATE', [newGroupId]
       );
-      const ids = tgt.map(r => r.id);
-      ids.splice(Math.min(newPos, ids.length), 0, parseInt(req.params.id));
-      for (let i = 0; i < ids.length; i++) {
+      // Build all updates
+      const srcIds = src.map(r => r.id).filter(id => id !== parseInt(req.params.id));
+      const tgtIds = tgt.map(r => r.id);
+      tgtIds.splice(Math.min(newPos, tgtIds.length), 0, parseInt(req.params.id));
+
+      // Collect all updates, then apply in ascending ID order to prevent deadlocks
+      const updates = [
+        ...srcIds.map((id, i) => ({ id, group_id: oldGroupId, position: i })),
+        ...tgtIds.map((id, i) => ({ id, group_id: newGroupId, position: i })),
+      ].sort((a, b) => a.id - b.id);
+
+      for (const u of updates) {
         await client.query('UPDATE items SET group_id=$1, position=$2 WHERE id=$3',
-          [newGroupId, i, ids[i]]);
+          [u.group_id, u.position, u.id]);
       }
       await logActivity(client, {
         board_id: item.board_id,
