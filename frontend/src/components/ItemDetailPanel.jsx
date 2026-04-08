@@ -541,7 +541,7 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
     ...rootComments.map(c => ({ ...c, _type: 'comment' })),
     ...activity.map(a =>    ({ ...a, _type: 'activity' })),
     ...emails.map(e =>      ({ ...e, _type: 'email' })),
-  ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   const fieldColumns = columns.filter(c => c.type !== 'creation_log');
 

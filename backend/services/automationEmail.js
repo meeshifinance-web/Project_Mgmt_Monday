@@ -165,12 +165,14 @@ async function sendAutomationEmail({ boardId, itemId, to, toType, toColumnId, su
     const from = board.email_from || process.env.EMAIL_FROM || process.env.EMAIL_USER;
 
     // 5. Send
+    const port = parseInt(process.env.EMAIL_PORT) || 587;
     const transporter = nodemailer.createTransport({
-      host:   process.env.EMAIL_HOST,
-      port:   parseInt(process.env.EMAIL_PORT) || 587,
-      secure: false,
-      auth:   { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-      tls:    { rejectUnauthorized: false },
+      host:       process.env.EMAIL_HOST,
+      port,
+      secure:     port === 465,        // true only for SSL (465), not STARTTLS (587)
+      requireTLS: port !== 465,        // force STARTTLS on 587 — required by Office 365
+      auth:       { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      tls:        { rejectUnauthorized: false },
     });
 
     await transporter.sendMail({
@@ -191,7 +193,9 @@ async function sendAutomationEmail({ boardId, itemId, to, toType, toColumnId, su
 
     console.log(`[AutomationEmail] ✅ Sent to <${resolvedTo}> | subject: "${resolvedSubject}"`);
   } catch (err) {
-    console.error('[AutomationEmail] Send error:', err.message);
+    console.error('[AutomationEmail] ❌ Send error:', err.message);
+    if (err.code) console.error('[AutomationEmail]    Code:', err.code);
+    if (err.response) console.error('[AutomationEmail]    SMTP response:', err.response);
   }
 }
 

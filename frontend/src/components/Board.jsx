@@ -634,6 +634,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
             </div>
           )}
           {col.type === 'status' && menuItem(handleEditStatus, '🏷️ Edit Labels')}
+          {col.type === 'dropdown' && isManager && menuItem(handleEditStatus, '⚙️ Edit Options')}
           {col.type === 'formula' && isManager && menuItem(() => { setMenuOpen(false); onEditFormula?.(col); }, '🧮 Edit Formula')}
           {col.type === 'person' && isManager && menuItem(
             handleToggleVisibility,
@@ -2603,7 +2604,13 @@ function VirtualisedGroups({
               <td colSpan={spanAll} style={{ padding: '0 8px 0 12px', borderLeft: `4px solid ${group.color}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button onClick={() => toggleGroup(group.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: group.color, transition: 'transform 0.15s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</button>
-                  <span style={{ fontWeight: 700, fontSize: 14, color: group.color }}>{group.name}</span>
+                  <InlineEdit
+                    value={group.name}
+                    onSave={name => handleGroupUpdate(group.id, { name, color: group.color })}
+                    singleClick={isManager}
+                    style={{ fontWeight: 700, fontSize: 14, color: group.color }}
+                    placeholder="Group name"
+                  />
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: group.color, borderRadius: 10, padding: '1px 7px', opacity: 0.85 }}>{group.items?.length || 0}</span>
                   {isManager && (
                     <button
@@ -3345,7 +3352,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       });
       updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === editingStatusCol.id ? r.data : c) }));
       setEditingStatusCol(null);
-      toast('Status options saved', 'success');
+      toast(`${editingStatusCol.type === 'dropdown' ? 'Dropdown' : 'Status'} options saved`, 'success');
     } catch { toast('Failed to save options', 'error'); }
   };
 
@@ -3510,7 +3517,13 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     });
   };
 
-  const cols = board.columns || [];
+  // Enrich person columns with board members as fallback options
+  const memberNames = (board.members || []).map(m => m.name).filter(Boolean);
+  const cols = (board.columns || []).map(col =>
+    col.type === 'person' && memberNames.length && !col.settings?.options?.length
+      ? { ...col, settings: { ...(col.settings || {}), options: memberNames } }
+      : col
+  );
   const groups = board.groups || [];
 
   // Apply text-search filters (existing)

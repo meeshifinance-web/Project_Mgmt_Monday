@@ -41,6 +41,7 @@ app.use(session({
 // JWT-authenticated browser traffic is skipped entirely.
 app.set('trust proxy', 1);
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 const apiKeyRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: (req) => {
@@ -49,7 +50,7 @@ const apiKeyRateLimiter = rateLimit({
     // Fine-grained enforcement is done post-auth inside requireScope.
     return 2000;
   },
-  keyGenerator: (req) => req.headers['x-api-key'] || req.ip,
+  keyGenerator: (req) => req.headers['x-api-key'] || ipKeyGenerator(req.ip),
   message: { error: 'Rate limit exceeded. See X-RateLimit-Limit header.' },
   standardHeaders: true,
   legacyHeaders: false,
