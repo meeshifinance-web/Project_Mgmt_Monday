@@ -171,10 +171,15 @@ select {
 }
 
 /* Text inside table cells — override hardcoded dark colors */
-[data-theme="dark"] tbody td span,
+[data-theme="dark"] tbody td span:not(.rating-star),
 [data-theme="dark"] tbody td div,
 [data-theme="dark"] tbody td label {
   color: var(--text-primary) !important;
+}
+
+/* Rating stars keep their own inline colors */
+[data-theme="dark"] .rating-star {
+  color: unset;
 }
 
 [data-theme="dark"] tbody td input:not([type="checkbox"]) {
@@ -217,6 +222,35 @@ select {
 [data-theme="dark"] [style*="background:'#fff'"],
 [data-theme="dark"] [style*='background:"#fff"'] {
   background-color: var(--card-bg) !important;
+}
+
+/* ── Cell dropdown popups (status, person) ───────────────────────────────── */
+[data-theme="dark"] .cell-dropdown-popup {
+  background-color: var(--card-bg) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Text inside popups — headers, names, footer links */
+[data-theme="dark"] .cell-dropdown-popup span,
+[data-theme="dark"] .cell-dropdown-popup > div {
+  color: var(--text-primary) !important;
+}
+
+/* Row hover backgrounds inside popups */
+[data-theme="dark"] .cell-dropdown-popup [style*="background: #fff"],
+[data-theme="dark"] .cell-dropdown-popup [style*="background:#fff"] {
+  background-color: transparent !important;
+}
+[data-theme="dark"] .cell-dropdown-popup [style*="background: #f0f6ff"],
+[data-theme="dark"] .cell-dropdown-popup [style*="background:#f0f6ff"] {
+  background-color: rgba(0, 115, 234, 0.15) !important;
+}
+
+/* Dividers inside popups */
+[data-theme="dark"] .cell-dropdown-popup [style*="background: #f0f0f0"],
+[data-theme="dark"] .cell-dropdown-popup [style*="background:#f0f0f0"] {
+  background-color: var(--border-color) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

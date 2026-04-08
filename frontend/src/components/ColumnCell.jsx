@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { updateColumn, uploadFile, deleteFile } from '../api';
 import { evaluateFormula } from '../utils/formulaEngine';
+import { useThemeContext } from '../context/ThemeContext';
 
 const STAR = '★';
 const STAR_E = '☆';
@@ -153,7 +154,7 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
       </div>
 
       {open && (
-        <div ref={popupRef} style={{
+        <div ref={popupRef} className="cell-dropdown-popup" style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 100,
           background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
           padding: 8, minWidth: 200,
@@ -260,7 +261,7 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
               ))}
               <div
                 onClick={() => { onChange(''); setOpen(false); }}
-                style={{ padding: '4px 8px', color: '#888', cursor: 'pointer', fontSize: 12, textAlign: 'center' }}
+                style={{ padding: '4px 8px', color: '#1a1a2e', cursor: 'pointer', fontSize: 12, textAlign: 'center' }}
               >
                 Clear
               </div>
@@ -275,13 +276,13 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <span style={{ fontSize: 13 }}>✏️</span>
-                    <span style={{ fontSize: 12, color: '#676879' }}>Edit Labels</span>
+                    <span style={{ fontSize: 12, color: '#1a1a2e' }}>Edit Labels</span>
                   </div>
                 )}
                 <div
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 4, cursor: 'default' }}
                 >
-                  <span style={{ fontSize: 12, color: '#c5c7d0' }}>Auto-assign labels</span>
+                  <span style={{ fontSize: 12, color: '#333' }}>Auto-assign labels</span>
                 </div>
               </div>
             </div>
@@ -294,33 +295,284 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
 }
 
 // Dropdown cell
-function DropdownCell({ value, settings, onChange }) {
-  const options = settings?.options || [];
+// Normalize dropdown options to {label, color} (handles legacy string arrays)
+function normalizeDdOptions(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((o, i) =>
+    typeof o === 'string'
+      ? { label: o, color: STATUS_PALETTE[i % STATUS_PALETTE.length] }
+      : o
+  );
+}
+
+// Parse multi-select value (JSON array or legacy single string)
+function parseDdValue(val) {
+  if (!val) return [];
+  try {
+    const p = JSON.parse(val);
+    return Array.isArray(p) ? p : p ? [String(p)] : [];
+  } catch {
+    return val.trim() ? [val.trim()] : [];
+  }
+}
+
+function DropdownCell({ value, settings, onChange, column, onSettingsUpdate }) {
+  const [open, setOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [draftOptions, setDraftOptions] = useState([]);
+  const [openPickerIdx, setOpenPickerIdx] = useState(null);
+  const popupRef = useRef(null);
+  const searchRef = useRef(null);
+  const { resolvedTheme } = useThemeContext();
+  const isDark = resolvedTheme === 'dark';
+
+  const options = normalizeDdOptions(settings?.options || []);
+  const selected = parseDdValue(value);
+  const readOnly = !onChange;
+
+  // Close popup on outside click or Escape
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (popupRef.current && !popupRef.current.contains(e.target)) {
+        setOpen(false); setEditMode(false); setSearch('');
+      }
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); setEditMode(false); setSearch(''); } };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  // Auto-focus search when popup opens
+  useEffect(() => {
+    if (open && !editMode && searchRef.current) searchRef.current.focus();
+  }, [open, editMode]);
+
+  const toggle = (label) => {
+    const next = selected.includes(label)
+      ? selected.filter(l => l !== label)
+      : [...selected, label];
+    onChange(next.length > 0 ? JSON.stringify(next) : '');
+  };
+
+  const openEditor = () => {
+    setDraftOptions(options.map(o => ({ ...o })));
+    setEditMode(true);
+    setOpenPickerIdx(null);
+  };
+
+  const saveDraft = async () => {
+    if (!column || !onSettingsUpdate) return;
+    const cleaned = draftOptions.filter(o => o.label.trim());
+    setSaving(true);
+    try {
+      const r = await updateColumn(column.id, {
+        title: column.title,
+        settings: { ...(column.settings || {}), options: cleaned },
+      });
+      onSettingsUpdate(r.data);
+      setEditMode(false);
+    } catch (_) {
+      // silent – user can retry
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filtered = options.filter(o =>
+    !search || o.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Theme-aware colours
+  const popupBg = isDark ? 'var(--card-bg)' : '#fff';
+  const popupBorder = isDark ? 'var(--border-color)' : '#e6e9ef';
+  const textPrimary = isDark ? 'var(--text-primary)' : '#1a1a2e';
+  const textSecondary = isDark ? 'var(--text-secondary)' : '#676879';
+  const rowHoverBg = isDark ? 'rgba(255,255,255,0.06)' : '#f5f6f8';
+  const rowSelectedBg = isDark ? 'rgba(0,115,234,0.15)' : '#f0f6ff';
+  const dividerColor = isDark ? 'var(--border-color)' : '#e6e9ef';
+  const inputBg = isDark ? 'var(--input-bg)' : '#f7f8fc';
+
   return (
-    <select
-      value={value || ''}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        width: '100%', border: 'none', background: 'transparent',
-        padding: '4px', cursor: 'pointer', outline: 'none',
-      }}
-    >
-      <option value="">—</option>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
+    <div style={{ position: 'relative', minHeight: 28, display: 'flex', alignItems: 'center' }}>
+      {/* ── Chip display ── */}
+      <div
+        onClick={() => { if (!readOnly) { setOpen(o => !o); setEditMode(false); setSearch(''); } }}
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 3, cursor: readOnly ? 'default' : 'pointer', flex: 1, alignItems: 'center', padding: '2px 2px', minHeight: 28 }}
+      >
+        {selected.length === 0
+          ? <span style={{ color: '#ccc', fontSize: 12 }}>—</span>
+          : selected.map(label => {
+              const opt = options.find(o => o.label === label);
+              const c = opt?.color || '#c4c4c4';
+              return (
+                <span key={label} style={{
+                  background: c + '22', color: c, border: `1px solid ${c}66`,
+                  borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600,
+                  maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{label}</span>
+              );
+            })
+        }
+      </div>
+
+      {/* ── Popup ── */}
+      {open && !readOnly && (
+        <div ref={popupRef} className="cell-dropdown-popup" style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 300,
+          background: popupBg, borderRadius: 10,
+          boxShadow: isDark ? '0 6px 24px rgba(0,0,0,0.5)' : '0 6px 24px rgba(0,0,0,0.15)',
+          border: `1px solid ${popupBorder}`, minWidth: 230, padding: '6px 0', overflow: 'visible',
+        }}>
+
+          {editMode ? (
+            /* ── Edit Options mode ── */
+            <div style={{ padding: '0 10px 10px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: textSecondary, padding: '8px 2px 10px', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Edit Options
+              </div>
+              {draftOptions.map((opt, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  {/* Color swatch */}
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div
+                      onClick={e => { e.stopPropagation(); setOpenPickerIdx(openPickerIdx === i ? null : i); }}
+                      style={{ width: 20, height: 20, borderRadius: 4, background: opt.color, cursor: 'pointer', border: '2px solid rgba(0,0,0,0.12)', boxSizing: 'border-box' }}
+                      title="Change color"
+                    />
+                    {openPickerIdx === i && (
+                      <div style={{ position: 'absolute', top: 24, left: 0, zIndex: 20 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: 8, background: popupBg, border: `1px solid ${popupBorder}`, borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', width: 162 }}>
+                          {STATUS_PALETTE.map(c => (
+                            <div key={c}
+                              onClick={() => { setDraftOptions(d => d.map((x, idx) => idx === i ? { ...x, color: c } : x)); setOpenPickerIdx(null); }}
+                              style={{ width: 22, height: 22, borderRadius: 4, background: c, cursor: 'pointer', border: c === opt.color ? '2px solid #323338' : '2px solid transparent', boxSizing: 'border-box' }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Label */}
+                  <input
+                    value={opt.label}
+                    onChange={e => setDraftOptions(d => d.map((x, idx) => idx === i ? { ...x, label: e.target.value } : x))}
+                    placeholder="Label…"
+                    style={{ flex: 1, border: `1.5px solid ${popupBorder}`, borderRadius: 5, padding: '4px 8px', fontSize: 12, background: inputBg, color: textPrimary, outline: 'none' }}
+                    onFocus={e => e.target.style.borderColor = '#0073ea'}
+                    onBlur={e => e.target.style.borderColor = popupBorder}
+                  />
+                  {/* Delete */}
+                  <button
+                    onClick={() => setDraftOptions(d => d.filter((_, idx) => idx !== i))}
+                    style={{ color: '#ccc', fontSize: 16, flexShrink: 0, lineHeight: 1, padding: '1px 3px', background: 'none', border: 'none', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#e2445c'}
+                    onMouseLeave={e => e.currentTarget.style.color = '#ccc'}
+                  >×</button>
+                </div>
+              ))}
+              <button
+                onClick={() => setDraftOptions(d => [...d, { label: '', color: STATUS_PALETTE[d.length % STATUS_PALETTE.length] }])}
+                style={{ width: '100%', padding: '5px 8px', marginBottom: 8, border: `1.5px dashed ${dividerColor}`, borderRadius: 4, color: textSecondary, fontSize: 12, cursor: 'pointer', background: 'none' }}
+              >+ Add Option</button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => { setEditMode(false); setOpenPickerIdx(null); }}
+                  style={{ flex: 1, padding: '5px 8px', border: `1px solid ${dividerColor}`, borderRadius: 4, fontSize: 12, color: textSecondary, cursor: 'pointer', background: 'none' }}>← Back</button>
+                <button onClick={saveDraft} disabled={saving}
+                  style={{ flex: 1, padding: '5px 8px', background: saving ? '#c5c7d0' : '#0073ea', color: '#fff', borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', border: 'none' }}>
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* ── Select mode ── */
+            <>
+              {/* Search */}
+              <div style={{ padding: '4px 10px 6px' }}>
+                <input
+                  ref={searchRef}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search options…"
+                  style={{ width: '100%', border: `1px solid ${popupBorder}`, borderRadius: 6, padding: '5px 10px', fontSize: 12, background: inputBg, color: textPrimary, outline: 'none', boxSizing: 'border-box' }}
+                  onClick={e => e.stopPropagation()}
+                />
+              </div>
+
+              {/* Options list */}
+              <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {options.length === 0 && (
+                  <div style={{ padding: '8px 14px', fontSize: 12, color: textSecondary }}>
+                    No options yet — click Edit Options below
+                  </div>
+                )}
+                {filtered.length === 0 && options.length > 0 && (
+                  <div style={{ padding: '8px 14px', fontSize: 12, color: textSecondary }}>No matches</div>
+                )}
+                {filtered.map(opt => {
+                  const isSel = selected.includes(opt.label);
+                  return (
+                    <div
+                      key={opt.label}
+                      onClick={() => toggle(opt.label)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', cursor: 'pointer', background: isSel ? rowSelectedBg : 'transparent' }}
+                      onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = rowHoverBg; }}
+                      onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <div style={{ width: 10, height: 10, borderRadius: 2, background: opt.color, flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 13, color: textPrimary, fontWeight: isSel ? 600 : 400 }}>{opt.label}</span>
+                      {isSel && <span style={{ color: '#0073ea', fontSize: 13, fontWeight: 700 }}>✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div style={{ borderTop: `1px solid ${dividerColor}`, marginTop: 2 }}>
+                {selected.length > 0 && (
+                  <div
+                    onClick={() => { onChange(''); setOpen(false); }}
+                    style={{ padding: '6px 12px', fontSize: 12, color: '#e2445c', cursor: 'pointer', fontWeight: 600 }}
+                    onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(226,68,92,0.12)' : '#fff5f7'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >✕ Clear all</div>
+                )}
+                {onSettingsUpdate && (
+                  <div
+                    onClick={e => { e.stopPropagation(); openEditor(); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', cursor: 'pointer', borderRadius: 0 }}
+                    onMouseEnter={e => e.currentTarget.style.background = rowHoverBg}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: 12 }}>✏️</span>
+                    <span style={{ fontSize: 12, color: textSecondary }}>Edit Options</span>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 // Rating cell (1-5 stars)
 function RatingCell({ value, onChange }) {
   const num = parseInt(value) || 0;
+  const { resolvedTheme } = useThemeContext();
+  const emptyColor = resolvedTheme === 'dark' ? '#4a5180' : '#c4c4c4';
   return (
     <div style={{ display: 'flex', gap: 2 }}>
       {[1, 2, 3, 4, 5].map(i => (
         <span
           key={i}
+          className="rating-star"
           onClick={() => onChange(i === num ? '' : String(i))}
-          style={{ cursor: 'pointer', fontSize: 16, color: i <= num ? '#fdab3d' : '#c4c4c4' }}
+          style={{ cursor: 'pointer', fontSize: 16, color: i <= num ? '#fdab3d' : emptyColor }}
         >
           {i <= num ? STAR : STAR_E}
         </span>
@@ -610,6 +862,8 @@ export function parseOwners(val) {
 function PersonCell({ value, settings, onChange }) {
   const [open, setOpen] = useState(false);
   const popupRef = useRef(null);
+  const { resolvedTheme } = useThemeContext();
+  const isDark = resolvedTheme === 'dark';
   const options = settings?.options || [];
   const selected = parseOwners(value);
   const readOnly = !onChange;
@@ -661,29 +915,34 @@ function PersonCell({ value, settings, onChange }) {
 
       {/* Dropdown — only for managers */}
       {open && !readOnly && (
-        <div ref={popupRef} style={{
+        <div ref={popupRef} className="cell-dropdown-popup" style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 300,
-          background: '#fff', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.15)',
-          border: '1px solid #e6e9ef', minWidth: 210, padding: '6px 0', overflow: 'hidden',
+          background: isDark ? 'var(--card-bg)' : '#fff',
+          borderRadius: 10, boxShadow: isDark ? '0 6px 24px rgba(0,0,0,0.5)' : '0 6px 24px rgba(0,0,0,0.15)',
+          border: `1px solid ${isDark ? 'var(--border-color)' : '#e6e9ef'}`,
+          minWidth: 210, padding: '6px 0', overflow: 'hidden',
         }}>
-          <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 700, color: isDark ? 'var(--text-secondary)' : '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>
             Assign people
           </div>
           {options.length === 0 && (
-            <div style={{ padding: '8px 14px', fontSize: 12, color: '#aaa' }}>No members in this column</div>
+            <div style={{ padding: '8px 14px', fontSize: 12, color: isDark ? 'var(--text-secondary)' : '#aaa' }}>No members in this board</div>
           )}
           {options.map(name => {
             const isSelected = selected.includes(name);
+            const rowBgSelected = isDark ? 'rgba(0,115,234,0.18)' : '#f0f6ff';
+            const rowBgNormal = isDark ? 'transparent' : '#fff';
+            const rowBgHover = isDark ? 'rgba(255,255,255,0.07)' : '#f5f6f8';
             return (
               <div
                 key={name}
                 onClick={() => toggle(name)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', cursor: 'pointer',
-                  background: isSelected ? '#f0f6ff' : '#fff',
+                  background: isSelected ? rowBgSelected : rowBgNormal,
                 }}
-                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f5f6f8'; }}
-                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = '#fff'; }}
+                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = rowBgHover; }}
+                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = rowBgNormal; }}
               >
                 <div style={{
                   width: 28, height: 28, borderRadius: '50%',
@@ -693,19 +952,19 @@ function PersonCell({ value, settings, onChange }) {
                 }}>
                   {nameToInitials(name)}
                 </div>
-                <span style={{ flex: 1, fontSize: 13, color: '#323338', fontWeight: isSelected ? 600 : 400 }}>{name}</span>
+                <span style={{ flex: 1, fontSize: 13, color: isDark ? 'var(--text-primary)' : '#1a1a2e', fontWeight: isSelected ? 700 : 500 }}>{name}</span>
                 {isSelected && <span style={{ color: '#0073ea', fontSize: 14, fontWeight: 700 }}>✓</span>}
               </div>
             );
           })}
           {selected.length > 0 && (
             <>
-              <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
+              <div style={{ height: 1, background: isDark ? 'var(--border-color)' : '#f0f0f0', margin: '4px 0' }} />
               <div
                 onClick={() => { onChange(''); setOpen(false); }}
                 style={{ padding: '7px 14px', fontSize: 12, color: '#e2445c', cursor: 'pointer', fontWeight: 600 }}
-                onMouseEnter={e => e.currentTarget.style.background = '#fff5f7'}
-                onMouseLeave={e => e.currentTarget.style.background = ''}
+                onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(226,68,92,0.12)' : '#fff5f7'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >✕ Clear all</div>
             </>
           )}
@@ -852,7 +1111,7 @@ export default function ColumnCell({ column, value, onChange, onEditSettings, it
     case 'priority':
       return <StatusCell value={value} settings={settings} onChange={onChange} column={column} onSettingsUpdate={onEditSettings} defaultOptions={DEFAULT_PRIORITY_OPTIONS} iconMap={PRIORITY_ICONS} />;
     case 'dropdown':
-      return <DropdownCell value={value} settings={settings} onChange={onChange} />;
+      return <DropdownCell value={value} settings={settings} onChange={onChange} column={column} onSettingsUpdate={onEditSettings} />;
     case 'rating':
       return <RatingCell value={value} onChange={onChange} />;
     case 'progress':

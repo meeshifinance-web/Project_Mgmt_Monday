@@ -29,13 +29,18 @@ function ColorPicker({ current, onChange }) {
 }
 
 export default function StatusOptionsEditor({ column, onSave, onClose }) {
+  const isDropdown = column.type === 'dropdown';
+  const defaultOptions = isDropdown
+    ? []
+    : [
+        { label: 'Not Started', color: '#c4c4c4' },
+        { label: 'In Progress', color: '#fdab3d' },
+        { label: 'Done',        color: '#00c875' },
+        { label: 'Stuck',       color: '#e2445c' },
+      ];
   const [options, setOptions] = useState(
-    (column.settings?.options || [
-      { label: 'Not Started', color: '#c4c4c4' },
-      { label: 'In Progress', color: '#fdab3d' },
-      { label: 'Done',        color: '#00c875' },
-      { label: 'Stuck',       color: '#e2445c' },
-    ]).map(o => ({ ...o }))   // shallow clone so edits don't mutate original
+    (column.settings?.options?.length ? column.settings.options : defaultOptions)
+      .map(o => typeof o === 'string' ? { label: o, color: '#0073ea' } : { ...o })
   );
   const [openPickerIdx, setOpenPickerIdx] = useState(null); // index of option whose picker is open
   const [newLabel, setNewLabel] = useState('');
@@ -80,7 +85,7 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
       }} onMouseDown={closeAllPickers}>
 
         <h3 style={{ marginBottom: 4, fontSize: 16, fontWeight: 700 }}>
-          Edit Status Options
+          {isDropdown ? 'Edit Dropdown Options' : 'Edit Status Options'}
         </h3>
         <p style={{ fontSize: 12, color: '#888', marginBottom: 18 }}>
           {column.title} · click a colour swatch to change it
@@ -151,7 +156,7 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
           border: '1.5px dashed #d0d0d0', marginBottom: 20,
         }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Add New Level
+            {isDropdown ? 'Add New Option' : 'Add New Level'}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* New color swatch */}

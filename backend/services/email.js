@@ -2,12 +2,14 @@ const nodemailer = require('nodemailer');
 
 function getTransporter() {
   if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER) return null;
+  const port = parseInt(process.env.EMAIL_PORT) || 587;
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: false,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    tls: { rejectUnauthorized: false },
+    host:       process.env.EMAIL_HOST,
+    port,
+    secure:     port === 465,
+    requireTLS: port !== 465,
+    auth:       { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    tls:        { rejectUnauthorized: false },
   });
 }
 
