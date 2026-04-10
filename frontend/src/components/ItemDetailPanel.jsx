@@ -476,12 +476,12 @@ function EmailEntry({ email }) {
 // ── Column type icons ─────────────────────────────────────────────────────────
 function colTypeIcon(type) {
   const MAP = {
-    status: '🟢', priority: '🔴', text: '📝', number: '#', date: '📅',
-    person: '👤', checkbox: '✅', dropdown: '▾', rating: '⭐', progress: '▓',
-    tags: '🏷', timeline: '📆', link: '🔗', color: '🎨', formula: 'ƒ',
+    status: '🟢', priority: '🔴', text: '📝', number: '🔢', date: '📅',
+    person: '👤', checkbox: '✅', dropdown: '🗃️', rating: '⭐', progress: '📊',
+    tags: '🏷️', timeline: '📆', link: '🔗', color: '🎨', formula: '🧮',
     creation_log: '🕐', email: '✉️', phone: '📞', location: '📍',
   };
-  return MAP[type] || '▪';
+  return MAP[type] || '📋';
 }
 
 // ── Main panel ────────────────────────────────────────────────────────────────
@@ -603,8 +603,8 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
             {fieldColumns.length === 0
               ? <div style={{ textAlign: 'center', padding: 48, color: '#aaa' }}>No columns yet</div>
               : fieldColumns.map(col => (
-                <div key={col.id} style={{ display: 'flex', alignItems: 'center', padding: '6px 24px', borderBottom: '1px solid #f5f6f8', minHeight: 44, gap: 12 }}>
-                  <div style={{ width: 160, flexShrink: 0, fontSize: 13, color: '#676879', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div key={col.id} style={{ display: 'flex', alignItems: 'center', padding: '6px 24px', borderBottom: '1px solid var(--border-color)', minHeight: 44, gap: 12 }}>
+                  <div style={{ width: 160, flexShrink: 0, fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 14 }}>{colTypeIcon(col.type)}</span>
                     {col.title}
                   </div>

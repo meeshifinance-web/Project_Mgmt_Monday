@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { updateColumn, uploadFile, deleteFile } from '../api';
 import { evaluateFormula } from '../utils/formulaEngine';
 import { useThemeContext } from '../context/ThemeContext';
@@ -778,6 +779,269 @@ function TextCell({ value, onChange, multiline, type }) {
   );
 }
 
+// ── Long Text Cell – hover tooltip + click-to-open resizable popup ──────────
+function LongTextCell({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value || '');
+  const [hovered, setHovered] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+  const [popupSize, setPopupSize] = useState({ w: 380, h: 220 });
+  const [popupPos, setPopupPos] = useState(null); // {top,left} after first open
+  const saveStatus = useRef('');
+  const debounceRef = useRef(null);
+  const lastSaved = useRef(value || '');
+  const cellRef = useRef(null);
+  const popupRef = useRef(null);
+  const dragState = useRef(null); // for resize
+  const dragMoveState = useRef(null); // for popup drag
+
+  // sync draft when value changes externally
+  useEffect(() => {
+    if (!open) { setDraft(value || ''); lastSaved.current = value || ''; }
+  }, [value, open]);
+
+  const save = useCallback((v) => {
+    if (v === lastSaved.current) return;
+    lastSaved.current = v;
+    onChange(v);
+  }, [onChange]);
+
+  const handleChange = (e) => {
+    const v = e.target.value;
+    setDraft(v);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => save(v), 500);
+  };
+
+  const handleOpen = (e) => {
+    e.stopPropagation();
+    setDraft(value || '');
+    lastSaved.current = value || '';
+    // position popup near the cell
+    if (cellRef.current) {
+      const rect = cellRef.current.getBoundingClientRect();
+      const vpW = window.innerWidth, vpH = window.innerHeight;
+      let top = rect.bottom + 4;
+      let left = rect.left;
+      // keep inside viewport
+      if (left + 380 > vpW - 8) left = vpW - 388;
+      if (top + 220 > vpH - 8) top = rect.top - 224;
+      setPopupPos({ top, left });
+    }
+    setOpen(true);
+    setHovered(false);
+  };
+
+  const handleClose = () => {
+    clearTimeout(debounceRef.current);
+    save(draft);
+    setOpen(false);
+  };
+
+  // close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (popupRef.current && !popupRef.current.contains(e.target)) handleClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open, draft]);
+
+  // ── Resize handle drag ────────────────────────────────────────────────────
+  const onResizeMouseDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragState.current = { startX: e.clientX, startY: e.clientY, startW: popupSize.w, startH: popupSize.h };
+    const onMove = (ev) => {
+      const dw = ev.clientX - dragState.current.startX;
+      const dh = ev.clientY - dragState.current.startY;
+      setPopupSize({
+        w: Math.max(240, dragState.current.startW + dw),
+        h: Math.max(140, dragState.current.startH + dh),
+      });
+    };
+    const onUp = () => { dragState.current = null; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // ── Popup header drag (move) ──────────────────────────────────────────────
+  const onHeaderMouseDown = (e) => {
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    dragMoveState.current = { startX: e.clientX, startY: e.clientY, startTop: popupPos.top, startLeft: popupPos.left };
+    const onMove = (ev) => {
+      const dx = ev.clientX - dragMoveState.current.startX;
+      const dy = ev.clientY - dragMoveState.current.startY;
+      setPopupPos({ top: dragMoveState.current.startTop + dy, left: dragMoveState.current.startLeft + dx });
+    };
+    const onUp = () => { dragMoveState.current = null; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // ── Hover tooltip position ────────────────────────────────────────────────
+  const handleMouseEnter = (e) => {
+    if (!value) return;
+    const rect = cellRef.current?.getBoundingClientRect();
+    if (rect) {
+      setTooltipPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setHovered(true);
+  };
+
+  return (
+    <>
+      {/* Cell display */}
+      <div
+        ref={cellRef}
+        onClick={handleOpen}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          cursor: 'text', minHeight: 26, padding: '3px 4px',
+          color: value ? 'var(--text-primary, #323338)' : '#ccc',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}
+      >
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {value || '—'}
+        </span>
+        {value && (
+          <span style={{ fontSize: 11, color: '#0073ea', flexShrink: 0, opacity: 0.7 }} title="Click to expand">⤢</span>
+        )}
+      </div>
+
+      {/* Hover tooltip – rendered via portal so it escapes overflow:hidden */}
+      {hovered && !open && value && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: tooltipPos.top,
+            left: tooltipPos.left,
+            maxWidth: 320,
+            background: '#323338',
+            color: '#fff',
+            padding: '8px 10px',
+            borderRadius: 6,
+            fontSize: 13,
+            lineHeight: 1.5,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.22)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+            maxHeight: 180,
+            overflow: 'hidden',
+          }}
+        >
+          {value.length > 300 ? value.slice(0, 297) + '…' : value}
+        </div>,
+        document.body
+      )}
+
+      {/* Popup editor – rendered via portal */}
+      {open && popupPos && createPortal(
+        <div
+          ref={popupRef}
+          style={{
+            position: 'fixed',
+            top: popupPos.top,
+            left: popupPos.left,
+            width: popupSize.w,
+            height: popupSize.h,
+            background: 'var(--bg-primary, #fff)',
+            border: '1px solid #c5c7d4',
+            borderRadius: 8,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            zIndex: 10000,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            minWidth: 240,
+            minHeight: 140,
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header / drag handle */}
+          <div
+            onMouseDown={onHeaderMouseDown}
+            style={{
+              padding: '6px 10px',
+              background: 'var(--bg-secondary, #f6f7fb)',
+              borderBottom: '1px solid #e6e9ef',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'move',
+              userSelect: 'none',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: 12, color: 'var(--text-secondary, #676879)', fontWeight: 500 }}>Long text</span>
+            <button
+              onClick={handleClose}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-secondary, #676879)', fontSize: 16, lineHeight: 1,
+                padding: '0 2px', display: 'flex', alignItems: 'center',
+              }}
+              title="Close"
+            >×</button>
+          </div>
+
+          {/* Textarea */}
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={handleChange}
+            placeholder="Enter text here…"
+            style={{
+              flex: 1,
+              resize: 'none',
+              border: 'none',
+              outline: 'none',
+              padding: '10px 12px',
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: 'var(--text-primary, #323338)',
+              background: 'var(--bg-primary, #fff)',
+              fontFamily: 'inherit',
+              overflowY: 'auto',
+            }}
+          />
+
+          {/* Resize grip */}
+          <div
+            onMouseDown={onResizeMouseDown}
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 18,
+              height: 18,
+              cursor: 'nwse-resize',
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'flex-end',
+              padding: '3px',
+              color: '#c5c7d4',
+              userSelect: 'none',
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M9 1L1 9M9 5L5 9M9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 // ── Deterministic avatar colour from a display name ───────────────────────────
 const AVATAR_COLORS = [
   '#0073ea', '#00c875', '#fdab3d', '#e2445c',
@@ -1135,7 +1399,7 @@ export default function ColumnCell({ column, value, onChange, onEditSettings, it
     case 'phone':
       return <TextCell value={value} onChange={onChange} type="tel" />;
     case 'long_text':
-      return <TextCell value={value} onChange={onChange} multiline />;
+      return <LongTextCell value={value} onChange={onChange} />;
     case 'time_tracking':
       return <TextCell value={value} onChange={onChange} type="text" />;
     case 'creation_log':
