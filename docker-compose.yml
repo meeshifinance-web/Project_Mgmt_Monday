@@ -1,0 +1,110 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: workday_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: workday
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./db/auth_schema.sql:/docker-entrypoint-initdb.d/02_auth_schema.sql
+      - ./db/board_visibility_schema.sql:/docker-entrypoint-initdb.d/03_board_visibility_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d workday"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: workday_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: workday
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      PORT: 3001
+      FRONTEND_URL: https://${DOMAIN}
+      BACKEND_URL: https://${DOMAIN}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 24h
+      SESSION_SECRET: ${SESSION_SECRET}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
+      MICROSOFT_TENANT_ID: ${MICROSOFT_TENANT_ID}
+      MICROSOFT_REDIRECT_URI: ${MICROSOFT_REDIRECT_URI}
+      EMAIL_HOST: smtp.office365.com
+      EMAIL_PORT: 587
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASS: ${EMAIL_PASS}
+      EMAIL_FROM: ${EMAIL_FROM}
+      EMAIL_IMAP_HOST: imap.gmail.com
+      EMAIL_IMAP_PORT: 993
+      EMAIL_IMAP_USER: ${EMAIL_IMAP_USER}
+      EMAIL_IMAP_PASS: ${EMAIL_IMAP_PASS}
+      EMAIL_DEFAULT_BOARD_ID: 1
+      EMAIL_DEFAULT_GROUP_ID: 1
+      EMAIL_POLL_INTERVAL_MS: 120000
+    expose:
+      - "3001"
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: workday_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    expose:
+      - "80"
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:alpine
+    container_name: workday_nginx
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - /data/workday/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - internal
+      - shared_proxy
+
+  certbot:
+    image: certbot/certbot
+    container_name: workday_certbot
+    volumes:
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    driver: bridge
+  shared_proxy:
+    external: true
