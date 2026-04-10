@@ -359,7 +359,7 @@ const CHANGEABLE_TYPES = [
   { value: 'checkbox', label: 'Checkbox', icon: '☑️' },
   { value: 'rating', label: 'Rating', icon: '⭐' },
   { value: 'status', label: 'Status', icon: '🔵' },
-  { value: 'dropdown', label: 'Dropdown', icon: '▼' },
+  { value: 'dropdown', label: 'Dropdown', icon: '🗃️' },
   { value: 'progress', label: 'Progress', icon: '📊' },
   { value: 'tags', label: 'Tags', icon: '🏷️' },
   { value: 'timeline', label: 'Timeline', icon: '📆' },
@@ -458,8 +458,8 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
   const menuItem = (onClick, children, danger) => (
     <div
       onClick={onClick}
-      style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: danger ? '#e2445c' : '#323338', display: 'flex', alignItems: 'center', gap: 9 }}
-      onMouseEnter={e => e.currentTarget.style.background = danger ? '#fff5f7' : '#f0f6ff'}
+      style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: danger ? '#e2445c' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 9 }}
+      onMouseEnter={e => e.currentTarget.style.background = danger ? 'rgba(226,68,92,0.08)' : 'var(--hover-bg)'}
       onMouseLeave={e => e.currentTarget.style.background = ''}
     >{children}</div>
   );
@@ -571,11 +571,11 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
           }}
         >
           {/* Header: column type + title */}
-          <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #f0f0f0' }}>
-            <div style={{ fontSize: 10, color: '#9699a6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 3 }}>
+          <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 3 }}>
               {col.type.replace(/_/g, ' ')}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#323338', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {col.title}
             </div>
           </div>
@@ -585,16 +585,16 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
             <div>
               <div
                 onClick={() => setShowTypePicker(v => !v)}
-                style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: '#323338', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+                style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
                 onMouseLeave={e => e.currentTarget.style.background = ''}
               >
                 <span>🔄 Change Type</span>
-                <span style={{ fontSize: 10, color: '#9699a6' }}>{showTypePicker ? '▲' : '▼'}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{showTypePicker ? '▲' : '▼'}</span>
               </div>
               {showTypePicker && (
-                <div style={{ padding: '6px 10px 10px', borderTop: '1px solid #f0f0f0', borderBottom: '1px solid #f0f0f0', background: '#fafbfd' }}>
-                  <div style={{ fontSize: 10, color: '#9699a6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                <div style={{ padding: '6px 10px 10px', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
                     Select new type
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
@@ -613,20 +613,20 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
                           style={{
                             padding: '5px 4px', borderRadius: 6, textAlign: 'center',
                             cursor: isCurrent ? 'default' : 'pointer',
-                            border: `1.5px solid ${isCurrent ? '#0073ea' : '#e0e3e8'}`,
-                            background: isCurrent ? '#e3f0ff' : '#fff',
-                            opacity: isCurrent ? 1 : 0.85,
+                            border: `1.5px solid ${isCurrent ? '#0073ea' : 'var(--border-color)'}`,
+                            background: isCurrent ? '#e3f0ff' : 'var(--card-bg)',
+                            opacity: isCurrent ? 1 : 0.9,
                           }}
-                          onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = '#f0f6ff'; }}
-                          onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = '#fff'; }}
+                          onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--hover-bg)'; }}
+                          onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--card-bg)'; }}
                         >
                           <div style={{ fontSize: 14 }}>{t.icon}</div>
-                          <div style={{ fontSize: 9, marginTop: 2, color: isCurrent ? '#0073ea' : '#676879', fontWeight: isCurrent ? 700 : 400, lineHeight: 1.2 }}>{t.label}</div>
+                          <div style={{ fontSize: 9, marginTop: 2, color: isCurrent ? '#0073ea' : 'var(--text-secondary)', fontWeight: isCurrent ? 700 : 400, lineHeight: 1.2 }}>{t.label}</div>
                         </div>
                       );
                     })}
                   </div>
-                  <div style={{ fontSize: 10, color: '#9699a6', marginTop: 7, lineHeight: 1.4 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 7, lineHeight: 1.4 }}>
                     Existing cell values are kept as-is.
                   </div>
                 </div>
@@ -1082,6 +1082,28 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
   const [newItemName, setNewItemName] = useState('');
   const [expandedItems, setExpandedItems] = useState(new Set());
   const toast = useToast();
+  const groupCheckRef = useRef(null);
+
+  const items = group.items || [];
+  const selectedInGroup = items.filter(i => selectedItems?.has(i.id));
+  const allSelected = items.length > 0 && selectedInGroup.length === items.length;
+  const someSelected = selectedInGroup.length > 0 && !allSelected;
+
+  // Set indeterminate state imperatively (not a React prop)
+  useEffect(() => {
+    if (groupCheckRef.current) groupCheckRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
+  const handleSelectGroup = useCallback((e) => {
+    e.stopPropagation();
+    if (allSelected) {
+      // deselect all in group
+      items.forEach(i => { if (selectedItems?.has(i.id)) onToggleSelect?.(i.id); });
+    } else {
+      // select all in group
+      items.forEach(i => { if (!selectedItems?.has(i.id)) onToggleSelect?.(i.id); });
+    }
+  }, [allSelected, items, selectedItems, onToggleSelect]);
 
   const toggleExpand = (itemId) => {
     setExpandedItems(prev => {
@@ -1146,6 +1168,17 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
                 style={{ color: '#c5c7d0', fontSize: 16, cursor: 'grab', userSelect: 'none', flexShrink: 0, lineHeight: 1 }}
                 onMouseDown={e => e.stopPropagation()}
               >⠿</span>
+            )}
+            {items.length > 0 && (
+              <input
+                ref={groupCheckRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={handleSelectGroup}
+                onClick={e => e.stopPropagation()}
+                title={allSelected ? 'Deselect all in group' : 'Select all in group'}
+                style={{ cursor: 'pointer', accentColor: group.color, flexShrink: 0, width: 14, height: 14 }}
+              />
             )}
             <button
               onClick={() => setCollapsed(c => !c)}
@@ -2593,6 +2626,18 @@ function VirtualisedGroups({
         if (row.type === 'group-header') {
           const { group } = row;
           const collapsed = collapsedGroups.has(group.id);
+          const groupItems = group.items || [];
+          const selectedInGroup = groupItems.filter(i => selectedItems?.has(i.id));
+          const groupAllSelected = groupItems.length > 0 && selectedInGroup.length === groupItems.length;
+          const groupSomeSelected = selectedInGroup.length > 0 && !groupAllSelected;
+          const handleGroupSelect = (e) => {
+            e.stopPropagation();
+            if (groupAllSelected) {
+              groupItems.forEach(i => { if (selectedItems?.has(i.id)) handleToggleSelect(i.id); });
+            } else {
+              groupItems.forEach(i => { if (!selectedItems?.has(i.id)) handleToggleSelect(i.id); });
+            }
+          };
           return (
             <tr key={row.id} style={{ height: ROW_HEIGHT, background: groupDropOver === group.id ? '#e8f0fe' : 'var(--bg-primary)', borderTop: groupDropOver === group.id ? '3px solid #0073ea' : '6px solid var(--bg-secondary)', cursor: isManager ? 'grab' : 'default' }}
               draggable={isManager}
@@ -2604,6 +2649,17 @@ function VirtualisedGroups({
               <td colSpan={spanAll} style={{ padding: '0 8px 0 12px', borderLeft: `4px solid ${group.color}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button onClick={() => toggleGroup(group.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: group.color, transition: 'transform 0.15s', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</button>
+                  {groupItems.length > 0 && (
+                    <input
+                      type="checkbox"
+                      checked={groupAllSelected}
+                      ref={el => { if (el) el.indeterminate = groupSomeSelected; }}
+                      onChange={handleGroupSelect}
+                      onClick={e => e.stopPropagation()}
+                      title={groupAllSelected ? 'Deselect all in group' : 'Select all in group'}
+                      style={{ cursor: 'pointer', accentColor: group.color, flexShrink: 0, width: 14, height: 14 }}
+                    />
+                  )}
                   <InlineEdit
                     value={group.name}
                     onSave={name => handleGroupUpdate(group.id, { name, color: group.color })}
@@ -2911,6 +2967,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
   // ── Multi-select ─────────────────────────────────────────────────────────
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const selectAllCheckRef = useRef(null);
 
   const handleToggleSelect = useCallback((itemId) => {
     setSelectedItems(prev => {
@@ -3580,6 +3637,24 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const filteredItems = filteredGroups.reduce((s, g) => s + (g.items?.length || 0), 0);
   const activeFilterCount = activeFilters.filter(f => f.column_id && f.condition).length;
 
+  // ── Select-all header checkbox state ──────────────────────────────────────
+  const allVisibleItemIds = filteredGroups.flatMap(g => (g.items || []).map(i => i.id));
+  const allVisibleSelected = allVisibleItemIds.length > 0 && allVisibleItemIds.every(id => selectedItems.has(id));
+  const someVisibleSelected = !allVisibleSelected && allVisibleItemIds.some(id => selectedItems.has(id));
+
+  useEffect(() => {
+    if (selectAllCheckRef.current) selectAllCheckRef.current.indeterminate = someVisibleSelected;
+  }, [someVisibleSelected]);
+
+  const handleSelectAll = useCallback(() => {
+    if (allVisibleSelected) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(allVisibleItemIds));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allVisibleSelected, allVisibleItemIds.join(',')]); // join for stable dep
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'Figtree, Roboto, -apple-system, sans-serif' }}>
 
@@ -3871,7 +3946,14 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               <tr style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border-color)' }}>
                 <th style={{ padding: 0, background: 'var(--bg-secondary)', width: 6, position: 'sticky', left: 0, zIndex: 30 }} />
                 <th style={{ padding: '0 8px', textAlign: 'center', background: 'var(--bg-secondary)', borderRight: '1px solid var(--border-color)', position: 'sticky', left: 6, zIndex: 30 }}>
-                  <input type="checkbox" title="Select all" style={{ cursor: 'pointer' }} />
+                  <input
+                    ref={selectAllCheckRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={handleSelectAll}
+                    title={allVisibleSelected ? 'Deselect all' : 'Select all items'}
+                    style={{ cursor: 'pointer', accentColor: '#0073ea' }}
+                  />
                 </th>
                 <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRight: 'none', letterSpacing: '0.3px', position: 'sticky', left: 42, zIndex: 30, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
