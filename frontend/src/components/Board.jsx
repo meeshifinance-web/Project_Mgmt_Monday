@@ -1986,7 +1986,7 @@ function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols })
 }
 
 // ── View Tab Bar ──────────────────────────────────────────────────────────────
-function ViewTabBar({ views, activeViewId, unsavedChanges, onSwitch, onRename, onDelete, onCreate, isManager }) {
+function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch, onRename, onDelete, onCreate, isManager }) {
   const [menuViewId, setMenuViewId] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const menuRef = useRef(null);
@@ -2016,6 +2016,7 @@ function ViewTabBar({ views, activeViewId, unsavedChanges, onSwitch, onRename, o
     }}>
       {views.map(view => {
         const isActive = view.id === activeViewId;
+        const isMain = view.id === mainViewId;
         const showDot = isActive && unsavedChanges;
         return (
           <div
@@ -2039,10 +2040,13 @@ function ViewTabBar({ views, activeViewId, unsavedChanges, onSwitch, onRename, o
               onSave={name => onRename(view.id, name)}
               style={{ fontSize: 13, fontWeight: 500, color: isActive ? '#0073ea' : '#676879', maxWidth: 140 }}
             />
-            {showDot && (
-              <span title="Unsaved filter changes" style={{ width: 7, height: 7, borderRadius: '50%', background: '#fdab3d', flexShrink: 0 }} />
+            {isMain && (
+              <span title="Main Table — filters & hidden columns/groups cannot be applied here" style={{ fontSize: 11, color: isActive ? '#0073ea' : '#9699a6', flexShrink: 0 }}>🔒</span>
             )}
-            {isManager && (
+            {showDot && (
+              <span title="Unsaved changes" style={{ width: 7, height: 7, borderRadius: '50%', background: '#fdab3d', flexShrink: 0 }} />
+            )}
+            {isManager && !isMain && (
               <button
                 onClick={e => openMenu(e, view.id)}
                 style={{
@@ -2363,7 +2367,10 @@ function FilterRow({ rule, cols, boardMembers, onChange, onRemove, isFirst }) {
 }
 
 // ── View Filter Panel ─────────────────────────────────────────────────────────
-function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, onSave, unsavedChanges, totalItems, filteredItems }) {
+function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenColumns, setHiddenColumns, hiddenGroups, setHiddenGroups, onSave, unsavedChanges, totalItems, filteredItems }) {
+  const [colSectionOpen, setColSectionOpen] = useState(false);
+  const [grpSectionOpen, setGrpSectionOpen] = useState(false);
+
   const addRule = () => {
     const newRule = { id: `f_${Date.now()}`, column_id: '', column_name: '', column_type: 'text', condition: '', value: '' };
     setActiveFilters([...activeFilters, newRule]);
@@ -2377,11 +2384,47 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, onSave,
     setActiveFilters(activeFilters.filter((_, i) => i !== idx));
   };
 
-  const clearAll = () => setActiveFilters([]);
+  const clearAll = () => {
+    setActiveFilters([]);
+    setHiddenColumns([]);
+    setHiddenGroups([]);
+  };
+
+  const toggleColumn = (colId) => {
+    setHiddenColumns(hiddenColumns.includes(colId)
+      ? hiddenColumns.filter(id => id !== colId)
+      : [...hiddenColumns, colId]);
+  };
+
+  const toggleGroup = (groupId) => {
+    setHiddenGroups(hiddenGroups.includes(groupId)
+      ? hiddenGroups.filter(id => id !== groupId)
+      : [...hiddenGroups, groupId]);
+  };
+
+  const allGroups = board.groups || [];
 
   const completeRules = activeFilters.filter(f =>
     f.column_id && f.condition &&
     (NO_VALUE_CONDITIONS.has(f.condition) ? true : (Array.isArray(f.value) ? f.value.length > 0 : f.value?.length > 0))
+  );
+
+  const hasAnySettings = activeFilters.length > 0 || hiddenColumns.length > 0 || hiddenGroups.length > 0;
+
+  const sectionHeader = (label, count, open, onToggle) => (
+    <div
+      onClick={onToggle}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+        padding: '6px 0', userSelect: 'none',
+      }}
+    >
+      <span style={{ fontSize: 11, color: '#9699a6', transition: 'transform 0.15s', display: 'inline-block', transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #323338)' }}>{label}</span>
+      {count > 0 && (
+        <span style={{ fontSize: 11, background: '#0073ea', color: '#fff', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>{count}</span>
+      )}
+    </div>
   );
 
   return (
@@ -2396,7 +2439,7 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, onSave,
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #323338)' }}>
-          Advanced filters
+          View settings
         </span>
         {completeRules.length > 0 && (
           <span style={{ fontSize: 12, color: '#676879' }}>
@@ -2404,7 +2447,7 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, onSave,
           </span>
         )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          {activeFilters.length > 0 && (
+          {hasAnySettings && (
             <button
               onClick={clearAll}
               style={{ fontSize: 12, color: '#e2445c', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
@@ -2415,8 +2458,9 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, onSave,
         </div>
       </div>
 
-      {/* Filter rows */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* ── Section 1: Filter rows ── */}
+      {sectionHeader('Filter items', completeRules.length, true, () => {})}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 16 }}>
         {activeFilters.map((rule, idx) => (
           <FilterRow
             key={rule.id || idx}
@@ -2428,28 +2472,80 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, onSave,
             isFirst={idx === 0}
           />
         ))}
-      </div>
-
-      {/* Footer row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: activeFilters.length > 0 ? 10 : 0 }}>
         <button
           onClick={addRule}
           style={{
-            fontSize: 12, color: '#0073ea', fontWeight: 600,
+            fontSize: 12, color: '#0073ea', fontWeight: 600, alignSelf: 'flex-start',
             background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
             display: 'flex', alignItems: 'center', gap: 4,
           }}
           onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
           onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
         >+ New filter</button>
+      </div>
 
+      {/* ── Section 2: Hide Columns ── */}
+      <div style={{ borderTop: '1px solid var(--border-color, #e6e9ef)', marginTop: 10 }}>
+        {sectionHeader('Hide columns', hiddenColumns.length, colSectionOpen, () => setColSectionOpen(o => !o))}
+        {colSectionOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 16, paddingBottom: 6 }}>
+            {cols.map(col => {
+              const isHidden = hiddenColumns.includes(col.id);
+              return (
+                <label key={col.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={!isHidden}
+                    onChange={() => toggleColumn(col.id)}
+                    style={{ accentColor: '#0073ea', cursor: 'pointer' }}
+                  />
+                  <span style={{ color: isHidden ? '#9699a6' : 'var(--text-primary, #323338)', textDecoration: isHidden ? 'line-through' : 'none' }}>
+                    {col.title}
+                  </span>
+                </label>
+              );
+            })}
+            {cols.length === 0 && <span style={{ fontSize: 12, color: '#9699a6' }}>No columns on this board</span>}
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 3: Hide Groups ── */}
+      <div style={{ borderTop: '1px solid var(--border-color, #e6e9ef)', marginTop: 2 }}>
+        {sectionHeader('Hide groups', hiddenGroups.length, grpSectionOpen, () => setGrpSectionOpen(o => !o))}
+        {grpSectionOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 16, paddingBottom: 6 }}>
+            {allGroups.map(grp => {
+              const isHidden = hiddenGroups.includes(grp.id);
+              return (
+                <label key={grp.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={!isHidden}
+                    onChange={() => toggleGroup(grp.id)}
+                    style={{ accentColor: '#0073ea', cursor: 'pointer' }}
+                  />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: isHidden ? '#9699a6' : 'var(--text-primary, #323338)', textDecoration: isHidden ? 'line-through' : 'none' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: grp.color || '#579bfc', flexShrink: 0 }} />
+                    {grp.name}
+                  </span>
+                </label>
+              );
+            })}
+            {allGroups.length === 0 && <span style={{ fontSize: 12, color: '#9699a6' }}>No groups on this board</span>}
+          </div>
+        )}
+      </div>
+
+      {/* ── Save button ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, borderTop: '1px solid var(--border-color, #e6e9ef)', paddingTop: 10 }}>
         <button
           onClick={onSave}
           style={{
             padding: '6px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
             background: '#0073ea', color: '#fff', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 5,
-            opacity: activeFilters.length === 0 && !unsavedChanges ? 0.6 : 1,
+            opacity: !hasAnySettings && !unsavedChanges ? 0.6 : 1,
           }}
           onMouseEnter={e => { e.currentTarget.style.background = '#0060c0'; }}
           onMouseLeave={e => { e.currentTarget.style.background = '#0073ea'; }}
@@ -2817,6 +2913,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const [views, setViews] = useState([]);
   const [activeViewId, setActiveViewId] = useState(null);
   const [activeFilters, setActiveFilters] = useState([]); // array of {id,column_id,column_type,condition,value}
+  const [hiddenColumns, setHiddenColumns] = useState([]); // col IDs hidden in this view
+  const [hiddenGroups, setHiddenGroups] = useState([]);   // group IDs hidden in this view
   const [unsavedChanges, setUnsavedChanges] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
   const [detailItemId, setDetailItemId] = useState(null);
@@ -2892,10 +2990,38 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     onBoardChange(prev => ({ ...prev, ...updater(prev) }));
   }, [onBoardChange]);
 
+  // ── View helpers ──────────────────────────────────────────────────────────
+  // Handles old array format (just filter rules) and new object format
+  const parseViewFilters = (raw) => {
+    if (!raw) return { rules: [], hiddenColumns: [], hiddenGroups: [] };
+    if (Array.isArray(raw)) return { rules: raw, hiddenColumns: [], hiddenGroups: [] };
+    return {
+      rules: raw.rules || [],
+      hiddenColumns: raw.hiddenColumns || [],
+      hiddenGroups: raw.hiddenGroups || [],
+    };
+  };
+
   // ── View handlers ─────────────────────────────────────────────────────────
+  // The first view (by created_at ASC) is always the locked Main Table
+  const mainViewId = views[0]?.id ?? null;
+  const isMainView = activeViewId !== null && activeViewId === mainViewId;
+
   const handleSwitchView = (view) => {
+    const isMain = view.id === mainViewId;
     setActiveViewId(view.id);
-    setActiveFilters(view.filters || []);
+    if (isMain) {
+      // Main Table is always pristine — no filters, no hidden columns/groups
+      setActiveFilters([]);
+      setHiddenColumns([]);
+      setHiddenGroups([]);
+      setFilterPanelOpen(false);
+    } else {
+      const { rules, hiddenColumns: hc, hiddenGroups: hg } = parseViewFilters(view.filters);
+      setActiveFilters(rules);
+      setHiddenColumns(hc);
+      setHiddenGroups(hg);
+    }
     setUnsavedChanges(false);
   };
 
@@ -2905,6 +3031,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       setViews(prev => [...prev, newView]);
       setActiveViewId(newView.id);
       setActiveFilters([]);
+      setHiddenColumns([]);
+      setHiddenGroups([]);
       setUnsavedChanges(false);
       setFilterPanelOpen(true);
     } catch { toast('Failed to create view', 'error'); }
@@ -2918,23 +3046,28 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   };
 
   const handleViewDelete = async (id) => {
-    if (views.length <= 1) return;
+    if (views.length <= 1 || id === mainViewId) return;
     try {
       await deleteView(id);
       const remaining = views.filter(v => v.id !== id);
       setViews(remaining);
       if (activeViewId === id) {
+        const { rules, hiddenColumns: hc, hiddenGroups: hg } = parseViewFilters(remaining[0].filters);
         setActiveViewId(remaining[0].id);
-        setActiveFilters(remaining[0].filters || []);
+        setActiveFilters(rules);
+        setHiddenColumns(hc);
+        setHiddenGroups(hg);
         setUnsavedChanges(false);
       }
     } catch { toast('Failed to delete view', 'error'); }
   };
 
   const handleSaveView = async () => {
-    if (!activeViewId) return;
+    if (!activeViewId || isMainView) return;
     try {
-      const updated = await updateView(activeViewId, { filters: activeFilters });
+      const updated = await updateView(activeViewId, {
+        filters: { rules: activeFilters, hiddenColumns, hiddenGroups },
+      });
       setViews(prev => prev.map(v => v.id === activeViewId ? { ...v, filters: updated.filters } : v));
       setUnsavedChanges(false);
       toast('View saved!', 'success');
@@ -2951,8 +3084,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   useEffect(() => {
     getBoardViews(board.id).then(data => {
       setViews(data);
+      const { rules, hiddenColumns: hc, hiddenGroups: hg } = parseViewFilters(data[0]?.filters);
       setActiveViewId(data[0]?.id ?? null);
-      setActiveFilters(data[0]?.filters ?? []);
+      setActiveFilters(rules);
+      setHiddenColumns(hc);
+      setHiddenGroups(hg);
       setUnsavedChanges(false);
     }).catch(() => { });
   }, [board.id]);
@@ -3576,11 +3712,13 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
   // Enrich person columns with board members as fallback options
   const memberNames = (board.members || []).map(m => m.name).filter(Boolean);
-  const cols = (board.columns || []).map(col =>
+  const allCols = (board.columns || []).map(col =>
     col.type === 'person' && memberNames.length && !col.settings?.options?.length
       ? { ...col, settings: { ...(col.settings || {}), options: memberNames } }
       : col
   );
+  // cols excludes columns hidden in the active view
+  const cols = allCols.filter(col => !hiddenColumns.includes(col.id));
   const groups = board.groups || [];
 
   // Apply text-search filters (existing)
@@ -3620,7 +3758,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     })).filter(g => g.items.length > 0)
     : applyViewFilters(applyFilters(groups));
 
-  const filteredGroups = sortConfig
+  const filteredGroups = (sortConfig
     ? searchedGroups.map(g => ({
       ...g,
       items: [...(g.items || [])].sort((a, b) => {
@@ -3630,7 +3768,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         return sortConfig.dir === 'asc' ? cmp : -cmp;
       }),
     }))
-    : searchedGroups;
+    : searchedGroups
+  ).filter(g => !hiddenGroups.includes(g.id));
 
   // Counts for "Showing X of Y" display
   const totalItems = groups.reduce((s, g) => s + (g.items?.length || 0), 0);
@@ -3730,8 +3869,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             </>
           )}
 
-          {/* Filter button */}
-          {(() => {
+          {/* Filter button — hidden on Main Table view */}
+          {!isMainView && (() => {
             const totalCount = filters.length + activeFilterCount;
             const isActive = filterPanelOpen || totalCount > 0;
             return (
@@ -3866,6 +4005,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         <ViewTabBar
           views={views}
           activeViewId={activeViewId}
+          mainViewId={mainViewId}
           unsavedChanges={unsavedChanges}
           onSwitch={handleSwitchView}
           onRename={handleViewRename}
@@ -3875,14 +4015,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         />
       )}
 
-      {/* ── View filter panel (desktop only) ── */}
-      {!isMobile && filterPanelOpen && (
+      {/* ── View filter panel (desktop only, not on Main Table) ── */}
+      {!isMobile && filterPanelOpen && !isMainView && (
         <div style={{ flexShrink: 0, paddingTop: 8 }}>
           <ViewFilterPanel
-            cols={cols}
+            cols={allCols}
             board={board}
             activeFilters={activeFilters}
             setActiveFilters={(f) => { setActiveFilters(f); setUnsavedChanges(true); }}
+            hiddenColumns={hiddenColumns}
+            setHiddenColumns={(v) => { setHiddenColumns(v); setUnsavedChanges(true); }}
+            hiddenGroups={hiddenGroups}
+            setHiddenGroups={(v) => { setHiddenGroups(v); setUnsavedChanges(true); }}
             onSave={handleSaveView}
             unsavedChanges={unsavedChanges}
             totalItems={totalItems}
