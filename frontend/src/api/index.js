@@ -168,6 +168,16 @@ export const uploadFile = (file, onProgress) => {
 };
 export const deleteFile = (filename) => api.delete(`/files/${filename}`).then(r => r.data);
 
+// ── Dashboards ────────────────────────────────────────────────────────────────
+export const getDashboards          = ()            => api.get('/dashboards').then(r => r.data);
+export const createDashboard        = (data)        => api.post('/dashboards', data).then(r => r.data);
+export const updateDashboard        = (id, data)    => api.put(`/dashboards/${id}`, data).then(r => r.data);
+export const deleteDashboard        = (id)          => api.delete(`/dashboards/${id}`).then(r => r.data);
+export const getDashboardWidgets    = (id)          => api.get(`/dashboards/${id}/widgets`).then(r => r.data);
+export const createDashboardWidget  = (id, data)    => api.post(`/dashboards/${id}/widgets`, data).then(r => r.data);
+export const updateDashboardWidget  = (id, wid, data) => api.put(`/dashboards/${id}/widgets/${wid}`, data).then(r => r.data);
+export const deleteDashboardWidget  = (id, wid)     => api.delete(`/dashboards/${id}/widgets/${wid}`).then(r => r.data);
+
 // Public form endpoints (no auth header needed — use plain fetch)
 export const getPublicForm    = (slug) => fetch(`/api/public/forms/${slug}`).then(r => r.json());
 export const submitPublicForm = (slug, data) =>

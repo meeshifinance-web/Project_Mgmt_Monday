@@ -18,6 +18,8 @@ import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders,
 import GlobalTrashPanel from './components/GlobalTrashPanel';
 import ApiKeysPanel from './components/ApiKeysPanel';
 import MyWorkPanel from './components/MyWorkPanel';
+import DashboardPage from './components/DashboardPage';
+import { getDashboards, createDashboard, deleteDashboard } from './api';
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 
@@ -283,6 +285,9 @@ function MainApp() {
   const [showGlobalTrash, setShowGlobalTrash] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [showMyWork, setShowMyWork] = useState(false);
+  const [dashboards, setDashboards] = useState([]);
+  const [activeDashboardId, setActiveDashboardId] = useState(null);
+  const [dashboardsExpanded, setDashboardsExpanded] = useState(true);
   const [boardMenuId, setBoardMenuId] = useState(null);
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -329,6 +334,10 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
+    getDashboards().then(data => setDashboards(data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     Promise.all([getBoards(), getFolders()])
       .then(([boardsRes, foldersRes]) => {
         setBoards(boardsRes.data);
@@ -352,6 +361,7 @@ function MainApp() {
   }, []);
 
   const loadBoard = async (id) => {
+    setActiveDashboardId(null); // always clear dashboard when opening a board
     setLoading(true);
     try {
       const r = await getBoard(id);
@@ -735,9 +745,102 @@ function MainApp() {
             </button>
           )}
 
+          {/* ── Dashboards ── */}
+          {isNavCollapsed ? (
+            <div
+              onClick={() => { setActiveDashboardId(d => d ? null : (dashboards[0]?.id ?? '__list__')); setActiveBoard(null); }}
+              title="Dashboards"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: 36, cursor: 'pointer',
+                background: activeDashboardId ? 'var(--sidebar-active-bg)' : 'transparent',
+                borderLeft: activeDashboardId ? '3px solid #0073ea' : '3px solid transparent',
+              }}
+              onMouseEnter={e => { if (!activeDashboardId) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = activeDashboardId ? 'var(--sidebar-active-bg)' : 'transparent'; }}
+            >
+              <span style={{ fontSize: 15 }}>📊</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ padding: '6px 16px 2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                onClick={() => setDashboardsExpanded(v => !v)}>
+                <span style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {dashboardsExpanded ? '▼' : '▶'}&nbsp; Dashboards
+                </span>
+                {isManager && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const d = await createDashboard({ name: 'New Dashboard' });
+                        setDashboards(prev => [d, ...prev]);
+                        setActiveDashboardId(d.id);
+                        setActiveBoard(null);
+                      } catch { toast('Failed to create dashboard', 'error'); }
+                    }}
+                    title="New Dashboard"
+                    style={{ fontSize: 16, color: 'var(--sidebar-text-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text-muted)'}
+                  >+</button>
+                )}
+              </div>
+              {dashboardsExpanded && (
+                <div>
+                  {dashboards.length === 0 && (
+                    <div style={{ padding: '4px 16px 4px 28px', fontSize: 12, color: 'var(--sidebar-text-muted)', fontStyle: 'italic' }}>
+                      {isManager ? 'Click + to create a dashboard' : 'No dashboards yet'}
+                    </div>
+                  )}
+                  {dashboards.map(d => {
+                    const isActive = activeDashboardId === d.id;
+                    return (
+                      <div key={d.id} style={{ display: 'flex', alignItems: 'center', paddingLeft: 12 }}>
+                        <button
+                          onClick={() => { setActiveDashboardId(d.id); setActiveBoard(null); }}
+                          style={{
+                            flex: 1, display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '6px 8px', textAlign: 'left', fontSize: 13,
+                            background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
+                            borderLeft: isActive ? '3px solid #0073ea' : '3px solid transparent',
+                            color: isActive ? 'var(--primary-blue)' : 'var(--sidebar-text)',
+                            fontWeight: isActive ? 600 : 400,
+                            overflow: 'hidden',
+                          }}
+                          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = isActive ? 'var(--sidebar-active-bg)' : 'transparent'; }}
+                        >
+                          <span style={{ fontSize: 13, flexShrink: 0 }}>📊</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                        </button>
+                        {isManager && isActive && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Delete dashboard "${d.name}"?`)) return;
+                              try {
+                                await deleteDashboard(d.id);
+                                setDashboards(prev => prev.filter(x => x.id !== d.id));
+                                setActiveDashboardId(null);
+                              } catch { toast('Failed to delete dashboard', 'error'); }
+                            }}
+                            title="Delete dashboard"
+                            style={{ padding: '4px 6px', marginRight: 6, color: '#e2445c', background: 'none', border: 'none', fontSize: 14, cursor: 'pointer', flexShrink: 0 }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#fff5f5'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                          >×</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
           {/* Header row */}
           {!isNavCollapsed && (
-            <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
               <span style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
                 {isAdmin ? 'All Boards' : 'Boards'}
               </span>
@@ -973,11 +1076,17 @@ function MainApp() {
             aria-label="Open navigation"
           >☰</button>
 
-          {activeBoard && isManager
-            ? <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
-            : <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{activeBoard?.name || 'Select a Board'}</h1>
-          }
-          {isAdmin && activeBoard && !activeBoard.members?.some(m => m.id === currentUser?.id) && (
+          {activeDashboardId ? (
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 16 }}>📊</span>
+              {dashboards.find(d => d.id === activeDashboardId)?.name || 'Dashboard'}
+            </h1>
+          ) : activeBoard && isManager ? (
+            <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
+          ) : (
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{activeBoard?.name || 'Select a Board'}</h1>
+          )}
+          {!activeDashboardId && isAdmin && activeBoard && !activeBoard.members?.some(m => m.id === currentUser?.id) && (
             <span style={{
               fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 5,
               background: '#fff4e0', color: '#b05e00', border: '1px solid #fdab3d',
@@ -990,8 +1099,15 @@ function MainApp() {
           <UserMenu />
         </div>
 
-        {/* Board area */}
-        {loading ? (
+        {/* Board / Dashboard area */}
+        {activeDashboardId ? (
+          <DashboardPage
+            dashboardId={activeDashboardId}
+            dashboard={dashboards.find(d => d.id === activeDashboardId)}
+            boards={boards}
+            onDashboardUpdate={updated => setDashboards(prev => prev.map(d => d.id === updated.id ? updated : d))}
+          />
+        ) : loading ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center', color: '#888' }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>

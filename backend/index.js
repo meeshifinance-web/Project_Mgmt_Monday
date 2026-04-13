@@ -83,6 +83,7 @@ app.use('/api/keys', require('./routes/apiKeys'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/my-work', require('./routes/myWork'));
+app.use('/api/dashboards', require('./routes/dashboards'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -307,6 +308,33 @@ async function start() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_board_views_board ON board_views(board_id)`);
     console.log('✅ board_views table ready');
+
+    // Dashboards
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dashboards (
+        id         SERIAL PRIMARY KEY,
+        name       TEXT NOT NULL DEFAULT 'New Dashboard',
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dashboard_widgets (
+        id           SERIAL PRIMARY KEY,
+        dashboard_id INTEGER NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+        type         TEXT NOT NULL,
+        title        TEXT DEFAULT '',
+        config       JSONB DEFAULT '{}',
+        grid_x       INTEGER DEFAULT 0,
+        grid_y       INTEGER DEFAULT 0,
+        grid_w       INTEGER DEFAULT 6,
+        grid_h       INTEGER DEFAULT 4,
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dashboard_widgets ON dashboard_widgets(dashboard_id)`);
+    console.log('✅ dashboards tables ready');
 
     const { rows } = await pool.query('SELECT COUNT(*) FROM boards');
     if (parseInt(rows[0].count) === 0) {
