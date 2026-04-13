@@ -576,7 +576,7 @@ function MainApp() {
                 </div>
               </>
             )}
-            {isAdmin && (
+            {(isAdmin || (isManager && b.created_by === currentUser?.id)) && (
               <>
                 <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }} />
                 <div

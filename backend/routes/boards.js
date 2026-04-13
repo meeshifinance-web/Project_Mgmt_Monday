@@ -343,17 +343,33 @@ router.patch('/:id/email-settings', ...canWrite, async (req, res) => {
 });
 
 // ── DELETE board — soft-delete (moves to global trash, 15-day retention) ──────
-router.delete('/:id', requireAuth, requireScope('full'), requireRole('admin'), async (req, res) => {
+// Admins can delete any board; managers can only delete boards they created.
+router.delete('/:id', requireAuth, requireScope('full'), requireRole('admin', 'manager'), async (req, res) => {
   try {
+    const isAdmin = req.user.role === 'admin';
+    const whereClause = isAdmin
+      ? 'id = $3 AND (is_deleted IS NULL OR is_deleted = false)'
+      : 'id = $3 AND (is_deleted IS NULL OR is_deleted = false) AND created_by = $1';
+
     const { rows } = await pool.query(
       `UPDATE boards
        SET is_deleted = true, deleted_at = NOW(),
            deleted_by_user_id = $1, deleted_by_user_name = $2
-       WHERE id = $3 AND (is_deleted IS NULL OR is_deleted = false)
+       WHERE ${whereClause}
        RETURNING id`,
       [req.user.id, req.user.name, req.params.id]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Board not found' });
+    if (!rows.length) {
+      // Distinguish between board not found vs. manager not owning it
+      if (!isAdmin) {
+        const { rows: exists } = await pool.query(
+          'SELECT id FROM boards WHERE id=$1 AND (is_deleted IS NULL OR is_deleted = false)',
+          [req.params.id]
+        );
+        if (exists.length) return res.status(403).json({ error: 'You can only delete boards you created' });
+      }
+      return res.status(404).json({ error: 'Board not found' });
+    }
     res.json({ success: true });
   } catch (err) {
     console.error(err);

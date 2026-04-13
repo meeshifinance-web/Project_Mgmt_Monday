@@ -1239,8 +1239,11 @@ function PersonCell({ value, settings, onChange }) {
 }
 
 // ── File attachment cell ───────────────────────────────────────────────────────
+const FILE_SIZE_LIMIT = 20 * 1024 * 1024; // 20 MB (match backend)
+
 function FileCell({ value, onChange }) {
-  const [uploading, setUploading] = useState(false);
+  // pending: { id, name, progress } — optimistic entries while uploading
+  const [pending, setPending] = useState([]);
   const inputRef = useRef(null);
 
   let files = [];
@@ -1248,18 +1251,47 @@ function FileCell({ value, onChange }) {
   if (!Array.isArray(files)) files = [];
 
   const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const selected = Array.from(e.target.files);
+    if (!selected.length) return;
     e.target.value = '';
-    setUploading(true);
-    try {
-      const uploaded = await uploadFile(file);
-      const next = [...files, uploaded];
-      onChange(JSON.stringify(next));
-    } catch {
-      // upload failed — silent
-    } finally {
-      setUploading(false);
+
+    // client-side size guard
+    const tooBig = selected.filter(f => f.size > FILE_SIZE_LIMIT);
+    if (tooBig.length) {
+      alert(`File too large (max 20 MB): ${tooBig.map(f => f.name).join(', ')}`);
+      if (tooBig.length === selected.length) return;
+    }
+    const allowed = selected.filter(f => f.size <= FILE_SIZE_LIMIT);
+
+    // add optimistic entries immediately so UI updates right away
+    const ids = allowed.map(() => Math.random().toString(36).slice(2));
+    setPending(p => [
+      ...p,
+      ...allowed.map((f, i) => ({ id: ids[i], name: f.name, progress: 0 })),
+    ]);
+
+    // upload each file (parallel)
+    const results = await Promise.allSettled(
+      allowed.map((file, i) =>
+        uploadFile(file, (pct) =>
+          setPending(p => p.map(x => x.id === ids[i] ? { ...x, progress: pct } : x))
+        )
+      )
+    );
+
+    // remove optimistic entries
+    setPending(p => p.filter(x => !ids.includes(x.id)));
+
+    const uploaded = results
+      .map(r => r.status === 'fulfilled' ? r.value : null)
+      .filter(Boolean);
+
+    if (uploaded.length) {
+      // re-read current files to avoid stale closure
+      let current = [];
+      try { current = value ? JSON.parse(value) : []; } catch { current = []; }
+      if (!Array.isArray(current)) current = [];
+      onChange(JSON.stringify([...current, ...uploaded]));
     }
   };
 
@@ -1325,13 +1357,23 @@ function FileCell({ value, onChange }) {
           >✕</button>
         </div>
       ))}
-      <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={handleFileChange} />
+      {/* Optimistic pending entries with progress */}
+      {pending.map(p => (
+        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 120 }}>
+          <span style={{ fontSize: 12, color: '#676879', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{p.name}</span>
+          <div style={{ flex: 1, minWidth: 50, height: 4, background: '#e6e9ef', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: `${p.progress}%`, height: '100%', background: '#0073ea', borderRadius: 2, transition: 'width 0.15s ease' }} />
+          </div>
+          <span style={{ fontSize: 10, color: '#0073ea', flexShrink: 0 }}>{p.progress}%</span>
+        </div>
+      ))}
+      <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
       <button
         onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
-        disabled={uploading}
-        style={{ fontSize: 11, color: '#0073ea', background: 'none', border: 'none', cursor: uploading ? 'default' : 'pointer', padding: '2px 0', opacity: uploading ? 0.5 : 1 }}
+        disabled={pending.length > 0}
+        style={{ fontSize: 11, color: '#0073ea', background: 'none', border: 'none', cursor: pending.length > 0 ? 'default' : 'pointer', padding: '2px 0', opacity: pending.length > 0 ? 0.5 : 1, flexShrink: 0 }}
       >
-        {uploading ? '⏳ Uploading…' : '📎 Attach file'}
+        📎 Attach file
       </button>
     </div>
   );

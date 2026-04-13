@@ -157,10 +157,14 @@ export const renameApiKey  = (id, name)  => api.put(`/keys/${id}/rename`, { name
 export const getMyWork = () => api.get('/my-work').then(r => r.data);
 
 // ── Files ──────────────────────────────────────────────────────────────────────
-export const uploadFile = (file) => {
+export const uploadFile = (file, onProgress) => {
   const fd = new FormData();
   fd.append('file', file);
-  return api.post('/files/upload', fd).then(r => r.data);
+  return api.post('/files/upload', fd, {
+    onUploadProgress: onProgress
+      ? (e) => { if (e.total) onProgress(Math.round((e.loaded * 100) / e.total)); }
+      : undefined,
+  }).then(r => r.data);
 };
 export const deleteFile = (filename) => api.delete(`/files/${filename}`).then(r => r.data);
 

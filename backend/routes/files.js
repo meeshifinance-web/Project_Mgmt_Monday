@@ -39,16 +39,17 @@ router.post('/upload', requireAuth, upload.single('file'), (req, res) => {
 router.get('/:filename', requireAuth, (req, res) => {
   const filename = path.basename(req.params.filename); // strip path traversal
   const filePath = path.join(UPLOADS_DIR, filename);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
-  res.sendFile(filePath);
+  fs.access(filePath, fs.constants.F_OK, (err) => {
+    if (err) return res.status(404).json({ error: 'File not found' });
+    res.sendFile(filePath);
+  });
 });
 
 // DELETE /api/files/:filename
 router.delete('/:filename', requireAuth, (req, res) => {
   const filename = path.basename(req.params.filename);
   const filePath = path.join(UPLOADS_DIR, filename);
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  res.json({ success: true });
+  fs.unlink(filePath, () => res.json({ success: true })); // ignore ENOENT
 });
 
 module.exports = router;
