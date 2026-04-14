@@ -713,6 +713,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate
       onDragEnd={onDragEnd}
       onDragOver={e => onDragOver(e, group.id, item.id)}
       onDrop={e => onDrop(e, group.id, item.id)}
+      onClick={e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); e.stopPropagation(); onToggleSelect?.(item.id); } }}
       style={{ borderBottom: '1px solid var(--border-color)', background: rowBg, height: 40, cursor: 'grab', transition: 'background 0.1s' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -2458,6 +2459,9 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
         </div>
       </div>
 
+      {/* ── Scrollable sections wrapper ── */}
+      <div style={{ overflowY: 'auto', maxHeight: 'calc(80vh - 120px)' }}>
+
       {/* ── Section 1: Filter rows ── */}
       {sectionHeader('Filter items', completeRules.length, true, () => {})}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 16 }}>
@@ -2536,6 +2540,8 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
           </div>
         )}
       </div>
+
+      </div>{/* ── end scrollable sections wrapper ── */}
 
       {/* ── Save button ── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, borderTop: '1px solid var(--border-color, #e6e9ef)', paddingTop: 10 }}>
