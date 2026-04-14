@@ -528,10 +528,12 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
                 <button onClick={() => copyToClipboard(embedCode, 'Embed code')} style={{ ...shareBtn('#64748b'), marginTop: 8, width: '100%', justifyContent: 'center' }}>Copy Embed Code</button>
               </Field>
 
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.55, display: 'flex', gap: 8 }}>
-                <span style={{ flexShrink: 0 }}>💡</span>
-                <span>Replace <code style={{ background: '#fef3c7', padding: '1px 4px', borderRadius: 4 }}>localhost:5173</code> with your production domain when deploying.</span>
-              </div>
+              {window.location.hostname === 'localhost' && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.55, display: 'flex', gap: 8 }}>
+                  <span style={{ flexShrink: 0 }}>💡</span>
+                  <span>Replace <code style={{ background: '#fef3c7', padding: '1px 4px', borderRadius: 4 }}>localhost</code> with your production domain when deploying.</span>
+                </div>
+              )}
             </div>
           )}
         </div>
