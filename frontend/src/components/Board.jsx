@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react'; // lazy/Suspense kept for ActivityLogPanel
 import { useVirtualizer } from '@tanstack/react-virtual';
+import ManualCascadePopover from './automation/ManualCascadePopover';
 import ColumnCell, { parseOwners } from './ColumnCell';
 import AddColumnModal from './AddColumnModal';
 import StatusOptionsEditor from './StatusOptionsEditor';
@@ -703,7 +704,7 @@ function colWidth(col) {
 // ── Item row ──────────────────────────────────────────────────────────────────
 const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
-  isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand }) {
+  isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand, onRunCascade }) {
   const [hovered, setHovered] = useState(false);
   const rowBg = isSelected ? 'rgba(0,115,234,0.1)' : hovered ? 'var(--hover-bg)' : 'var(--bg-primary)';
   return (
@@ -813,16 +814,27 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate
           </td>
         ))
       }
-      {/* Copy + Delete */}
-      <td style={{ width: 64, textAlign: 'center', borderRight: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>
+      {/* Copy + Cascade + Delete */}
+      <td style={{ width: 80, textAlign: 'center', borderRight: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>
         {canEdit && hovered && (
-          <button
-            onClick={e => { e.stopPropagation(); onItemCopy?.(item.id); }}
-            style={{ color: '#c5c7d0', fontSize: 13, lineHeight: 1, marginRight: 6, transition: 'color 0.15s' }}
-            title="Duplicate item"
-            onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
-            onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
-          >⧉</button>
+          <>
+            <button
+              onClick={e => { e.stopPropagation(); onItemCopy?.(item.id); }}
+              style={{ color: '#c5c7d0', fontSize: 13, lineHeight: 1, marginRight: 4, transition: 'color 0.15s' }}
+              title="Duplicate item"
+              onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+              onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
+            >⧉</button>
+            {onRunCascade && (
+              <button
+                onClick={e => { e.stopPropagation(); onRunCascade(item); }}
+                style={{ color: '#c5c7d0', fontSize: 12, lineHeight: 1, marginRight: 4, transition: 'color 0.15s' }}
+                title="Run date cascade"
+                onMouseEnter={e => e.currentTarget.style.color = '#00c875'}
+                onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
+              >📅</button>
+            )}
+          </>
         )}
         {canEdit && (
           <button onClick={() => onItemDelete(item.id)}
@@ -1077,7 +1089,8 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
   isGroupDragSrc, isGroupDropOver,
   onGroupDragStart, onGroupDragEnd, onGroupDragOver, onGroupDrop,
   selectedItems, onToggleSelect,
-  onSubitemCreate, onSubitemUpdate, onSubitemDelete, onSubitemValueChange }) {
+  onSubitemCreate, onSubitemUpdate, onSubitemDelete, onSubitemValueChange,
+  onRunCascade }) {
   const [collapsed, setCollapsed] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState('');
@@ -1239,6 +1252,7 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
             subitems={item.subitems || []}
             isExpanded={expandedItems.has(item.id)}
             onToggleExpand={() => toggleExpand(item.id)}
+            onRunCascade={onRunCascade}
           />
           {/* Subitems — shown when expanded */}
           {expandedItems.has(item.id) && (
@@ -2812,6 +2826,7 @@ function VirtualisedGroups({
                 subitems={item.subitems || []}
                 isExpanded={expandedItems.has(item.id)}
                 onToggleExpand={() => toggleExpand(item.id)}
+                onRunCascade={canEdit ? (itm) => setCascadePopover({ item: itm }) : null}
               />
             </React.Fragment>
           );
@@ -2904,6 +2919,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const [shareCopied, setShareCopied] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
   const [activeAutoCount, setActiveAutoCount] = useState(0);
+  const [cascadePopover, setCascadePopover] = useState(null); // { itemId, item }
   const [showForms, setShowForms] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -3474,6 +3490,22 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       });
       if (r.data.triggeredAutomations?.length) fireAutomations(r.data.triggeredAutomations, toast);
       if (r.data.movedItem) toast('Item moved by automation', 'success');
+
+      // ── Date Cascade result ────────────────────────────────────────────────
+      if (r.data.cascadeResult?.success) {
+        const { datesCalculated, stepsUpdated } = r.data.cascadeResult;
+        // Apply cascaded dates directly to local state (avoids a round-trip fetch)
+        updateLocalBoard(b => ({
+          groups: b.groups.map(g => ({
+            ...g,
+            items: g.items.map(i => {
+              if (i.id !== itemId) return i;
+              return { ...i, values: { ...i.values, ...datesCalculated } };
+            }),
+          })),
+        }));
+        toast(`⚡ ${stepsUpdated} step date${stepsUpdated !== 1 ? 's' : ''} auto-filled`, 'success');
+      }
     } catch { toast('Failed to save value', 'error'); }
   }, [updateLocalBoard, toast]);
 
@@ -4305,6 +4337,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       {showAutomations && (
         <AutomationsLazy
           boardId={board.id}
+          boardName={board.name}
           columns={cols}
           groups={groups}
           boardEmailFrom={board.email_from || ''}
@@ -4349,6 +4382,30 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         />
       )}
 
+      {cascadePopover && (
+        <ManualCascadePopover
+          boardId={board.id}
+          itemId={cascadePopover.item.id}
+          itemName={cascadePopover.item.name}
+          itemValues={cascadePopover.item.values || {}}
+          onResult={(result) => {
+            if (result?.success) {
+              updateLocalBoard(b => ({
+                groups: b.groups.map(g => ({
+                  ...g,
+                  items: g.items.map(i => {
+                    if (i.id !== cascadePopover.item.id) return i;
+                    return { ...i, values: { ...i.values, ...result.datesCalculated } };
+                  }),
+                })),
+              }));
+              toast(`⚡ ${result.stepsUpdated} step date${result.stepsUpdated !== 1 ? 's' : ''} auto-filled`, 'success');
+            }
+          }}
+          onClose={() => setCascadePopover(null)}
+        />
+      )}
+
       {importPreview && (
         <ImportPreviewModal
           csvRows={importPreview.csvRows}
@@ -4379,3 +4436,4 @@ function AutomationsLazy(props) {
     </Suspense>
   );
 }
+

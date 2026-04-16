@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { requireAuth, canAccessBoard } = require('../middleware/auth');
 const { sendAutomationEmail } = require('../services/automationEmail');
+const { runDateCascade } = require('../services/dateCascadeEngine');
 
 async function logActivity(client, data) {
   try {
@@ -36,15 +37,19 @@ router.post('/upsert', requireAuth, async (req, res) => {
   }
 
   const client = await pool.connect();
+  // Variables captured for post-transaction cascade check
+  let savedRow, triggeredAutomations, movedItem, setValues;
+  let board_id, colType, old_value;
+
   try {
     await client.query('BEGIN');
 
-    // Fetch old value for logging
+    // Fetch old value for logging + cascade from-value comparison
     const oldRes = await client.query(
       'SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2',
       [item_id, column_id]
     );
-    const old_value = oldRes.rows[0]?.value || '';
+    old_value = oldRes.rows[0]?.value || '';
 
     // 1. Upsert the column value
     const { rows } = await client.query(
@@ -54,6 +59,17 @@ router.post('/upsert', requireAuth, async (req, res) => {
        RETURNING *`,
       [item_id, column_id, value]
     );
+    savedRow = rows[0];
+
+    // Mark this cell as manually edited so cascade won't overwrite it
+    try {
+      await client.query(
+        `INSERT INTO column_value_meta (item_id, column_id, is_auto_cascaded)
+         VALUES ($1,$2,false)
+         ON CONFLICT (item_id, column_id) DO UPDATE SET is_auto_cascaded=false`,
+        [item_id, column_id]
+      );
+    } catch (_) { /* table may not exist during first migration — safe to ignore */ }
 
     // 2. Get column info + item info
     const colRes = await client.query(
@@ -62,16 +78,23 @@ router.post('/upsert', requireAuth, async (req, res) => {
     );
     if (!colRes.rows.length) {
       await client.query('COMMIT');
-      return res.json({ value: rows[0], triggeredAutomations: [] });
+      // Release before returning so cascade check path is consistent
+      triggeredAutomations = [];
+      movedItem = null;
+      setValues = [];
+      client.release();
+      return res.json({ value: savedRow, triggeredAutomations, cascadeResult: null });
     }
 
-    const { board_id, title } = colRes.rows[0];
+    const { board_id: bId, title } = colRes.rows[0];
+    board_id = bId;
+    colType  = colRes.rows[0].type;
 
     // Fetch item name for log
     const itemRes2 = await client.query('SELECT name FROM items WHERE id=$1', [item_id]);
     const item_name = itemRes2.rows[0]?.name || '';
 
-    // 3. Find enabled status_change automations that match
+    // 3. Find enabled status_change automations (existing Monday-style automations)
     const autoRes = await client.query(
       "SELECT * FROM automations WHERE board_id=$1 AND trigger_type='status_change' AND enabled=true",
       [board_id]
@@ -82,10 +105,10 @@ router.post('/upsert', requireAuth, async (req, res) => {
       return colMatch && cfg.to_value === value;
     });
 
-    // 4. Execute each automation
-    const triggeredAutomations = [];
-    let movedItem = null;
-    const setValues = [];
+    // 4. Execute each matching automation
+    triggeredAutomations = [];
+    movedItem = null;
+    setValues = [];
 
     for (const auto of matching) {
       const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : auto.action_config;
@@ -109,7 +132,6 @@ router.post('/upsert', requireAuth, async (req, res) => {
           setValues.push({ column_id: parseInt(targetColId), value: targetVal });
         }
       } else if (auto.action_type === 'send_email') {
-        // Execute server-side — resolve item placeholders and send via SMTP
         sendAutomationEmail({
           boardId:    board_id,
           itemId:     parseInt(item_id),
@@ -140,14 +162,71 @@ router.post('/upsert', requireAuth, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.json({ value: rows[0], triggeredAutomations, movedItem, setValues });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
-  } finally {
     client.release();
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
+  // Release BEFORE cascade so cascade gets a fresh pool connection
+  client.release();
+
+  // ── Date Cascade Hook ────────────────────────────────────────────────────────
+  // Runs in the same request cycle (synchronous to include result in response).
+  // Uses its own pool connection — no shared transaction with the above.
+  let cascadeResult = null;
+  try {
+    if (board_id) {
+      const rulesRes = await pool.query(
+        'SELECT * FROM board_automation_rules WHERE board_id=$1 AND is_active=true',
+        [board_id]
+      );
+      for (const rule of rulesRes.rows) {
+        let anchorColId = rule.anchor_column_id;
+        let anchorDate  = null;
+
+        if (rule.trigger_type === 'date_entry' && colType === 'date') {
+          if (parseInt(rule.trigger_column_id) === parseInt(column_id)) {
+            anchorDate = value; // the date the user just saved
+          }
+        } else if (rule.trigger_type === 'status_change' &&
+                   (colType === 'status' || colType === 'dropdown')) {
+          const colMatches = !rule.trigger_column_id ||
+                             parseInt(rule.trigger_column_id) === parseInt(column_id);
+          const fromMatches = !rule.trigger_status_from ||
+                              rule.trigger_status_from === old_value;
+          const toMatches   = rule.trigger_status_to === value;
+          if (colMatches && fromMatches && toMatches) {
+            // Use the existing anchor column value, or today as fallback
+            const anchorRes = await pool.query(
+              'SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2',
+              [item_id, anchorColId]
+            );
+            anchorDate = anchorRes.rows[0]?.value ||
+                         new Date().toISOString().slice(0, 10);
+          }
+        }
+
+        if (anchorDate) {
+          cascadeResult = await runDateCascade({
+            boardId:        parseInt(board_id),
+            itemId:         parseInt(item_id),
+            anchorColumnId: parseInt(anchorColId),
+            anchorDate,
+            direction:      rule.direction,
+            userId:         req.user?.id,
+            ruleId:         rule.id,
+          });
+          break; // first matching rule wins
+        }
+      }
+    }
+  } catch (cascadeErr) {
+    console.error('[DateCascade] hook error:', cascadeErr.message);
+    // do not fail the main request
+  }
+
+  res.json({ value: savedRow, triggeredAutomations, movedItem, setValues, cascadeResult });
 });
 
 module.exports = router;

@@ -186,3 +186,18 @@ export const submitPublicForm = (slug, data) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }).then(r => r.json());
+
+// ── Date Cascade ──────────────────────────────────────────────────────────────
+export const getCascadeTemplates   = (boardId)           => api.get(`/date-cascade/templates/${boardId}`).then(r => r.data);
+export const saveCascadeTemplates  = (boardId, steps)    => api.post(`/date-cascade/templates/${boardId}`, { steps }).then(r => r.data);
+export const updateCascadeStep     = (boardId, stepId, data) => api.put(`/date-cascade/templates/${boardId}/step/${stepId}`, data).then(r => r.data);
+export const deleteCascadeTemplates = (boardId)          => api.delete(`/date-cascade/templates/${boardId}`).then(r => r.data);
+
+export const getCascadeRules       = (boardId)           => api.get(`/date-cascade/rules/${boardId}`).then(r => r.data);
+export const createCascadeRule     = (boardId, data)     => api.post(`/date-cascade/rules/${boardId}`, data).then(r => r.data);
+export const updateCascadeRule     = (ruleId, data)      => api.put(`/date-cascade/rules/${ruleId}`, data).then(r => r.data);
+export const deleteCascadeRule     = (ruleId)            => api.delete(`/date-cascade/rules/${ruleId}`).then(r => r.data);
+
+export const triggerDateCascade    = (data)              => api.post('/date-cascade/trigger', data).then(r => r.data);
+export const getCascadeLogs        = (boardId, itemId)   => api.get(itemId ? `/date-cascade/logs/${boardId}/${itemId}` : `/date-cascade/logs/${boardId}`).then(r => r.data);
+export const overrideCascadeMeta   = (item_id, column_id) => api.patch('/date-cascade/meta/override', { item_id, column_id }).then(r => r.data);

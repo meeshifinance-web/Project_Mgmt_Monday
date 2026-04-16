@@ -84,6 +84,7 @@ app.use('/api/files', require('./routes/files'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/my-work', require('./routes/myWork'));
 app.use('/api/dashboards', require('./routes/dashboards'));
+app.use('/api/date-cascade', require('./routes/dateCascade'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -335,6 +336,66 @@ async function start() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dashboard_widgets ON dashboard_widgets(dashboard_id)`);
     console.log('✅ dashboards tables ready');
+
+    // ── Date Cascade tables ────────────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS board_step_templates (
+        id            SERIAL PRIMARY KEY,
+        board_id      INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+        step_order    INTEGER NOT NULL,
+        step_name     VARCHAR(255) NOT NULL,
+        duration_days INTEGER NOT NULL DEFAULT 1,
+        column_id     INTEGER REFERENCES columns(id) ON DELETE CASCADE,
+        is_anchor     BOOLEAN DEFAULT FALSE,
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(board_id, step_order)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS board_automation_rules (
+        id                   SERIAL PRIMARY KEY,
+        board_id             INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+        rule_name            VARCHAR(255) NOT NULL,
+        trigger_type         VARCHAR(30)  NOT NULL CHECK (trigger_type IN ('date_entry','status_change')),
+        trigger_column_id    INTEGER REFERENCES columns(id) ON DELETE SET NULL,
+        trigger_status_from  VARCHAR(100),
+        trigger_status_to    VARCHAR(100),
+        anchor_column_id     INTEGER REFERENCES columns(id) ON DELETE SET NULL,
+        direction            VARCHAR(10)  NOT NULL DEFAULT 'both'
+                             CHECK (direction IN ('forward','backward','both')),
+        is_active            BOOLEAN DEFAULT TRUE,
+        created_at           TIMESTAMPTZ DEFAULT NOW(),
+        updated_at           TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS automation_logs (
+        id                SERIAL PRIMARY KEY,
+        board_id          INTEGER NOT NULL,
+        item_id           INTEGER NOT NULL,
+        rule_id           INTEGER REFERENCES board_automation_rules(id) ON DELETE SET NULL,
+        triggered_by      VARCHAR(30),
+        anchor_column_id  INTEGER,
+        anchor_date       DATE,
+        dates_calculated  JSONB,
+        performed_by      INTEGER,
+        created_at        TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS column_value_meta (
+        id               SERIAL PRIMARY KEY,
+        item_id          INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        column_id        INTEGER NOT NULL REFERENCES columns(id) ON DELETE CASCADE,
+        is_auto_cascaded BOOLEAN DEFAULT FALSE,
+        UNIQUE(item_id, column_id)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_automation_logs_board ON automation_logs(board_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_automation_logs_item  ON automation_logs(item_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_cascade_meta_item     ON column_value_meta(item_id)`);
+    console.log('✅ Date Cascade tables ready');
 
     const { rows } = await pool.query('SELECT COUNT(*) FROM boards');
     if (parseInt(rows[0].count) === 0) {
