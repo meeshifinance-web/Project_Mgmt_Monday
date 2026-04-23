@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const { requireAuth, canAccessBoard } = require('../middleware/auth');
 const { sendAutomationEmail } = require('../services/automationEmail');
+const { notifyNewAssignees } = require('../services/assignmentEmail');
 const { runDateCascade } = require('../services/dateCascadeEngine');
 
 async function logActivity(client, data) {
@@ -170,6 +171,19 @@ router.post('/upsert', requireAuth, async (req, res) => {
   }
   // Release BEFORE cascade so cascade gets a fresh pool connection
   client.release();
+
+  // ── Person-assignment Email Hook ─────────────────────────────────────────────
+  // Fire-and-forget — never blocks the response. Only fires for person columns
+  // when newly-added assignees are detected (diff of oldValue vs newValue).
+  if (colType === 'person' && old_value !== value) {
+    notifyNewAssignees({
+      oldValue: old_value,
+      newValue: value,
+      itemId:   parseInt(item_id),
+      boardId:  parseInt(board_id),
+      actor:    { id: req.user?.id, name: req.user?.name },
+    }).catch(err => console.error('[AssignEmail] async error:', err.message));
+  }
 
   // ── Date Cascade Hook ────────────────────────────────────────────────────────
   // Runs in the same request cycle (synchronous to include result in response).
