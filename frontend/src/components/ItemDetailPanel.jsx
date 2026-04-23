@@ -485,7 +485,7 @@ function colTypeIcon(type) {
 }
 
 // ── Main panel ────────────────────────────────────────────────────────────────
-export default function ItemDetailPanel({ item, group, columns, boardId, onClose, onItemUpdate, onValueChange, canEdit, isManager, defaultTab = 'fields' }) {
+export default function ItemDetailPanel({ item, group, columns, boardId, onClose, onItemUpdate, onValueChange, canEdit, isManager, defaultTab = 'updates' }) {
   const { user } = useAuth();
   const [tab, setTab] = useState(defaultTab);
   // Re-sync if panel is opened via notification (defaultTab changes)
@@ -503,9 +503,9 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
       .catch(() => {});
   }, [boardId]);
 
-  // Load comments + activity when switching to updates tab or item changes
+  // Load comments + activity + emails when switching to updates/activity tab or item changes
   useEffect(() => {
-    if (tab !== 'updates') return;
+    if (tab !== 'updates' && tab !== 'activity') return;
     setLoadingUpdates(true);
     Promise.all([
       getComments(item.id).then(r => r.data),
@@ -536,12 +536,18 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
     repliesMap[r.parent_id].push(r);
   });
 
-  // Merge root comments + activity + emails into timeline, sorted by date
-  const timeline = [
+  // Updates tab — human conversation (comments + emails)
+  const updatesTimeline = [
     ...rootComments.map(c => ({ ...c, _type: 'comment' })),
-    ...activity.map(a =>    ({ ...a, _type: 'activity' })),
     ...emails.map(e =>      ({ ...e, _type: 'email' })),
   ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  // Activity Log tab — system-generated events only
+  const activityTimeline = [...activity]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const updatesCount  = rootComments.length + emails.length;
+  const activityCount = activity.length;
 
   const fieldColumns = columns.filter(c => c.type !== 'creation_log');
 
@@ -586,7 +592,11 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
 
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 0, marginTop: 16 }}>
-            {[['fields', 'Fields'], ['updates', `Updates${(comments.length + emails.length) ? ` (${comments.length + emails.length})` : ''}`]].map(([key, label]) => (
+            {[
+              ['fields',   'Fields'],
+              ['updates',  `Updates${updatesCount ? ` (${updatesCount})` : ''}`],
+              ['activity', `Activity Log${activityCount ? ` (${activityCount})` : ''}`],
+            ].map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '7px 20px', fontSize: 13, fontWeight: 600,
                 color: tab === key ? '#0073ea' : '#676879',
@@ -632,18 +642,18 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
               </div>
             )}
 
-            {/* Timeline */}
+            {/* Timeline — comments + emails only */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
               {loadingUpdates ? (
                 <div style={{ textAlign: 'center', padding: 40, color: '#aaa' }}>Loading…</div>
-              ) : timeline.length === 0 ? (
+              ) : updatesTimeline.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 60, color: '#aaa' }}>
                   <div style={{ fontSize: 40, marginBottom: 10 }}>💬</div>
                   <div style={{ fontSize: 14 }}>No updates yet</div>
                   <div style={{ fontSize: 12, marginTop: 4 }}>Write a comment · type @ to mention someone · emails appear here automatically</div>
                 </div>
               ) : (
-                timeline.map(entry => {
+                updatesTimeline.map(entry => {
                   if (entry._type === 'comment') {
                     return (
                       <CommentEntry
@@ -660,11 +670,29 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
                       />
                     );
                   }
-                  if (entry._type === 'email') {
-                    return <EmailEntry key={`e-${entry.id}`} email={entry} />;
-                  }
-                  return <ActivityEntry key={`a-${entry.id}`} log={entry} />;
+                  return <EmailEntry key={`e-${entry.id}`} email={entry} />;
                 })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Activity Log tab ── */}
+        {tab === 'activity' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+              {loadingUpdates ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#aaa' }}>Loading…</div>
+              ) : activityTimeline.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 60, color: '#aaa' }}>
+                  <div style={{ fontSize: 40, marginBottom: 10 }}>📋</div>
+                  <div style={{ fontSize: 14 }}>No activity yet</div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>Field changes, status updates, and moves will appear here</div>
+                </div>
+              ) : (
+                activityTimeline.map(entry => (
+                  <ActivityEntry key={`a-${entry.id}`} log={entry} />
+                ))
               )}
             </div>
           </div>
