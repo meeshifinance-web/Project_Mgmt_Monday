@@ -47,11 +47,12 @@ async function pollOnce() {
         console.error('[emailPoller] markRead failed:', err.message);
       }
 
-      // TEMP DEBUG: log every outcome including skipped/no_match with from + subject,
-      // so we can diagnose why prod emails aren't matching automation rules.
-      // Revert to the quiet version (skip-guard) once filter behavior is confirmed.
-      const summary = result.itemId ? `item ${result.itemId}` : (result.reason || '');
-      console.log(`[emailPoller] → ${result.action} ${summary} | from="${email.from?.address || ''}" subj="${email.subject}"`);
+      // Only log meaningful outcomes; skipped/no_match is noise (unrelated
+      // mailbox traffic that didn't match any automation keyword).
+      if (result.action !== 'skipped') {
+        const summary = result.itemId ? `item ${result.itemId}` : (result.reason || '');
+        console.log(`[emailPoller] → ${result.action} ${summary} | "${email.subject}"`);
+      }
     }
   } catch (err) {
     console.error('[emailPoller] cycle error:', err.message);
