@@ -19,12 +19,15 @@ const ACTIONS_FOR = {
   status_change: [
     { value: 'move_to_group', label: 'Move item to group' },
     { value: 'set_status',    label: 'Set another status to…' },
+    { value: 'assign_person', label: '👤 Assign to person / owner' },
+    { value: 'set_due_date',  label: '📅 Set due date to a weekday' },
     { value: 'notify',        label: 'Show notification' },
     { value: 'send_email',    label: '✉️ Send email' },
   ],
   item_created: [
     { value: 'set_status',    label: 'Set status to…' },
     { value: 'assign_person', label: '👤 Assign to person / owner' },
+    { value: 'set_due_date',  label: '📅 Set due date to a weekday' },
     { value: 'notify',        label: 'Show notification' },
     { value: 'send_email',    label: '✉️ Send email' },
   ],
@@ -111,6 +114,14 @@ function Summary({ auto, columns, groups }) {
   if (auto.action_type === 'assign_person') {
     const col = columns.find(c => String(c.id) === String(acfg.column_id));
     actText = `Assign "${acfg.user_name || '?'}" → ${col?.title || 'person column'}`;
+  }
+  if (auto.action_type === 'set_due_date') {
+    const col = columns.find(c => String(c.id) === String(acfg.column_id));
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dayLabel = dayNames[Number(acfg.weekday)] ?? '?';
+    const wa = Number(acfg.weeks_ahead) || 1;
+    const weekLabel = wa === 1 ? 'next' : wa === 2 ? 'in 2 weeks' : `in ${wa} weeks`;
+    actText = `Set "${col?.title || 'date'}" → ${dayLabel} ${weekLabel}`;
   }
   if (auto.action_type === 'notify')     actText = `Notify: "${acfg.message || '…'}"`;
   if (auto.action_type === 'send_email') {
@@ -338,6 +349,55 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                 </select>
               )}
             </div>
+          </div>
+        )}
+
+        {actionType === 'set_due_date' && (
+          <div style={{ marginTop: 8 }}>
+            {columns.filter(c => c.type === 'date').length === 0 ? (
+              <div style={{ fontSize: 11, color: '#e2445c', padding: '6px 10px', background: '#fff0f2', borderRadius: 6 }}>
+                No date columns found on this board. Add a Date column first.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1.2 }}>
+                  <p style={label}>Date column</p>
+                  <select value={actionConfig.column_id || ''} onChange={e => setAC({ column_id: e.target.value })} style={sel}>
+                    <option value="">Select date column…</option>
+                    {columns.filter(c => c.type === 'date').map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={label}>Day of week</p>
+                  <select value={actionConfig.weekday ?? ''} onChange={e => setAC({ weekday: e.target.value })} style={sel}>
+                    <option value="">Select day…</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                    <option value="0">Sunday</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={label}>Of which week?</p>
+                  <select value={actionConfig.weeks_ahead || 1} onChange={e => setAC({ weeks_ahead: parseInt(e.target.value) })} style={sel}>
+                    <option value="1">Next</option>
+                    <option value="2">2 weeks ahead</option>
+                    <option value="3">3 weeks ahead</option>
+                    <option value="4">4 weeks ahead</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            <p style={{ fontSize: 11, color: '#888', margin: '6px 2px 0', lineHeight: 1.5 }}>
+              When a new item is created, the selected date column auto-fills with the upcoming
+              chosen weekday. "Next" means the soonest future occurrence (never today). Useful for
+              recurring weekly / bi-weekly review tasks.
+            </p>
           </div>
         )}
 

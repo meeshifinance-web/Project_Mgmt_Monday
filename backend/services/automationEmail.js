@@ -24,6 +24,33 @@
 
 const nodemailer = require('nodemailer');
 const pool = require('../db');
+const {
+  escapeHtml,
+  formatDueDate,
+  statusBadgeHtml,
+  dueDateChipHtml,
+  renderEmailShell,
+  renderPlainText,
+} = require('./emailTemplate');
+
+// Look up the configured color for a status option so the email badge matches
+// the one users see in the app. Falls back to neutral grey on miss.
+async function lookupStatusColor(boardId, statusValue) {
+  if (!statusValue) return null;
+  try {
+    const res = await pool.query(
+      `SELECT settings FROM columns WHERE board_id=$1 AND type='status'`,
+      [boardId]
+    );
+    for (const row of res.rows) {
+      const s = typeof row.settings === 'string' ? JSON.parse(row.settings) : (row.settings || {});
+      const opts = Array.isArray(s.options) ? s.options : [];
+      const match = opts.find(o => String(o.label || '').toLowerCase() === String(statusValue).toLowerCase());
+      if (match && match.color) return match.color;
+    }
+  } catch (_) { /* non-fatal */ }
+  return null;
+}
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -175,12 +202,75 @@ async function sendAutomationEmail({ boardId, itemId, to, toType, toColumnId, su
       tls:        { rejectUnauthorized: false },
     });
 
+    // Build the same item card the assignment email uses (status badge, due
+    // date chip, breadcrumb) and embed the user-authored body underneath as
+    // the message itself. Result: every automation email feels on-brand and
+    // gives the recipient one-click access to the task.
+    const statusVal = (() => {
+      const col = colRes.rows.find(c => /status/i.test(c.title));
+      return col ? values[col.id] || '' : '';
+    })();
+    const dueVal = (() => {
+      // Pick the first date column with a value
+      for (const c of colRes.rows) {
+        if (/due|date/i.test(c.title) && values[c.id]) return values[c.id];
+      }
+      return '';
+    })();
+    const statusColor = await lookupStatusColor(boardId, statusVal);
+    const dueInfo     = formatDueDate(dueVal);
+
+    const facts = [];
+    if (statusVal) facts.push({
+      label: 'Status',
+      valueHtml: statusBadgeHtml(statusVal, statusColor),
+      valueText: statusVal,
+    });
+    if (dueInfo) facts.push({
+      label: 'Due',
+      valueHtml: dueDateChipHtml(dueInfo),
+      valueText: dueInfo.relative ? `${dueInfo.absolute} (${dueInfo.relative})` : dueInfo.absolute,
+    });
+
+    const breadcrumbHtml = [board.name, item.group_name].filter(Boolean).map(escapeHtml).join(' &nbsp;&rsaquo;&nbsp; ');
+    const appUrl  = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const itemUrl = `${appUrl}/board/${boardId}?item=${itemId}`;
+
+    // User body becomes the "extraHtml" block — preserve their line breaks
+    // but escape their text so any < > or & in plain content renders correctly.
+    const escapedBody = escapeHtml(resolvedBody || '').replace(/\n/g, '<br>');
+    const extraHtml = escapedBody
+      ? `<div style="white-space:normal;font-size:14px;line-height:1.6;color:#42526e">${escapedBody}</div>`
+      : '';
+
+    const html = renderEmailShell({
+      preheader: (resolvedSubject || resolvedBody || '').slice(0, 110),
+      heading: resolvedSubject || 'Update from Tuesday.com',
+      itemName: item.item_name || '',
+      breadcrumbHtml,
+      facts,
+      extraHtml,
+      ctaUrl: itemUrl,
+      ctaLabel: 'View task',
+      footerNote: 'This message was triggered automatically by a workflow rule on this board.',
+    });
+
+    const text = renderPlainText({
+      heading: resolvedSubject || 'Update from Tuesday.com',
+      itemName: item.item_name || '',
+      extraText: resolvedBody || '',
+      facts,
+      ctaUrl: itemUrl,
+      ctaLabel: 'View task',
+      footerNote: 'Sent automatically by a Tuesday.com automation rule.',
+    });
+
     await transporter.sendMail({
       from,
       to: resolvedTo,
       subject: resolvedSubject || '(No subject)',
-      text:    resolvedBody,
-      html:    `<div style="font-family:sans-serif;white-space:pre-wrap">${resolvedBody.replace(/\n/g, '<br>')}</div>`,
+      text,
+      html,
     });
 
     // Store the outgoing email so it appears in the item's Updates tab

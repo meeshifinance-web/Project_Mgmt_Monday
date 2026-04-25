@@ -4,6 +4,8 @@ const pool = require('../db');
 const { requireAuth, canAccessBoard } = require('../middleware/auth');
 const { requireScope } = require('../middleware/apiAuth');
 const { sendAutomationEmail } = require('../services/automationEmail');
+const { computeRelativeDate } = require('../services/relativeDate');
+const { notifyNewAssignees } = require('../services/assignmentEmail');
 
 async function logActivity(client, data) {
   try {
@@ -88,6 +90,15 @@ router.post('/', requireAuth, requireScope('write'), async (req, res) => {
               [item.id, colId, userName]
             );
             item.values[parseInt(colId)] = userName;
+            // Fire assignment notification — fresh item, so oldValue is empty.
+            // Run after commit (setImmediate) so the row is durable before email.
+            setImmediate(() => notifyNewAssignees({
+              oldValue: null,
+              newValue: userName,
+              itemId:   item.id,
+              boardId:  board_id,
+              actor:    { id: req.user?.id, name: req.user?.name },
+            }).catch(err => console.error('[AssignEmail] automation async error:', err.message)));
           }
         } else if (auto.action_type === 'send_email') {
           // Fire after commit so item exists in DB for placeholder resolution
@@ -100,6 +111,26 @@ router.post('/', requireAuth, requireScope('write'), async (req, res) => {
             subject:    acfg.subject || '',
             body:       acfg.body || '',
           }).catch(err => console.error('[AutomationEmail] async error:', err.message)));
+        } else if (auto.action_type === 'set_due_date') {
+          // Compute a date relative to today based on weekday + weeks_ahead and
+          // write it to the configured date column. Lets directors auto-set
+          // recurring review/meeting due dates ("next Monday", "Thursday in 2
+          // weeks") on every newly-created task without manual entry.
+          const { column_id: colId, weekday, weeks_ahead } = acfg;
+          if (colId && weekday !== undefined && weekday !== '' && weekday !== null) {
+            try {
+              const dateStr = computeRelativeDate({ weekday, weeks_ahead });
+              await client.query(
+                `INSERT INTO column_values (item_id, column_id, value)
+                 VALUES ($1,$2,$3)
+                 ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+                [item.id, colId, dateStr]
+              );
+              item.values[parseInt(colId)] = dateStr;
+            } catch (e) {
+              console.error('[Automation set_due_date] failed:', e.message);
+            }
+          }
         } else {
           triggeredAutomations.push(auto);
         }

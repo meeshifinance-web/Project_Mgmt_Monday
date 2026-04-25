@@ -5,6 +5,7 @@ const { requireAuth, canAccessBoard } = require('../middleware/auth');
 const { sendAutomationEmail } = require('../services/automationEmail');
 const { notifyNewAssignees } = require('../services/assignmentEmail');
 const { runDateCascade } = require('../services/dateCascadeEngine');
+const { computeRelativeDate } = require('../services/relativeDate');
 
 async function logActivity(client, data) {
   try {
@@ -132,6 +133,39 @@ router.post('/upsert', requireAuth, async (req, res) => {
           );
           setValues.push({ column_id: parseInt(targetColId), value: targetVal });
         }
+      } else if (auto.action_type === 'assign_person') {
+        // Auto-assign the task to a specific board member when status flips.
+        // Same data shape as the item_created variant — column_id targets a
+        // person column, user_name is the assignee's name as stored on board.
+        const { column_id: targetColId, user_name: userName } = acfg;
+        if (targetColId && userName) {
+          // Capture pre-existing assignees so notifyNewAssignees can diff
+          // and only email people who weren't already on the item.
+          const oldRes = await client.query(
+            'SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2',
+            [item_id, targetColId]
+          );
+          const oldAssignees = oldRes.rows[0]?.value || null;
+
+          await client.query(
+            `INSERT INTO column_values (item_id, column_id, value)
+             VALUES ($1,$2,$3)
+             ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+            [item_id, targetColId, userName]
+          );
+          setValues.push({ column_id: parseInt(targetColId), value: userName });
+
+          // Fire-and-forget assignment email after the transaction.
+          if (oldAssignees !== userName) {
+            setImmediate(() => notifyNewAssignees({
+              oldValue: oldAssignees,
+              newValue: userName,
+              itemId:   parseInt(item_id),
+              boardId:  parseInt(board_id),
+              actor:    { id: req.user?.id, name: req.user?.name },
+            }).catch(err => console.error('[AssignEmail] automation async error:', err.message)));
+          }
+        }
       } else if (auto.action_type === 'send_email') {
         sendAutomationEmail({
           boardId:    board_id,
@@ -142,6 +176,25 @@ router.post('/upsert', requireAuth, async (req, res) => {
           subject:    acfg.subject || '',
           body:       acfg.body || '',
         }).catch(err => console.error('[AutomationEmail] async error:', err.message));
+      } else if (auto.action_type === 'set_due_date') {
+        // Same logic as the item_created variant — when status flips to the
+        // configured trigger value, auto-fill the chosen date column with the
+        // next occurrence of weekday + N weeks ahead.
+        const { column_id: targetColId, weekday, weeks_ahead } = acfg;
+        if (targetColId && weekday !== undefined && weekday !== '' && weekday !== null) {
+          try {
+            const dateStr = computeRelativeDate({ weekday, weeks_ahead });
+            await client.query(
+              `INSERT INTO column_values (item_id, column_id, value)
+               VALUES ($1,$2,$3)
+               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+              [item_id, targetColId, dateStr]
+            );
+            setValues.push({ column_id: parseInt(targetColId), value: dateStr });
+          } catch (e) {
+            console.error('[Automation set_due_date] failed:', e.message);
+          }
+        }
       } else {
         triggeredAutomations.push(auto);
       }

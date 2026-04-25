@@ -4,6 +4,8 @@ const pool = require('../db');
 const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
 const rateLimit = require('express-rate-limit');
 const { sendAutomationEmail } = require('../services/automationEmail');
+const { computeRelativeDate } = require('../services/relativeDate');
+const { notifyNewAssignees } = require('../services/assignmentEmail');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
 
@@ -311,9 +313,37 @@ router.post('/public/forms/:slug/submit', formSubmitLimiter, async (req, res) =>
             [item.id, colId, userName]
           );
           setColIds.add(parseInt(colId));
+          // Fire assignment notification — form-created items are fresh, so
+          // oldValue is null. Runs after commit so the row is durable first.
+          setImmediate(() => notifyNewAssignees({
+            oldValue: null,
+            newValue: userName,
+            itemId:   item.id,
+            boardId:  form.board_id,
+            actor:    { id: null, name: 'Form submission' },
+          }).catch(err => console.error('[AssignEmail] form async error:', err.message)));
         }
       } else if (auto.action_type === 'send_email') {
         emailAutomations.push({ auto, acfg }); // fire after commit
+      } else if (auto.action_type === 'set_due_date') {
+        // Auto-fill the configured date column with a weekday + weeks-ahead
+        // computed date (e.g. "Monday next week"). Same logic as items.js
+        // so form-created items get the same treatment as UI-created ones.
+        const { column_id: colId, weekday, weeks_ahead } = acfg;
+        if (colId && weekday !== undefined && weekday !== '' && weekday !== null) {
+          try {
+            const dateStr = computeRelativeDate({ weekday, weeks_ahead });
+            await client.query(
+              `INSERT INTO column_values (item_id, column_id, value)
+               VALUES ($1,$2,$3)
+               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+              [item.id, colId, dateStr]
+            );
+            setColIds.add(parseInt(colId));
+          } catch (e) {
+            console.error('[Automation set_due_date] failed:', e.message);
+          }
+        }
       }
     }
 

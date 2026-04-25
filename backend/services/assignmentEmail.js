@@ -13,6 +13,15 @@
 
 const nodemailer = require('nodemailer');
 const pool = require('../db');
+const {
+  escapeHtml,
+  formatDueDate,
+  avatarHtml,
+  statusBadgeHtml,
+  dueDateChipHtml,
+  renderEmailShell,
+  renderPlainText,
+} = require('./emailTemplate');
 
 function parseOwners(val) {
   if (!val) return [];
@@ -37,64 +46,23 @@ function getTransporter() {
   });
 }
 
-function escapeHtml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function buildHtml({ assigneeName, actorName, itemName, boardName, groupName, status, dueDate, itemUrl }) {
-  const rows = [
-    ['Board', boardName],
-    ['Group', groupName],
-    status   ? ['Status', status]     : null,
-    dueDate  ? ['Due Date', dueDate]  : null,
-  ].filter(Boolean).map(([k, v]) =>
-    `<tr>
-       <td style="padding:6px 12px;color:#676879;font-size:13px;width:90px">${escapeHtml(k)}</td>
-       <td style="padding:6px 12px;color:#323338;font-size:14px;font-weight:500">${escapeHtml(v)}</td>
-     </tr>`
-  ).join('');
-
-  return `
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#f6f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-  <div style="max-width:560px;margin:0 auto;padding:32px 16px">
-    <div style="text-align:center;margin-bottom:24px">
-      <div style="display:inline-block;background:#0073ea;color:#fff;padding:8px 16px;border-radius:6px;font-weight:700;letter-spacing:0.5px;font-size:14px">TUESDAY.COM</div>
-    </div>
-
-    <div style="background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.06);overflow:hidden">
-      <div style="padding:28px 28px 8px">
-        <p style="margin:0 0 6px;color:#323338;font-size:16px">Hi ${escapeHtml(assigneeName)},</p>
-        <p style="margin:0 0 20px;color:#676879;font-size:14px;line-height:1.5">
-          <strong style="color:#323338">${escapeHtml(actorName)}</strong> assigned you to a new task on Tuesday.
-        </p>
-      </div>
-
-      <div style="margin:0 28px;border:1px solid #e6e9ef;border-radius:8px;overflow:hidden">
-        <div style="background:#f6f7fb;padding:14px 16px;border-bottom:1px solid #e6e9ef">
-          <div style="color:#323338;font-size:16px;font-weight:600;line-height:1.3">${escapeHtml(itemName)}</div>
-        </div>
-        <table style="width:100%;border-collapse:collapse">${rows}</table>
-      </div>
-
-      <div style="padding:24px 28px;text-align:center">
-        <a href="${escapeHtml(itemUrl)}" style="display:inline-block;padding:12px 28px;background:#0073ea;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px">Open in Tuesday</a>
-      </div>
-
-      <div style="padding:16px 28px;border-top:1px solid #f0f1f5;color:#aab;font-size:12px;text-align:center">
-        You received this because you were assigned an owner on this task.
-      </div>
-    </div>
-
-    <p style="margin:20px 0 0;color:#aab;font-size:11px;text-align:center">
-      D'Decor Home Fabrics Pvt. Ltd.
-    </p>
-  </div>
-</body>
-</html>`;
+// Look up the brand color configured for a status option, so the badge in
+// the email matches what users see in the app. Falls back to a neutral grey.
+async function lookupStatusColor(boardId, statusValue) {
+  if (!statusValue) return null;
+  try {
+    const res = await pool.query(
+      `SELECT settings FROM columns WHERE board_id=$1 AND type='status'`,
+      [boardId]
+    );
+    for (const row of res.rows) {
+      const s = typeof row.settings === 'string' ? JSON.parse(row.settings) : (row.settings || {});
+      const opts = Array.isArray(s.options) ? s.options : [];
+      const match = opts.find(o => String(o.label || '').toLowerCase() === String(statusValue).toLowerCase());
+      if (match && match.color) return match.color;
+    }
+  } catch (_) { /* non-fatal — fall back to default badge color */ }
+  return null;
 }
 
 /**
@@ -154,33 +122,80 @@ async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }
     );
     const status  = extrasRes.rows.find(r => r.type === 'status')?.value || '';
     const dueDate = extrasRes.rows.find(r => r.type === 'date')?.value || '';
+    const statusColor = await lookupStatusColor(boardId, status);
+    const dueInfo = formatDueDate(dueDate);
 
     const appUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
     const itemUrl = `${appUrl}/board/${boardId}?item=${itemId}`;
     const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
-    const actorName = actor?.name || 'Someone';
+    const actorName = actor?.name || 'Someone on your team';
+    const itemName = ctx.item_name || '(Untitled task)';
+    const boardName = ctx.board_name || '';
+    const groupName = ctx.group_name || '';
 
     for (const rcpt of recipients) {
-      const html = buildHtml({
-        assigneeName: rcpt.name,
-        actorName,
-        itemName:  ctx.item_name  || '(Untitled task)',
-        boardName: ctx.board_name || '',
-        groupName: ctx.group_name || '',
-        status,
-        dueDate,
-        itemUrl,
+      // Build the contextual fact rows. We only show fields that have values
+      // so the card looks clean — empty rows feel unfinished in email clients.
+      const facts = [];
+      if (status) {
+        facts.push({
+          label: 'Status',
+          valueHtml: statusBadgeHtml(status, statusColor),
+          valueText: status,
+        });
+      }
+      if (dueInfo) {
+        facts.push({
+          label: 'Due',
+          valueHtml: dueDateChipHtml(dueInfo),
+          valueText: dueInfo.relative ? `${dueInfo.absolute} (${dueInfo.relative})` : dueInfo.absolute,
+        });
+      }
+      facts.push({
+        label: 'Assigned by',
+        valueHtml: `${avatarHtml(actorName, { size: 22 })} <span style="vertical-align:middle;margin-left:6px">${escapeHtml(actorName)}</span>`,
+        valueText: actorName,
       });
-      const subject = `You've been assigned: ${ctx.item_name || 'a task'}`;
+
+      const breadcrumbHtml = [boardName, groupName].filter(Boolean).map(escapeHtml).join(' &nbsp;&rsaquo;&nbsp; ');
+      const introHtml =
+        `${avatarHtml(actorName, { size: 28 })} ` +
+        `<span style="vertical-align:middle;margin-left:8px">` +
+        `<strong style="color:#172b4d">${escapeHtml(actorName)}</strong> assigned you to a task. ` +
+        `Take a quick look when you have a moment.` +
+        `</span>`;
+
+      const subjectBits = [`📋 You've been assigned: ${itemName}`];
+      if (dueInfo?.relative) subjectBits.push(`(${dueInfo.relative})`);
+      const subject = subjectBits.join(' ');
+      const preheader = `${actorName} added you as an owner${dueInfo ? ` — due ${dueInfo.relative || dueInfo.absolute}` : ''}.`;
+
+      const html = renderEmailShell({
+        preheader,
+        heading: "You've been assigned a new task",
+        greeting: rcpt.name.split(/\s+/)[0] || rcpt.name,
+        introHtml,
+        itemName,
+        breadcrumbHtml,
+        facts,
+        ctaUrl:   itemUrl,
+        ctaLabel: 'Open task',
+        footerNote: `You're getting this because ${actorName} added you as an owner on this task. To stop these, ask your admin to disable assignment notifications.`,
+      });
+
+      const text = renderPlainText({
+        heading: "You've been assigned a new task on Tuesday.com",
+        greeting: rcpt.name.split(/\s+/)[0] || rcpt.name,
+        introText: `${actorName} added you as an owner. Take a quick look when you have a moment.`,
+        itemName,
+        facts,
+        ctaUrl: itemUrl,
+        ctaLabel: 'Open task',
+        footerNote: 'You are receiving this because you were assigned to this task.',
+      });
 
       try {
-        await transporter.sendMail({
-          from,
-          to: rcpt.email,
-          subject,
-          html,
-          text: `Hi ${rcpt.name},\n\n${actorName} assigned you to "${ctx.item_name || 'a task'}" on board "${ctx.board_name || ''}".\n\nOpen: ${itemUrl}\n\n— Tuesday.com (D'Decor)`,
-        });
+        await transporter.sendMail({ from, to: rcpt.email, subject, html, text });
 
         // Record in item_emails so it surfaces in the item's Updates tab
         try {
