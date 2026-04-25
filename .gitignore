@@ -1,9 +1,36 @@
-"backend/.env" 
-".claude/" 
-"backend/.env" 
-".claude/" 
-"backup.sql" 
-"*.jpg" 
-"*.png" 
-"frontend/dist/"
-"migration-tool/.workboard-token"
+# Secrets / env
+backend/.env
+frontend/.env
+.env
+.env.local
+
+# Tooling
+.claude/
+
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+backend/uploads/
+
+# Local data / backups
+backup.sql
+*.sql.bak
+
+# Editor backups / scratch
+*.bak
+*_backup.*
+*-backup.*
+
+# Images at repo root (project screenshots, not assets)
+/*.jpg
+/*.png
+/*.jpeg
+
+# Migration tool secrets
+migration-tool/.workboard-token
+
+# OS junk
+.DS_Store
+Thumbs.db
