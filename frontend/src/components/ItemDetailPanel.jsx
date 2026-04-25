@@ -373,12 +373,36 @@ function ReplyEntry({ reply, currentUserId, currentUserRole, onDelete }) {
   );
 }
 
+function stripHtml(html) {
+  if (!html) return '';
+  return String(html)
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // ── Email entry (incoming / outgoing) ─────────────────────────────────────────
 function EmailEntry({ email }) {
   const [expanded, setExpanded] = useState(false);
   const isIncoming = email.direction === 'incoming';
 
-  const bodyLines  = (email.body_text || '').split('\n').filter(l => l.trim());
+  // Fallback: older rows stored only body_html (Graph returns HTML by default).
+  // Strip tags so the Updates tab still renders something readable.
+  const rawBody = email.body_text && email.body_text.trim()
+    ? email.body_text
+    : stripHtml(email.body_html || '');
+  const bodyLines  = rawBody.split('\n').filter(l => l.trim());
   const previewLines = bodyLines.slice(0, 3);
   const hasMore    = bodyLines.length > 3;
 

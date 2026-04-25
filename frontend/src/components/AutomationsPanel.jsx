@@ -263,7 +263,12 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
             <div>
               <p style={label}>Contains keyword</p>
               <input value={triggerConfig.keyword || ''} onChange={e => setTC({ keyword: e.target.value })}
-                placeholder="e.g. repair, urgent, purchase order…" style={inp} />
+                placeholder="e.g. TASK, urgent, purchase order…" style={inp} />
+            </div>
+            <div>
+              <p style={label}>From contains (optional)</p>
+              <input value={triggerConfig.from_contains || ''} onChange={e => setTC({ from_contains: e.target.value })}
+                placeholder="e.g. director@ddecor.com — leave blank for any sender" style={inp} />
             </div>
           </div>
         )}
@@ -426,12 +431,26 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
         )}
 
         {actionType === 'create_item_in_group' && (
-          <div style={{ marginTop: 8 }}>
-            <p style={label}>Target group (in this board)</p>
-            <select value={actionConfig.group_id || ''} onChange={e => setAC({ group_id: e.target.value })} style={sel}>
-              <option value="">First group (default)</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            <div>
+              <p style={label}>Target group (in this board)</p>
+              <select value={actionConfig.group_id || ''} onChange={e => setAC({ group_id: e.target.value })} style={sel}>
+                <option value="">First group (default)</option>
+                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <p style={label}>Assign To-recipients as owners in (optional)</p>
+              <select value={actionConfig.owner_column_id || ''} onChange={e => setAC({ owner_column_id: e.target.value })} style={sel}>
+                <option value="">— don't auto-assign —</option>
+                {columns.filter(c => c.type === 'person').map(c => (
+                  <option key={c.id} value={c.id}>{c.title}</option>
+                ))}
+              </select>
+              <div style={{ fontSize: 11, color: '#888', marginTop: 4, lineHeight: 1.4 }}>
+                Each person in the email's <strong>To</strong> field will be matched by email to a user and set as an owner on the new item.
+              </div>
+            </div>
           </div>
         )}
       </div>

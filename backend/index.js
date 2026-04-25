@@ -408,6 +408,12 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log(`🚀 Backend running on http://localhost:${PORT}`);
+    // Inbound email poller — no-op unless EMAIL_M365_MAILBOX + Graph creds are set
+    try {
+      require('./services/emailPoller').start();
+    } catch (err) {
+      console.error('[emailPoller] failed to start:', err.message);
+    }
   });
 }
 
