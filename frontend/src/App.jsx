@@ -14,7 +14,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import PublicForm from './pages/PublicForm';
-import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, cloneBoard } from './api';
+import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, moveFolderToParent, cloneBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
 import ApiKeysPanel from './components/ApiKeysPanel';
 import MyWorkPanel from './components/MyWorkPanel';
@@ -36,6 +36,21 @@ function PublicRoute({ children }) {
   if (user) return <Navigate to="/" replace />;
   return children;
 }
+
+// Shared style for items inside the folder kebab dropdown — kept at module
+// scope so it isn't recreated on every render of the sidebar.
+const menuItemStyle = {
+  display: 'block',
+  width: '100%',
+  textAlign: 'left',
+  padding: '7px 14px',
+  fontSize: 12,
+  color: 'inherit',
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
 
 function LoadingScreen() {
   return (
@@ -289,6 +304,8 @@ function MainApp() {
   const [activeDashboardId, setActiveDashboardId] = useState(null);
   const [dashboardsExpanded, setDashboardsExpanded] = useState(true);
   const [boardMenuId, setBoardMenuId] = useState(null);
+  const [folderMenuId, setFolderMenuId] = useState(null);
+  const [folderMoveTarget, setFolderMoveTarget] = useState(null); // folder being moved
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cloneTargetBoard, setCloneTargetBoard] = useState(null);
@@ -437,14 +454,31 @@ function MainApp() {
   }, []);
 
   // ── Folder handlers ──────────────────────────────────────────────────────────
-  const handleCreateFolder = async () => {
-    const name = prompt('Folder name:');
+  const handleCreateFolder = async (parentFolderId = null) => {
+    const name = prompt(parentFolderId ? 'Subfolder name:' : 'Folder name:');
     if (!name?.trim()) return;
     try {
-      const r = await createFolder(name.trim());
+      const r = await createFolder(name.trim(), parentFolderId);
       setFolders(f => [...f, r.data]);
-      toast('Folder created', 'success');
-    } catch { toast('Failed to create folder', 'error'); }
+      toast(parentFolderId ? 'Subfolder created' : 'Folder created', 'success');
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to create folder', 'error');
+    }
+  };
+
+  // Move a folder under another folder, or out to top-level (newParentId=null).
+  // The picker in the UI only ever passes top-level folder ids or null, so
+  // depth-cap and cycle violations are caught server-side as a safety net.
+  const handleMoveFolder = async (folderId, newParentId) => {
+    setFolderMenuId(null);
+    setFolderMoveTarget(null);
+    try {
+      const r = await moveFolderToParent(folderId, newParentId);
+      setFolders(fs => fs.map(f => f.id === folderId ? r.data : f));
+      toast(newParentId ? 'Folder moved into folder' : 'Folder moved to top level', 'success');
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to move folder', 'error');
+    }
   };
 
   const handleRenameFolder = async (id) => {
@@ -460,8 +494,12 @@ function MainApp() {
   const handleDeleteFolder = async (id) => {
     try {
       const r = await deleteFolder(id);
-      setFolders(f => f.filter(x => x.id !== id));
-      // Unfile boards that were in this folder
+      setFolders(f => f
+        .filter(x => x.id !== id)
+        // Subfolders of the deleted folder are promoted to top-level on the server
+        // — mirror that here so the UI doesn't show them stranded inside a vanished parent.
+        .map(x => r.data.promotedFolderIds?.includes(x.id) ? { ...x, parent_folder_id: null } : x)
+      );
       if (r.data.unfiledBoardIds?.length) {
         setBoards(bs => bs.map(b => r.data.unfiledBoardIds.includes(b.id) ? { ...b, folder_id: null } : b));
       }
@@ -852,87 +890,164 @@ function MainApp() {
             </div>
           )}
 
-          {/* Folders with their boards */}
-          {folders.map(folder => {
-            const folderBoards = boardsByFolder[folder.id] || [];
-            const collapsed = collapsedFolders.has(folder.id);
-            const isRenaming = renamingFolderId === folder.id;
-            return (
-              <div key={folder.id}>
-                {/* Folder header — collapsed nav: icon only */}
-                {isNavCollapsed ? (
-                  <div
-                    onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
-                    title={folder.name}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 36, cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span style={{ fontSize: 14 }}>📁</span>
-                  </div>
-                ) : (
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', padding: '5px 16px', cursor: 'pointer', gap: 4 }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span
-                      onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
-                      style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginRight: 2, userSelect: 'none', flexShrink: 0 }}
-                    >
-                      {collapsed ? '▶' : '▼'}
-                    </span>
-                    <span style={{ fontSize: 12, color: 'var(--sidebar-text-muted)', flexShrink: 0 }}>📁</span>
-                    {isRenaming ? (
-                      <input
-                        autoFocus
-                        value={renameFolderDraft}
-                        onChange={e => setRenameFolderDraft(e.target.value)}
-                        onBlur={() => handleRenameFolder(folder.id)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setRenamingFolderId(null); }}
-                        onClick={e => e.stopPropagation()}
-                        style={{
-                          flex: 1, background: 'var(--sidebar-input-bg)', border: '1px solid var(--sidebar-input-border)',
-                          color: 'var(--sidebar-text)', borderRadius: 4, padding: '1px 6px', fontSize: 12, outline: 'none',
-                        }}
-                      />
-                    ) : (
-                      <span
-                        onDoubleClick={isManager ? () => { setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); } : undefined}
-                        onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
-                        style={{ flex: 1, fontSize: 12, color: 'var(--sidebar-text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                        title={isManager ? 'Double-click to rename' : undefined}
-                      >
-                        {folder.name}
-                        {folderBoards.length > 0 && (
-                          <span style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginLeft: 4, fontWeight: 400 }}>
-                            ({folderBoards.length})
-                          </span>
-                        )}
-                      </span>
-                    )}
-                    {isManager && !isRenaming && (
-                      <>
-                        <button
-                          onClick={e => { e.stopPropagation(); setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); }}
-                          style={{ color: 'var(--sidebar-text-muted)', fontSize: 12, flexShrink: 0, padding: '0 2px', lineHeight: 1 }}
-                          title="Rename folder"
-                        >✏️</button>
-                        <button
-                          onClick={e => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
-                          style={{ color: 'var(--sidebar-text-muted)', fontSize: 14, flexShrink: 0, padding: '0 2px' }}
-                          title="Delete folder"
-                        >×</button>
-                      </>
-                    )}
-                  </div>
-                )}
+          {/* ── Folder tree with optional 1-level subfolders ─────────────────────
+              Backend caps depth at 2 (top-folder → subfolder; subfolders cannot
+              themselves contain folders). The render below mirrors that: when
+              a folder has parent_folder_id set, it is shown indented under
+              its parent. We also build a list of top-level folders for the
+              "Move to folder" picker so users only ever see valid targets. */}
+          {(() => {
+            const topLevelFolders = folders.filter(f => !f.parent_folder_id);
+            const subfoldersByParent = folders.reduce((acc, f) => {
+              if (f.parent_folder_id) (acc[f.parent_folder_id] = acc[f.parent_folder_id] || []).push(f);
+              return acc;
+            }, {});
 
-                {/* Boards inside this folder */}
-                {!collapsed && folderBoards.map(b => renderBoardRow(b, !isNavCollapsed))}
-              </div>
-            );
-          })}
+            // Render a single folder row + its boards. The `isSub` flag adds
+            // indentation, hides "New subfolder" in the menu, and offers
+            // "Move to top level" instead of nesting options.
+            const renderFolder = (folder, isSub = false) => {
+              const folderBoards = boardsByFolder[folder.id] || [];
+              const childFolders = subfoldersByParent[folder.id] || [];
+              const collapsed = collapsedFolders.has(folder.id);
+              const isRenaming = renamingFolderId === folder.id;
+              const menuOpen = folderMenuId === folder.id;
+              const moveOpen = folderMoveTarget === folder.id;
+              const totalCount = folderBoards.length + childFolders.reduce((sum, c) => sum + (boardsByFolder[c.id]?.length || 0), 0);
+
+              return (
+                <div key={folder.id}>
+                  {isNavCollapsed ? (
+                    <div
+                      onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
+                      title={folder.name + (isSub ? ' (subfolder)' : '')}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, cursor: 'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span style={{ fontSize: 13 }}>{isSub ? '📂' : '📁'}</span>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        position: 'relative',
+                        display: 'flex', alignItems: 'center',
+                        padding: isSub ? '4px 16px 4px 32px' : '5px 16px',
+                        cursor: 'pointer', gap: 4,
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span
+                        onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
+                        style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginRight: 2, userSelect: 'none', flexShrink: 0 }}
+                      >
+                        {collapsed ? '▶' : '▼'}
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--sidebar-text-muted)', flexShrink: 0 }}>{isSub ? '📂' : '📁'}</span>
+                      {isRenaming ? (
+                        <input
+                          autoFocus
+                          value={renameFolderDraft}
+                          onChange={e => setRenameFolderDraft(e.target.value)}
+                          onBlur={() => handleRenameFolder(folder.id)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setRenamingFolderId(null); }}
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            flex: 1, background: 'var(--sidebar-input-bg)', border: '1px solid var(--sidebar-input-border)',
+                            color: 'var(--sidebar-text)', borderRadius: 4, padding: '1px 6px', fontSize: 12, outline: 'none',
+                          }}
+                        />
+                      ) : (
+                        <span
+                          onDoubleClick={isManager ? () => { setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); } : undefined}
+                          onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
+                          style={{ flex: 1, fontSize: 12, color: 'var(--sidebar-text)', fontWeight: isSub ? 500 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          title={isManager ? 'Double-click to rename' : undefined}
+                        >
+                          {folder.name}
+                          {totalCount > 0 && (
+                            <span style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginLeft: 4, fontWeight: 400 }}>
+                              ({totalCount})
+                            </span>
+                          )}
+                        </span>
+                      )}
+                      {isManager && !isRenaming && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setFolderMenuId(menuOpen ? null : folder.id); setFolderMoveTarget(null); }}
+                          style={{ color: 'var(--sidebar-text-muted)', fontSize: 14, flexShrink: 0, padding: '0 4px', lineHeight: 1, fontWeight: 700 }}
+                          title="More actions"
+                        >⋮</button>
+                      )}
+                      {/* Kebab menu */}
+                      {menuOpen && (
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            position: 'absolute', top: '100%', right: 8, zIndex: 50,
+                            background: 'var(--bg-card, #fff)', color: 'var(--text)',
+                            border: '1px solid var(--border, #e6e9ef)', borderRadius: 8,
+                            boxShadow: '0 8px 24px rgba(9,30,66,0.18)',
+                            minWidth: 200, padding: '4px 0', fontSize: 12,
+                          }}
+                        >
+                          <button
+                            onClick={() => { setFolderMenuId(null); setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); }}
+                            style={menuItemStyle}
+                          >✏️ &nbsp; Rename</button>
+                          {!isSub && (
+                            <button
+                              onClick={() => { setFolderMenuId(null); handleCreateFolder(folder.id); }}
+                              style={menuItemStyle}
+                            >📂 &nbsp; New subfolder</button>
+                          )}
+                          <button
+                            onClick={() => setFolderMoveTarget(moveOpen ? null : folder.id)}
+                            style={menuItemStyle}
+                          >➡️ &nbsp; Move to folder…</button>
+                          {moveOpen && (
+                            <div style={{ borderTop: '1px solid var(--border, #eee)', borderBottom: '1px solid var(--border, #eee)', maxHeight: 200, overflowY: 'auto', background: 'var(--bg-soft, #f7f8fa)' }}>
+                              {/* Always offer "Top level" if the folder is currently nested */}
+                              {folder.parent_folder_id && (
+                                <button onClick={() => handleMoveFolder(folder.id, null)} style={{ ...menuItemStyle, fontStyle: 'italic' }}>
+                                  ⬆ Move to top level
+                                </button>
+                              )}
+                              {topLevelFolders
+                                .filter(t => t.id !== folder.id && t.id !== folder.parent_folder_id)
+                                .map(t => (
+                                  <button key={t.id} onClick={() => handleMoveFolder(folder.id, t.id)} style={menuItemStyle}>
+                                    📁 &nbsp; Into "{t.name}"
+                                  </button>
+                                ))}
+                              {topLevelFolders.filter(t => t.id !== folder.id && t.id !== folder.parent_folder_id).length === 0 && !folder.parent_folder_id && (
+                                <div style={{ padding: '6px 12px', color: 'var(--text-muted, #999)', fontStyle: 'italic' }}>
+                                  No other folders to move into
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => { setFolderMenuId(null); handleDeleteFolder(folder.id); }}
+                            style={{ ...menuItemStyle, color: '#e2445c' }}
+                          >🗑️ &nbsp; Delete folder</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Boards directly inside this folder */}
+                  {!collapsed && folderBoards.map(b => renderBoardRow(b, !isNavCollapsed))}
+
+                  {/* Subfolders (only on top-level folders) */}
+                  {!collapsed && !isSub && childFolders.map(child => renderFolder(child, true))}
+                </div>
+              );
+            };
+
+            return topLevelFolders.map(f => renderFolder(f, false));
+          })()}
 
           {/* Unfiled boards */}
           {unfiledBoards.length > 0 && (

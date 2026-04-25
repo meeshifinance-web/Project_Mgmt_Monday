@@ -140,10 +140,13 @@ export const importBoardRows = (boardId, rows) => api.post(`/boards/${boardId}/i
 
 // ── Folders ────────────────────────────────────────────────────────────────────
 export const getFolders = () => api.get('/folders');
-export const createFolder = (name) => api.post('/folders', { name });
+export const createFolder = (name, parent_folder_id = null) =>
+  api.post('/folders', { name, parent_folder_id });
 export const updateFolder = (id, name) => api.put(`/folders/${id}`, { name });
 export const deleteFolder = (id) => api.delete(`/folders/${id}`);
 export const moveBoardToFolder = (boardId, folder_id) => api.patch(`/folders/board/${boardId}`, { folder_id });
+export const moveFolderToParent = (id, parent_folder_id) =>
+  api.patch(`/folders/${id}/parent`, { parent_folder_id });
 
 // ── Board Views ────────────────────────────────────────────────────────────────
 export const getBoardViews = (boardId) =>
