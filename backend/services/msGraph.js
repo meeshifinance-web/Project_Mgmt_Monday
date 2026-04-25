@@ -9,10 +9,13 @@
  *   - Application Access Policy restricting scope to EMAIL_M365_MAILBOX
  *
  * Env vars consumed:
- *   MICROSOFT_TENANT_ID       — real tenant GUID (NOT "common")
- *   MICROSOFT_CLIENT_ID       — from Azure app registration
- *   MICROSOFT_CLIENT_SECRET   — from Azure app registration
+ *   GRAPH_MAIL_TENANT_ID      — real tenant GUID (NOT "common")
+ *   GRAPH_MAIL_CLIENT_ID      — from Azure app registration (mail-routing app)
+ *   GRAPH_MAIL_CLIENT_SECRET  — from Azure app registration (mail-routing app)
  *   EMAIL_M365_MAILBOX        — e.g. tuesday@ddecor.com
+ *
+ * NOTE: these are intentionally separate from the Microsoft SSO app's
+ * MICROSOFT_* vars so the two Azure registrations don't collide.
  */
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
@@ -22,10 +25,10 @@ let cachedToken = null;     // { access_token, expires_at (ms epoch) }
 
 function isConfigured() {
   return !!(
-    process.env.MICROSOFT_TENANT_ID &&
-    process.env.MICROSOFT_TENANT_ID !== 'common' &&
-    process.env.MICROSOFT_CLIENT_ID &&
-    process.env.MICROSOFT_CLIENT_SECRET &&
+    process.env.GRAPH_MAIL_TENANT_ID &&
+    process.env.GRAPH_MAIL_TENANT_ID !== 'common' &&
+    process.env.GRAPH_MAIL_CLIENT_ID &&
+    process.env.GRAPH_MAIL_CLIENT_SECRET &&
     process.env.EMAIL_M365_MAILBOX
   );
 }
@@ -35,10 +38,10 @@ async function getAccessToken() {
     return cachedToken.access_token;
   }
 
-  const tokenUrl = `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID}/oauth2/v2.0/token`;
+  const tokenUrl = `https://login.microsoftonline.com/${process.env.GRAPH_MAIL_TENANT_ID}/oauth2/v2.0/token`;
   const body = new URLSearchParams({
-    client_id:     process.env.MICROSOFT_CLIENT_ID,
-    client_secret: process.env.MICROSOFT_CLIENT_SECRET,
+    client_id:     process.env.GRAPH_MAIL_CLIENT_ID,
+    client_secret: process.env.GRAPH_MAIL_CLIENT_SECRET,
     scope:         SCOPE,
     grant_type:    'client_credentials',
   });
