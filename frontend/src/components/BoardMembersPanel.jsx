@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { addBoardMember, removeBoardMember, searchUsers } from '../api';
+import { addBoardMember, removeBoardMember, searchUsers, setBoardMemberOwner, updateBoard } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
 
@@ -165,6 +165,8 @@ function UserSearchInput({ members, onSelect }) {
 export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
   const [members, setMembers] = useState(board.members || []);
   const [adding, setAdding] = useState(false);
+  const [enforceVisibility, setEnforceVisibility] = useState(!!board.enforce_owner_visibility);
+  const [savingToggle, setSavingToggle] = useState(false);
   const toast = useToast();
   const { user: currentUser, isManager } = useAuth();
 
@@ -183,7 +185,7 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
       const r = await addBoardMember(board.id, user.email);
       const { member, updatedColumns } = r.data;
       applyMemberChange(
-        [...members, { ...member, added_at: new Date().toISOString() }],
+        [...members, { ...member, added_at: new Date().toISOString(), is_owner: false }],
         updatedColumns
       );
       toast(`${member.name} added to board`, 'success');
@@ -206,6 +208,53 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
     }
   };
 
+  // Toggle a member's Board Owner flag. Board Owners (alongside system admins)
+  // see every item on the board even when the strict-visibility toggle is on.
+  const handleToggleOwner = async (member) => {
+    const next = !member.is_owner;
+    try {
+      await setBoardMemberOwner(board.id, member.id, next);
+      const updated = members.map(m => m.id === member.id ? { ...m, is_owner: next } : m);
+      setMembers(updated);
+      onMembersChange(updated, null);
+      toast(
+        next
+          ? `${member.name} is now a Board Owner — sees all items`
+          : `${member.name} is no longer a Board Owner`,
+        'success'
+      );
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to update owner status', 'error');
+    }
+  };
+
+  // Toggle the per-board "Restrict items to assignees" switch.
+  const handleToggleEnforceVisibility = async () => {
+    const next = !enforceVisibility;
+    setSavingToggle(true);
+    setEnforceVisibility(next); // optimistic
+    try {
+      await updateBoard(board.id, {
+        name: board.name,
+        description: board.description,
+        visibility: board.visibility,
+        item_name: board.item_name,
+        enforce_owner_visibility: next,
+      });
+      toast(
+        next
+          ? 'Strict visibility ON — non-owners only see items where they are assigned'
+          : 'Strict visibility OFF — managers see everything (legacy mode)',
+        'success'
+      );
+    } catch (err) {
+      setEnforceVisibility(!next); // revert
+      toast(err.response?.data?.error || 'Failed to update visibility setting', 'error');
+    } finally {
+      setSavingToggle(false);
+    }
+  };
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 400,
@@ -225,6 +274,34 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
           </div>
           <button onClick={onClose} style={{ fontSize: 20, color: '#888', lineHeight: 1 }}>×</button>
         </div>
+
+        {/* Strict-visibility toggle (board-level) */}
+        {isManager && (
+          <div style={{
+            padding: '14px 20px', borderBottom: '1px solid #f0f0f0',
+            background: enforceVisibility ? '#fff7e6' : '#fafbfc',
+          }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={enforceVisibility}
+                disabled={savingToggle}
+                onChange={handleToggleEnforceVisibility}
+                style={{ marginTop: 2, accentColor: '#fdab3d', cursor: 'pointer', width: 16, height: 16 }}
+              />
+              <span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#323338', display: 'block' }}>
+                  🔒 Restrict items to assignees only
+                </span>
+                <span style={{ fontSize: 11, color: '#676879', display: 'block', marginTop: 3, lineHeight: 1.5 }}>
+                  When ON, only Board Owners (★) and system admins see every item.
+                  Everyone else — including managers / VPs / AVPs — sees only items
+                  where they're listed in an Owner column.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         {/* Search & invite */}
         {isManager && (
@@ -264,9 +341,29 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
                   <div style={{ fontWeight: 600, fontSize: 13, color: '#323338', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {m.name}
                     {m.id === currentUser?.id && <span style={{ fontSize: 10, color: '#888' }}>(you)</span>}
+                    {m.is_owner && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8,
+                        background: '#fff3d6', color: '#b87a00', textTransform: 'uppercase', letterSpacing: 0.4,
+                      }}>Board Owner</span>
+                    )}
                   </div>
                   <div style={{ fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
                 </div>
+                {/* Board Owner star — managers can promote/demote any member */}
+                {isManager && (
+                  <button
+                    onClick={() => handleToggleOwner(m)}
+                    style={{
+                      color: m.is_owner ? '#fdab3d' : '#ddd',
+                      fontSize: 18, lineHeight: 1, flexShrink: 0, padding: '2px 4px',
+                      transition: 'color 0.15s, transform 0.15s',
+                    }}
+                    title={m.is_owner ? 'Click to remove Board Owner status' : 'Make this user a Board Owner (sees all items)'}
+                    onMouseEnter={e => { e.currentTarget.style.color = '#fdab3d'; e.currentTarget.style.transform = 'scale(1.15)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = m.is_owner ? '#fdab3d' : '#ddd'; e.currentTarget.style.transform = 'scale(1)'; }}
+                  >★</button>
+                )}
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
                   background: `${ROLE_COLORS[m.role]}20`, color: ROLE_COLORS[m.role],

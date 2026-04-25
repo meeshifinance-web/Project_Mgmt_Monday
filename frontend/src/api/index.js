@@ -37,6 +37,8 @@ export const cloneBoard = (id, data) => api.post(`/boards/${id}/clone`, data).th
 export const getBoardMembers = (boardId) => api.get(`/boards/${boardId}/members`);
 export const addBoardMember = (boardId, email) => api.post(`/boards/${boardId}/members`, { email });
 export const removeBoardMember = (boardId, userId) => api.delete(`/boards/${boardId}/members/${userId}`);
+export const setBoardMemberOwner = (boardId, userId, isOwner) =>
+  api.patch(`/boards/${boardId}/members/${userId}`, { is_owner: isOwner });
 
 // ── Groups ────────────────────────────────────────────────────────────────────
 export const createGroup = (data) => api.post('/groups', data);

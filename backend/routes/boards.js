@@ -165,10 +165,33 @@ router.get('/:id', requireAuth, async (req, res) => {
     }
 
     // ── Item-level visibility filter ────────────────────────────────────────
-    // Admins and managers see everything.
-    // Regular members only see items where EVERY active owner column is either
-    // empty (visible to all) OR contains their name.
-    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+    // Two modes, controlled per-board by boards.enforce_owner_visibility:
+    //
+    //   STRICT MODE  (enforce_owner_visibility = true):
+    //     Only system admins AND designated Board Owners (board_members.is_owner)
+    //     see every item. Everyone else — including managers / VPs / AVPs — is
+    //     filtered by owner column. Used for confidential boards where
+    //     reportees must not see each other's tasks.
+    //
+    //   LEGACY MODE  (enforce_owner_visibility = false, default):
+    //     Admins and managers see everything (backward-compatible).
+    //     Regular members are filtered by owner column.
+    //
+    // In both modes, an item is visible if EVERY active owner column is either
+    // empty OR contains the user's name.
+    let bypassFilter;
+    if (board.enforce_owner_visibility) {
+      const ownerRes = await pool.query(
+        'SELECT 1 FROM board_members WHERE board_id=$1 AND user_id=$2 AND is_owner=true LIMIT 1',
+        [id, req.user.id]
+      );
+      const isBoardOwner = ownerRes.rows.length > 0;
+      bypassFilter = req.user.role === 'admin' || isBoardOwner;
+    } else {
+      bypassFilter = req.user.role === 'admin' || req.user.role === 'manager';
+    }
+
+    if (!bypassFilter) {
       const ownerCols = colsRes.rows.filter(c => {
         const s = typeof c.settings === 'string' ? JSON.parse(c.settings) : (c.settings || {});
         return c.type === 'person' && s.isOwnerColumn === true;
@@ -194,7 +217,8 @@ router.get('/:id', requireAuth, async (req, res) => {
     board.groups = groupsRes.rows;
 
     const membersRes = await pool.query(
-      `SELECT u.id, u.name, u.email, u.avatar_url, u.role, bm.added_at
+      `SELECT u.id, u.name, u.email, u.avatar_url, u.role,
+              bm.added_at, COALESCE(bm.is_owner, false) AS is_owner
        FROM board_members bm JOIN users u ON u.id = bm.user_id
        WHERE bm.board_id = $1 ORDER BY bm.added_at`,
       [id]
@@ -222,9 +246,12 @@ router.post('/', ...canWrite, async (req, res) => {
     );
     const board = boardRes.rows[0];
 
-    // 2. Add creator as first member
+    // 2. Add creator as first member, marked as a Board Owner so they see
+    //    every item even if/when the strict-visibility toggle is enabled.
     await client.query(
-      'INSERT INTO board_members (board_id, user_id, added_by) VALUES ($1,$2,$2) ON CONFLICT DO NOTHING',
+      `INSERT INTO board_members (board_id, user_id, added_by, is_owner)
+       VALUES ($1,$2,$2,true)
+       ON CONFLICT (board_id, user_id) DO UPDATE SET is_owner = true`,
       [board.id, req.user.id]
     );
 
@@ -306,14 +333,20 @@ router.post('/', ...canWrite, async (req, res) => {
 // ── PUT update board ──────────────────────────────────────────────────────────
 router.put('/:id', ...canWrite, async (req, res) => {
   const { id } = req.params;
-  const { name, description, visibility, item_name } = req.body;
+  const { name, description, visibility, item_name, enforce_owner_visibility } = req.body;
   try {
     if (!(await canAccessBoard(id, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
 
+    // COALESCE on enforce_owner_visibility so old clients that omit the field
+    // don't accidentally turn off strict visibility on a confidential board.
     const { rows } = await pool.query(
-      'UPDATE boards SET name=$1, description=$2, visibility=$3, item_name=$4 WHERE id=$5 RETURNING *',
-      [name, description ?? '', visibility ?? 'private', item_name ?? 'Item', id]
+      `UPDATE boards
+          SET name=$1, description=$2, visibility=$3, item_name=$4,
+              enforce_owner_visibility = COALESCE($5, enforce_owner_visibility)
+        WHERE id=$6 RETURNING *`,
+      [name, description ?? '', visibility ?? 'private', item_name ?? 'Item',
+       typeof enforce_owner_visibility === 'boolean' ? enforce_owner_visibility : null, id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Board not found' });
     res.json(rows[0]);
@@ -501,12 +534,40 @@ router.get('/:id/members', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.name, u.email, u.avatar_url, u.role, bm.added_at
+      `SELECT u.id, u.name, u.email, u.avatar_url, u.role,
+              bm.added_at, COALESCE(bm.is_owner, false) AS is_owner
        FROM board_members bm JOIN users u ON u.id = bm.user_id
        WHERE bm.board_id = $1 ORDER BY bm.added_at`,
       [req.params.id]
     );
     res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── PATCH toggle a member's Board Owner flag ──────────────────────────────────
+// Board Owners (in addition to system admins) bypass the per-item visibility
+// filter when boards.enforce_owner_visibility = true. Multi-owner is supported
+// — any number of members on a board can carry the flag.
+router.patch('/:id/members/:userId', ...canWrite, async (req, res) => {
+  const { is_owner } = req.body;
+  if (typeof is_owner !== 'boolean') {
+    return res.status(400).json({ error: 'is_owner (boolean) is required' });
+  }
+  try {
+    if (!(await canAccessBoard(req.params.id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+
+    const { rows } = await pool.query(
+      `UPDATE board_members SET is_owner=$1
+        WHERE board_id=$2 AND user_id=$3
+        RETURNING user_id, is_owner`,
+      [is_owner, req.params.id, req.params.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Member not found on this board' });
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
