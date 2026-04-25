@@ -7,8 +7,23 @@ const XLSX = require('xlsx');
 const READ_ONLY_ROLES = ['user'];
 
 // GET /api/boards/:boardId/export — download board as Excel
+// Optional query params:
+//   item_ids=1,2,3      — only export these items (filters rows)
+//   column_ids=4,5,6    — only export these columns (filters columns; preserves order)
 router.get('/:boardId/export', requireAuth, async (req, res) => {
   const { boardId } = req.params;
+
+  const parseIdList = (s) => {
+    if (!s || typeof s !== 'string') return null;
+    const ids = s
+      .split(',')
+      .map(x => parseInt(x.trim(), 10))
+      .filter(n => Number.isInteger(n) && n > 0);
+    return ids.length ? ids : null;
+  };
+  const itemIdFilter = parseIdList(req.query.item_ids);
+  const columnIdFilter = parseIdList(req.query.column_ids);
+
   try {
     const boardRes = await pool.query('SELECT name FROM boards WHERE id=$1', [boardId]);
     if (!boardRes.rows.length) return res.status(404).json({ error: 'Board not found' });
@@ -18,10 +33,14 @@ router.get('/:boardId/export', requireAuth, async (req, res) => {
 
     const boardName = boardRes.rows[0].name;
 
-    const colRes = await pool.query(
-      'SELECT id, title, type FROM columns WHERE board_id=$1 ORDER BY position',
-      [boardId]
-    );
+    const colParams = [boardId];
+    let colSql = 'SELECT id, title, type FROM columns WHERE board_id=$1';
+    if (columnIdFilter) {
+      colParams.push(columnIdFilter);
+      colSql += ` AND id = ANY($${colParams.length}::int[])`;
+    }
+    colSql += ' ORDER BY position';
+    const colRes = await pool.query(colSql, colParams);
     const columns = colRes.rows;
 
     const groupRes = await pool.query(
@@ -31,23 +50,33 @@ router.get('/:boardId/export', requireAuth, async (req, res) => {
     const groupMap = {};
     for (const g of groupRes.rows) groupMap[g.id] = g.name;
 
-    const itemRes = await pool.query(
-      `SELECT i.id, i.name, i.group_id, i.position
+    const itemParams = [boardId];
+    let itemSql = `SELECT i.id, i.name, i.group_id, i.position
        FROM items i
        JOIN groups g ON g.id = i.group_id
-       WHERE g.board_id = $1
-       ORDER BY i.group_id, i.position`,
-      [boardId]
-    );
+       WHERE g.board_id = $1`;
+    if (itemIdFilter) {
+      itemParams.push(itemIdFilter);
+      itemSql += ` AND i.id = ANY($${itemParams.length}::int[])`;
+    }
+    itemSql += ' ORDER BY i.group_id, i.position';
+    const itemRes = await pool.query(itemSql, itemParams);
 
-    const cvRes = await pool.query(
-      `SELECT cv.item_id, cv.column_id, cv.value
+    const cvParams = [boardId];
+    let cvSql = `SELECT cv.item_id, cv.column_id, cv.value
        FROM column_values cv
        JOIN items i ON i.id = cv.item_id
        JOIN groups g ON g.id = i.group_id
-       WHERE g.board_id = $1`,
-      [boardId]
-    );
+       WHERE g.board_id = $1`;
+    if (itemIdFilter) {
+      cvParams.push(itemIdFilter);
+      cvSql += ` AND i.id = ANY($${cvParams.length}::int[])`;
+    }
+    if (columnIdFilter) {
+      cvParams.push(columnIdFilter);
+      cvSql += ` AND cv.column_id = ANY($${cvParams.length}::int[])`;
+    }
+    const cvRes = await pool.query(cvSql, cvParams);
     const cvMap = {};
     for (const cv of cvRes.rows) {
       if (!cvMap[cv.item_id]) cvMap[cv.item_id] = {};

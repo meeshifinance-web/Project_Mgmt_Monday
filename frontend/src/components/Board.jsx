@@ -13,7 +13,7 @@ import {
   createGroup, updateGroup, deleteGroup, reorderGroups,
   createItem, updateItem, deleteItem, copyItem, moveItem,
   createColumn, updateColumn, deleteColumn, reorderColumns,
-  upsertColumnValue, updateBoard, updateBoardEmailSettings,
+  upsertColumnValue, bulkUpsertColumnValue, updateBoard, updateBoardEmailSettings,
   getTrashItems, getAutomations,
   exportBoard, importBoardRows,
   getBoardViews, createView, updateView, deleteView,
@@ -714,7 +714,12 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate
       onDragEnd={onDragEnd}
       onDragOver={e => onDragOver(e, group.id, item.id)}
       onDrop={e => onDrop(e, group.id, item.id)}
-      onClick={e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); e.stopPropagation(); onToggleSelect?.(item.id); } }}
+      onClick={e => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+          e.preventDefault(); e.stopPropagation();
+          onToggleSelect?.(item.id, { shift: e.shiftKey });
+        }
+      }}
       style={{ borderBottom: '1px solid var(--border-color)', background: rowBg, height: 40, cursor: 'grab', transition: 'background 0.1s' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -727,7 +732,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate
           ? <input
             type="checkbox"
             checked={!!isSelected}
-            onChange={e => { e.stopPropagation(); onToggleSelect?.(item.id); }}
+            onChange={e => { e.stopPropagation(); onToggleSelect?.(item.id, { shift: e.nativeEvent.shiftKey }); }}
             onClick={e => e.stopPropagation()}
             style={{ cursor: 'pointer', accentColor: group.color }}
           />
@@ -993,9 +998,16 @@ function DropLine({ colSpan }) {
 }
 
 // ── Bulk action bar ───────────────────────────────────────────────────────────
-function BulkActionBar({ count, groups, onMove, onDelete, onClear }) {
+function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDelete, onClear, onBulkUpdate, onExportSelected }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const [changeOpen, setChangeOpen] = useState(false);
+  const [changeCol, setChangeCol]   = useState(null);       // column picked for bulk change
+  const [textDraft, setTextDraft]   = useState('');
+  const changeRef = useRef(null);
+
+  const BULK_EDITABLE_TYPES = ['status', 'dropdown', 'person', 'text', 'date'];
+  const editableColumns = columns.filter(c => BULK_EDITABLE_TYPES.includes(c.type));
 
   useEffect(() => {
     if (!open) return;
@@ -1003,6 +1015,23 @@ function BulkActionBar({ count, groups, onMove, onDelete, onClear }) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  useEffect(() => {
+    if (!changeOpen) return;
+    const handler = (e) => {
+      if (changeRef.current && !changeRef.current.contains(e.target)) {
+        setChangeOpen(false); setChangeCol(null); setTextDraft('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [changeOpen]);
+
+  const applyBulk = async (value) => {
+    if (!changeCol) return;
+    await onBulkUpdate?.(changeCol.id, value);
+    setChangeOpen(false); setChangeCol(null); setTextDraft('');
+  };
 
   return (
     <div style={{
@@ -1057,6 +1086,148 @@ function BulkActionBar({ count, groups, onMove, onDelete, onClear }) {
           </div>
         )}
       </div>
+
+      {/* Change column value */}
+      {onBulkUpdate && editableColumns.length > 0 && (
+        <div style={{ position: 'relative' }} ref={changeRef}>
+          <button
+            onClick={() => { setChangeOpen(o => !o); setChangeCol(null); }}
+            style={{
+              background: changeOpen ? '#0073ea' : '#2d3f55', border: '1px solid #3d5166',
+              color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+            onMouseEnter={e => { if (!changeOpen) e.currentTarget.style.background = '#3d5166'; }}
+            onMouseLeave={e => { if (!changeOpen) e.currentTarget.style.background = '#2d3f55'; }}
+          >
+            ✎ Change ▾
+          </button>
+          {changeOpen && !changeCol && (
+            <div style={{
+              position: 'absolute', bottom: '110%', left: 0,
+              background: '#fff', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+              border: '1px solid #e6e9ef', minWidth: 220, overflow: 'hidden', zIndex: 200,
+            }}>
+              <div style={{ padding: '8px 14px', fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, background: '#f7f8fc' }}>
+                Change which column?
+              </div>
+              {editableColumns.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => setChangeCol(c)}
+                  style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: '#323338', display: 'flex', alignItems: 'center', gap: 8 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}
+                >
+                  <span style={{ fontSize: 11, color: '#888', textTransform: 'uppercase', minWidth: 60 }}>{c.type}</span>
+                  {c.title}
+                </div>
+              ))}
+            </div>
+          )}
+          {changeOpen && changeCol && (
+            <div style={{
+              position: 'absolute', bottom: '110%', left: 0,
+              background: '#fff', borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+              border: '1px solid #e6e9ef', minWidth: 260, maxWidth: 320, padding: 10, zIndex: 200,
+            }}>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+                Set <strong>{changeCol.title}</strong> on {count} item{count !== 1 ? 's' : ''}:
+              </div>
+              {(changeCol.type === 'status' || changeCol.type === 'dropdown') && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {(changeCol.settings?.options || []).map((opt, i) => {
+                    const label = typeof opt === 'string' ? opt : opt.label;
+                    const color = typeof opt === 'object' ? opt.color : '#c4c4c4';
+                    return (
+                      <button key={i} onClick={() => applyBulk(label)}
+                        style={{ background: color || '#e6e9ef', color: '#fff', borderRadius: 4, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none' }}>
+                        {label}
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => applyBulk('')}
+                    style={{ background: '#f5f5f5', color: '#888', borderRadius: 4, padding: '6px 12px', fontSize: 12, cursor: 'pointer', border: '1px dashed #ccc' }}>
+                    Clear
+                  </button>
+                </div>
+              )}
+              {changeCol.type === 'person' && (
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {(members || []).map(m => (
+                    <div key={m.id}
+                      onClick={() => applyBulk(JSON.stringify([m.name]))}
+                      style={{ padding: '6px 8px', fontSize: 13, cursor: 'pointer', borderRadius: 4, color: '#323338' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f0f6ff'}
+                      onMouseLeave={e => e.currentTarget.style.background = ''}
+                    >👤 {m.name}</div>
+                  ))}
+                  <div onClick={() => applyBulk('')}
+                    style={{ padding: '6px 8px', fontSize: 12, cursor: 'pointer', color: '#888', borderTop: '1px solid #eee', marginTop: 4 }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#fff5f5'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}
+                  >× Clear assignees</div>
+                </div>
+              )}
+              {changeCol.type === 'text' && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    autoFocus
+                    value={textDraft}
+                    onChange={e => setTextDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') applyBulk(textDraft); }}
+                    placeholder="Text value…"
+                    style={{ flex: 1, border: '1px solid #ddd', borderRadius: 4, padding: '6px 8px', fontSize: 13 }}
+                  />
+                  <button onClick={() => applyBulk(textDraft)}
+                    style={{ background: '#0073ea', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>
+                    Apply
+                  </button>
+                </div>
+              )}
+              {changeCol.type === 'date' && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    autoFocus
+                    type="date"
+                    value={textDraft}
+                    onChange={e => setTextDraft(e.target.value)}
+                    style={{ flex: 1, border: '1px solid #ddd', borderRadius: 4, padding: '6px 8px', fontSize: 13 }}
+                  />
+                  <button onClick={() => applyBulk(textDraft)}
+                    style={{ background: '#0073ea', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>
+                    Apply
+                  </button>
+                  <button onClick={() => applyBulk('')}
+                    style={{ background: '#f5f5f5', color: '#888', border: '1px solid #ddd', borderRadius: 4, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>
+                    Clear
+                  </button>
+                </div>
+              )}
+              <button onClick={() => setChangeCol(null)}
+                style={{ marginTop: 10, background: 'transparent', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer' }}>
+                ← back
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Export selected */}
+      {onExportSelected && (
+        <button
+          onClick={onExportSelected}
+          style={{
+            background: 'transparent', border: '1px solid #3d5166', color: '#c5c7d0',
+            borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,115,234,0.15)'; e.currentTarget.style.borderColor = '#0073ea'; e.currentTarget.style.color = '#fff'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#3d5166'; e.currentTarget.style.color = '#c5c7d0'; }}
+        >
+          📥 Export selected
+        </button>
+      )}
 
       {/* Delete selected */}
       <button
@@ -3126,11 +3297,29 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   // ── Multi-select ─────────────────────────────────────────────────────────
   const [selectedItems, setSelectedItems] = useState(new Set());
   const selectAllCheckRef = useRef(null);
+  const lastSelectedIdRef = useRef(null);          // anchor for shift-click ranges
+  const visibleItemIdsRef = useRef([]);            // mirrors allVisibleItemIds in render order
 
-  const handleToggleSelect = useCallback((itemId) => {
+  const handleToggleSelect = useCallback((itemId, opts = {}) => {
+    const { shift = false } = opts;
     setSelectedItems(prev => {
       const next = new Set(prev);
+      const order = visibleItemIdsRef.current || [];
+      const anchor = lastSelectedIdRef.current;
+      // Shift-click + valid anchor → select range (anchor … current) inclusive
+      if (shift && anchor != null && anchor !== itemId && order.length) {
+        const a = order.indexOf(anchor);
+        const b = order.indexOf(itemId);
+        if (a !== -1 && b !== -1) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          for (let i = lo; i <= hi; i++) next.add(order[i]);
+          lastSelectedIdRef.current = itemId;
+          return next;
+        }
+      }
+      // Plain toggle
       if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      lastSelectedIdRef.current = itemId;
       return next;
     });
   }, []);
@@ -3688,9 +3877,15 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   };
 
   // ── Export ────────────────────────────────────────────────────────────────
-  const handleExport = async () => {
+  // Default export excludes hidden columns. Pass itemIds to limit rows.
+  const doExport = async ({ itemIds } = {}) => {
     try {
-      const r = await exportBoard(board.id);
+      const visibleColIds = allCols
+        .filter(col => !hiddenColumns.includes(col.id))
+        .map(col => col.id);
+      const opts = { columnIds: visibleColIds };
+      if (itemIds && itemIds.length) opts.itemIds = itemIds;
+      const r = await exportBoard(board.id, opts);
       const cd = r.headers['content-disposition'] || '';
       const match = cd.match(/filename="(.+?)"/);
       const filename = match ? match[1] : `board_export.xlsx`;
@@ -3700,8 +3895,37 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      toast('Board exported', 'success');
+      toast(itemIds ? `Exported ${itemIds.length} item(s)` : 'Board exported', 'success');
     } catch { toast('Export failed', 'error'); }
+  };
+  const handleExport = () => doExport();
+  const handleBulkExport = () => {
+    const ids = Array.from(selectedItems);
+    if (!ids.length) return;
+    doExport({ itemIds: ids });
+  };
+
+  // ── Bulk update column value ─────────────────────────────────────────────
+  const handleBulkUpdate = async (columnId, value) => {
+    const ids = Array.from(selectedItems);
+    if (!ids.length || !columnId) return;
+    const idSet = new Set(ids);
+    try {
+      const r = await bulkUpsertColumnValue({ item_ids: ids, column_id: columnId, value });
+      updateLocalBoard(b => ({
+        groups: b.groups.map(g => ({
+          ...g,
+          items: g.items.map(i => idSet.has(i.id)
+            ? { ...i, values: { ...(i.values || {}), [columnId]: value } }
+            : i
+          ),
+        })),
+      }));
+      const updated = r?.data?.updated ?? ids.length;
+      toast(`Updated ${updated} item(s)`, 'success');
+    } catch (err) {
+      toast(err?.response?.data?.error || 'Bulk update failed', 'error');
+    }
   };
 
   // ── Import ────────────────────────────────────────────────────────────────
@@ -3816,6 +4040,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
   // ── Select-all header checkbox state ──────────────────────────────────────
   const allVisibleItemIds = filteredGroups.flatMap(g => (g.items || []).map(i => i.id));
+  // Keep the order available to handleToggleSelect (for shift-click range selection)
+  visibleItemIdsRef.current = allVisibleItemIds;
   const allVisibleSelected = allVisibleItemIds.length > 0 && allVisibleItemIds.every(id => selectedItems.has(id));
   const someVisibleSelected = !allVisibleSelected && allVisibleItemIds.some(id => selectedItems.has(id));
 
@@ -4249,8 +4475,12 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         <BulkActionBar
           count={selectedItems.size}
           groups={groups}
+          columns={cols}
+          members={board.members || []}
           onMove={handleBulkMove}
           onDelete={handleBulkDelete}
+          onBulkUpdate={handleBulkUpdate}
+          onExportSelected={handleBulkExport}
           onClear={() => setSelectedItems(new Set())}
         />
       )}

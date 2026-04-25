@@ -243,4 +243,122 @@ router.post('/upsert', requireAuth, async (req, res) => {
   res.json({ value: savedRow, triggeredAutomations, movedItem, setValues, cascadeResult });
 });
 
+// ── POST /bulk-upsert ─────────────────────────────────────────────────────────
+// Sets the SAME column value on many items at once. Capped at 100 items per
+// call. Fires assignment emails for person-column changes, writes activity
+// logs, but SKIPS automations + date cascade (those are designed to fire on
+// single edits — running them N times here could create a stampede).
+const BULK_LIMIT = 100;
+
+router.post('/bulk-upsert', requireAuth, async (req, res) => {
+  if (req.user.role === 'user')
+    return res.status(403).json({ error: 'Read-only access — you cannot edit values' });
+
+  const { item_ids, column_id, value } = req.body;
+  if (!Array.isArray(item_ids) || item_ids.length === 0 || !column_id)
+    return res.status(400).json({ error: 'item_ids (array) and column_id are required' });
+  if (item_ids.length > BULK_LIMIT)
+    return res.status(400).json({ error: `Too many items — limit is ${BULK_LIMIT} per bulk update` });
+
+  // Resolve column + board
+  const colRes = await pool.query('SELECT board_id, title, type FROM columns WHERE id=$1', [column_id]);
+  if (!colRes.rows.length) return res.status(404).json({ error: 'Column not found' });
+  const { board_id, title, type: colType } = colRes.rows[0];
+
+  if (!(await canAccessBoard(board_id, req.user, pool)))
+    return res.status(403).json({ error: 'Access denied' });
+
+  // Verify every item belongs to this board — reject silently if any don't.
+  // (Protects against a crafted payload spanning boards the user can't see.)
+  const checkRes = await pool.query(
+    `SELECT i.id FROM items i
+       JOIN groups g ON g.id = i.group_id
+      WHERE g.board_id = $1 AND i.id = ANY($2)`,
+    [board_id, item_ids.map(Number)]
+  );
+  const validIds = checkRes.rows.map(r => r.id);
+  if (!validIds.length) return res.status(400).json({ error: 'No valid items for this board' });
+
+  // Optional service — loaded lazily so tests without it won't crash
+  let notifyNewAssignees = null;
+  try { ({ notifyNewAssignees } = require('../services/assignmentEmail')); } catch (_) {}
+
+  const client = await pool.connect();
+  const updated = [];
+  try {
+    await client.query('BEGIN');
+
+    for (const itemId of validIds) {
+      const oldRes = await client.query(
+        'SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2',
+        [itemId, column_id]
+      );
+      const oldValue = oldRes.rows[0]?.value || '';
+      if (oldValue === value) { updated.push({ item_id: itemId, changed: false }); continue; }
+
+      await client.query(
+        `INSERT INTO column_values (item_id, column_id, value)
+         VALUES ($1,$2,$3)
+         ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+        [itemId, column_id, value]
+      );
+
+      // Mark manually-edited so date cascade won't overwrite
+      try {
+        await client.query(
+          `INSERT INTO column_value_meta (item_id, column_id, is_auto_cascaded)
+           VALUES ($1,$2,false)
+           ON CONFLICT (item_id, column_id) DO UPDATE SET is_auto_cascaded=false`,
+          [itemId, column_id]
+        );
+      } catch (_) {}
+
+      // Activity log
+      const itemRes = await client.query('SELECT name FROM items WHERE id=$1', [itemId]);
+      const itemName = itemRes.rows[0]?.name || '';
+      await logActivity(client, {
+        board_id,
+        user_id:   req.user.id,
+        user_name: req.user.name,
+        item_id:   itemId,
+        item_name: itemName,
+        action:    'value_changed',
+        field:     title,
+        old_value: oldValue,
+        new_value: value,
+      });
+
+      updated.push({ item_id: itemId, changed: true, old_value: oldValue });
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    client.release();
+    console.error('[bulk-upsert]', err);
+    return res.status(500).json({ error: 'Bulk update failed' });
+  }
+  client.release();
+
+  // Fire assignment emails for person-column changes, outside the transaction.
+  if (colType === 'person' && notifyNewAssignees) {
+    for (const u of updated) {
+      if (!u.changed) continue;
+      notifyNewAssignees({
+        oldValue: u.old_value,
+        newValue: value,
+        itemId:   u.item_id,
+        boardId:  board_id,
+        actor:    { id: req.user?.id, name: req.user?.name },
+      }).catch(err => console.error('[AssignEmail] bulk async error:', err.message));
+    }
+  }
+
+  res.json({
+    updated: updated.filter(u => u.changed).length,
+    skipped: updated.length - updated.filter(u => u.changed).length,
+    total:   updated.length,
+  });
+});
+
 module.exports = router;

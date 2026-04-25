@@ -59,6 +59,7 @@ export const reorderColumns = (boardId, orderedIds) => api.patch('/columns/reord
 
 // ── Column values ─────────────────────────────────────────────────────────────
 export const upsertColumnValue = (data) => api.post('/column-values/upsert', data);
+export const bulkUpsertColumnValue = (data) => api.post('/column-values/bulk-upsert', data);
 
 // ── Automations ───────────────────────────────────────────────────────────────
 export const getAutomations = (boardId) => api.get(`/automations/board/${boardId}`);
@@ -127,7 +128,12 @@ export const deleteForm     = (id)             => api.delete(`/forms/${id}`);
 export const saveFormFields = (id, fields)     => api.put(`/forms/${id}/fields`, { fields });
 
 // ── Export / Import ────────────────────────────────────────────────────────────
-export const exportBoard = (boardId) => api.get(`/boards/${boardId}/export`, { responseType: 'blob' });
+export const exportBoard = (boardId, opts = {}) => {
+  const params = {};
+  if (opts.itemIds && opts.itemIds.length) params.item_ids = opts.itemIds.join(',');
+  if (opts.columnIds && opts.columnIds.length) params.column_ids = opts.columnIds.join(',');
+  return api.get(`/boards/${boardId}/export`, { responseType: 'blob', params });
+};
 export const importBoardRows = (boardId, rows) => api.post(`/boards/${boardId}/import`, { rows });
 
 // ── Folders ────────────────────────────────────────────────────────────────────
