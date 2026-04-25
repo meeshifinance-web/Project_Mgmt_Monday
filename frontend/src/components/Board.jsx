@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react'; // lazy/Suspense kept for ActivityLogPanel
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import ManualCascadePopover from './automation/ManualCascadePopover';
 import ColumnCell, { parseOwners } from './ColumnCell';
@@ -20,8 +20,6 @@ import {
 } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
-
-const ActivityLogPanel = lazy(() => import('./ActivityLogPanel'));
 
 const GROUP_COLORS = ['#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1'];
 
@@ -1809,7 +1807,7 @@ function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onIt
 // ── More bottom sheet (mobile toolbar) ────────────────────────────────────────
 function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, importing,
   onClose, onAutomations, onForms, onFilter, filtersActive,
-  onExport, onImport, onMembers, onActivity, onTrash,
+  onExport, onImport, onMembers, onTrash,
   boardMembersCount }) {
   const options = [];
   if (isManager) {
@@ -1822,7 +1820,6 @@ function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, impo
     options.push({ icon: '⬆️', label: importing ? 'Importing…' : 'Import CSV', action: onImport, disabled: importing });
   }
   options.push({ icon: '👥', label: `Members (${boardMembersCount})`, action: onMembers });
-  options.push({ icon: '📋', label: 'Activity Log', action: onActivity });
   options.push({ icon: '🗑️', label: `Trash${trashCount > 0 ? ` (${trashCount})` : ''}`, action: onTrash, danger: trashCount > 0 });
 
   const handleOption = (action, disabled) => {
@@ -3109,7 +3106,6 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const [hiddenColumns, setHiddenColumns] = useState([]); // col IDs hidden in this view
   const [hiddenGroups, setHiddenGroups] = useState([]);   // group IDs hidden in this view
   const [unsavedChanges, setUnsavedChanges] = useState(false);
-  const [showActivityLog, setShowActivityLog] = useState(false);
   const [detailItemId, setDetailItemId] = useState(null);
   const [detailDefaultTab, setDetailDefaultTab] = useState('fields');
   const [importing, setImporting] = useState(false);
@@ -4238,10 +4234,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
               fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
             }}>👥 {board.members?.length || 0} Members</button>
-            <button onClick={() => setShowActivityLog(true)} style={{
-              padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
-              fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
-            }}>📋 Activity</button>
+            {/* Board-level Activity button removed — per-item Activity Log
+                is available inside the item detail panel (Activity Log tab). */}
             <button
               onClick={() => setShowTrash(true)}
               style={{
@@ -4502,7 +4496,6 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           onExport={handleExport}
           onImport={() => importFileRef.current?.click()}
           onMembers={() => setShowMembers(true)}
-          onActivity={() => setShowActivityLog(true)}
           onTrash={() => setShowTrash(true)}
         />
       )}
@@ -4586,12 +4579,6 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           onClose={() => setShowMembers(false)}
           onMembersChange={handleMembersChange}
         />
-      )}
-
-      {showActivityLog && (
-        <Suspense fallback={null}>
-          <ActivityLogPanel boardId={board.id} onClose={() => setShowActivityLog(false)} />
-        </Suspense>
       )}
 
       {defaultEditor && (
