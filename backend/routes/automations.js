@@ -19,12 +19,12 @@ router.get('/board/:boardId', requireAuth, async (req, res) => {
 });
 
 router.post('/', ...canWrite, async (req, res) => {
-  const { board_id, name, trigger_type, trigger_config, action_type, action_config } = req.body;
+  const { board_id, name, trigger_type, trigger_config, action_type, action_config, enabled } = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO automations (board_id, name, trigger_type, trigger_config, action_type, action_config)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [board_id, name, trigger_type, JSON.stringify(trigger_config), action_type, JSON.stringify(action_config)]
+      `INSERT INTO automations (board_id, name, trigger_type, trigger_config, action_type, action_config, enabled)
+       VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7, true)) RETURNING *`,
+      [board_id, name, trigger_type, JSON.stringify(trigger_config), action_type, JSON.stringify(action_config), enabled ?? null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -33,13 +33,17 @@ router.post('/', ...canWrite, async (req, res) => {
   }
 });
 
+// PUT preserves the existing `enabled` value when the request body omits it
+// (form-edit payloads typically don't carry the toggle state). The toggle
+// endpoint sends an explicit boolean, which still lands correctly via COALESCE.
 router.put('/:id', ...canWrite, async (req, res) => {
   const { name, trigger_type, trigger_config, action_type, action_config, enabled } = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE automations SET name=$1, trigger_type=$2, trigger_config=$3, action_type=$4, action_config=$5, enabled=$6
+      `UPDATE automations SET name=$1, trigger_type=$2, trigger_config=$3, action_type=$4, action_config=$5,
+                              enabled=COALESCE($6, enabled)
        WHERE id=$7 RETURNING *`,
-      [name, trigger_type, JSON.stringify(trigger_config), action_type, JSON.stringify(action_config), enabled, req.params.id]
+      [name, trigger_type, JSON.stringify(trigger_config), action_type, JSON.stringify(action_config), enabled ?? null, req.params.id]
     );
     res.json(rows[0]);
   } catch (err) {
