@@ -527,6 +527,7 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
     <>
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100 }} onClick={onClose} />
       <div
+        className="wb-side-panel"
         style={{
           position: 'fixed', top: 0, right: 0, bottom: 0,
           width: '100%', maxWidth: 860,

@@ -716,9 +716,10 @@ export default function FormsPanel({ boardId, groups, columns, onClose }) {
   const handleBack  = () => { setView('list'); setEditingId(null); setSavedId(null); };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 400, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }}
+    <div className="wb-side-panel-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 400, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }}
       onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
+        className="wb-side-panel"
         style={{ width: view === 'builder' ? '90vw' : 720, maxWidth: '100vw', background: '#f8fafc', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 48px rgba(0,0,0,0.18)', overflow: 'hidden', fontFamily: "'Inter', sans-serif" }}>
 
         {/* Panel header */}

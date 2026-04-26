@@ -1210,7 +1210,7 @@ function MainApp() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
         {/* Top bar */}
         <div
-          className="app-topbar"
+          className="app-topbar wb-safe-top wb-safe-left wb-safe-right"
           style={{
             background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)',
             padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', gap: 10,

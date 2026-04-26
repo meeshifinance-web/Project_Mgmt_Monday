@@ -577,11 +577,13 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
 
   return (
     <div
+      className="wb-side-panel-overlay"
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 500, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end' }}
       onClick={onClose}
     >
       <div
         onClick={e => e.stopPropagation()}
+        className="wb-side-panel"
         style={{
           background: '#fff', width: 600, height: '100vh',
           display: 'flex', flexDirection: 'column',

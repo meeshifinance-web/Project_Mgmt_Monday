@@ -70,8 +70,8 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
 
   return (
     <>
-      <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-        <div style={panel}>
+      <div className="wb-side-panel-overlay" style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="wb-side-panel" style={panel}>
           {/* Header */}
           <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>

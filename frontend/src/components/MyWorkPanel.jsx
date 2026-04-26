@@ -203,7 +203,7 @@ export default function MyWorkPanel({ onClose, onNavigateToBoard }) {
       />
 
       {/* Panel */}
-      <div style={{
+      <div className="wb-side-panel" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
         width: 520, maxWidth: '95vw',
         background: 'var(--bg-primary)',

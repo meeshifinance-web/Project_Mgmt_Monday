@@ -249,6 +249,7 @@ export default function CommandPalette({ open, onClose }) {
   return (
     <div
       onClick={onClose}
+      className="wb-cmdk-overlay"
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
         background: 'rgba(15, 23, 42, 0.55)',
@@ -259,6 +260,7 @@ export default function CommandPalette({ open, onClose }) {
     >
       <div
         onClick={e => e.stopPropagation()}
+        className="wb-cmdk-modal"
         style={{
           width: 620, maxWidth: '94vw', maxHeight: '70vh',
           background: 'var(--card-bg, #fff)', color: 'var(--text-primary, #172b4d)',

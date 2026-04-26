@@ -105,7 +105,7 @@ export default function NotificationBell({ onOpenItem }) {
 
       {/* Dropdown panel */}
       {open && (
-        <div style={{
+        <div className="wb-notif-dropdown" style={{
           position: 'absolute', right: 0, top: 'calc(100% + 8px)',
           width: 380, maxHeight: 520,
           background: '#fff', borderRadius: 10,

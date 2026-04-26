@@ -60,7 +60,7 @@ export default function TrashPanel({ boardId, onClose, onRestore, onCountChange 
       />
 
       {/* Panel */}
-      <div style={{
+      <div className="wb-side-panel" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 420, zIndex: 400,
         background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,0.14)',
         display: 'flex', flexDirection: 'column',

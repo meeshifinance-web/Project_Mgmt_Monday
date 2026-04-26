@@ -171,7 +171,7 @@ export default function GlobalTrashPanel({ onClose, onBoardRestored, onFolderRes
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 399, background: 'rgba(0,0,0,0.25)' }} />
 
       {/* Panel */}
-      <div style={{
+      <div className="wb-side-panel" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 460, zIndex: 400,
         background: '#fff', boxShadow: '-4px 0 24px rgba(0,0,0,0.14)',
         display: 'flex', flexDirection: 'column',

@@ -896,11 +896,11 @@ export default function AutomationsPanel({
   });
 
   return (
-    <div style={{
+    <div className="wb-side-panel-overlay" style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 400,
       display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
     }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{
+      <div className="wb-side-panel" onClick={e => e.stopPropagation()} style={{
         background: '#fff', width: 520, height: '100vh',
         boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column',
       }}>
