@@ -82,6 +82,7 @@ app.use('/api/views', require('./routes/views'));
 app.use('/api/keys', require('./routes/apiKeys'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/cmdk-search', require('./routes/cmdkSearch'));
 app.use('/api/my-work', require('./routes/myWork'));
 app.use('/api/dashboards', require('./routes/dashboards'));
 app.use('/api/date-cascade', require('./routes/dateCascade'));

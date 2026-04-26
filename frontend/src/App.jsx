@@ -16,6 +16,7 @@ import AuthCallbackPage from './pages/AuthCallbackPage';
 import PublicForm from './pages/PublicForm';
 import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, moveFolderToParent, cloneBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
+import CommandPalette from './components/CommandPalette';
 import ApiKeysPanel from './components/ApiKeysPanel';
 import MyWorkPanel from './components/MyWorkPanel';
 import DashboardPage from './components/DashboardPage';
@@ -309,8 +310,24 @@ function MainApp() {
   const [isNavCollapsed, setIsNavCollapsed] = useState(() => localStorage.getItem('workboard_nav_collapsed') === 'true');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cloneTargetBoard, setCloneTargetBoard] = useState(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const { resolvedTheme } = useThemeContext();
   const isDark = resolvedTheme === 'dark';
+
+  // Cmd-K / Ctrl-K — global keyboard shortcut to open the command palette.
+  // Captured at the document level so it works no matter what's focused
+  // (inputs included). Esc closes via the palette's own keyhandler.
+  useEffect(() => {
+    const onKey = (e) => {
+      const isCmdK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+      if (isCmdK) {
+        e.preventDefault();
+        setPaletteOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const toggleNav = () => setIsNavCollapsed(v => {
     const next = !v;
@@ -1122,7 +1139,7 @@ function MainApp() {
                 + New Board
               </button>
               <button
-                onClick={handleCreateFolder}
+                onClick={() => handleCreateFolder()}
                 style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'var(--sidebar-text-muted)', fontSize: 12 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -1306,6 +1323,10 @@ function MainApp() {
           }}
         />
       )}
+
+      {/* Cmd-K command palette — overlay mounted at the root so it can
+          take focus from anywhere in the app. */}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

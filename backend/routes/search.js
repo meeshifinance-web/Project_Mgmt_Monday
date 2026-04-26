@@ -46,7 +46,6 @@ router.get('/', requireAuth, async (req, res) => {
        FROM items i
        JOIN groups g ON g.id = i.group_id
        WHERE i.board_id = ANY($1::int[])
-         AND i.deleted_at IS NULL
          AND (
            LOWER(i.name) LIKE $2
            OR EXISTS (
