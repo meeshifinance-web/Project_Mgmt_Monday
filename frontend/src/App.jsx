@@ -18,6 +18,7 @@ import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders,
 import GlobalTrashPanel from './components/GlobalTrashPanel';
 import CommandPalette from './components/CommandPalette';
 import EmptyState from './components/EmptyState';
+import WelcomeTour, { shouldShowWelcomeTour } from './components/WelcomeTour';
 import ApiKeysPanel from './components/ApiKeysPanel';
 import MyWorkPanel from './components/MyWorkPanel';
 import DashboardPage from './components/DashboardPage';
@@ -312,6 +313,7 @@ function MainApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cloneTargetBoard, setCloneTargetBoard] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(() => shouldShowWelcomeTour());
   const { resolvedTheme } = useThemeContext();
   const isDark = resolvedTheme === 'dark';
 
@@ -328,6 +330,20 @@ function MainApp() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Listen for chord shortcuts dispatched from the Board's keyboard handler:
+  //   g+b → open the mobile sidebar (no-op on desktop where it's always visible)
+  //   g+m → open the My Work panel
+  // Decoupled via window CustomEvents so the Board doesn't need to know about
+  // App-level state.
+  useEffect(() => {
+    const onShortcut = (e) => {
+      if (e.detail === 'open-sidebar') setMobileNavOpen(true);
+      if (e.detail === 'open-mywork')  setShowMyWork(true);
+    };
+    window.addEventListener('wb-shortcut', onShortcut);
+    return () => window.removeEventListener('wb-shortcut', onShortcut);
   }, []);
 
   const toggleNav = () => setIsNavCollapsed(v => {
@@ -1340,6 +1356,14 @@ function MainApp() {
       {/* Cmd-K command palette — overlay mounted at the root so it can
           take focus from anywhere in the app. */}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+
+      {/* First-login welcome tour — shown only once per browser. */}
+      {showWelcome && (
+        <WelcomeTour
+          userName={currentUser?.name}
+          onDismiss={() => setShowWelcome(false)}
+        />
+      )}
     </div>
   );
 }

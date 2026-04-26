@@ -415,6 +415,13 @@ async function start() {
     } catch (err) {
       console.error('[emailPoller] failed to start:', err.message);
     }
+    // Date-arrives automation engine — runs hourly, fires "When date arrives"
+    // rules for any item whose date column hits the configured target.
+    try {
+      require('./services/dateArrivesEngine').startDateArrivesEngine();
+    } catch (err) {
+      console.error('[dateArrivesEngine] failed to start:', err.message);
+    }
   });
 }
 

@@ -24,6 +24,130 @@ import { useAuth } from '../context/AuthContext';
 
 const GROUP_COLORS = ['#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1'];
 
+// ── Keyboard shortcuts help dialog ───────────────────────────────────────────
+// Triggered by `?`. Closes on Esc, click-outside, or the × button. Listing
+// kept short — every shortcut here actually works in the global handler.
+function KeyboardShortcutsDialog({ onClose }) {
+  const groups = [
+    {
+      title: 'Navigation',
+      rows: [
+        { keys: ['j'], alt: ['↓'], desc: 'Move down to next item' },
+        { keys: ['k'], alt: ['↑'], desc: 'Move up to previous item' },
+        { keys: ['e'], alt: ['Enter', 'o'], desc: 'Open the focused item' },
+        { keys: ['x'], desc: 'Toggle the focused item for bulk select' },
+        { keys: ['Esc'], desc: 'Close panel / clear focus' },
+      ],
+    },
+    {
+      title: 'Search & jump',
+      rows: [
+        { keys: ['Ctrl', 'K'], alt: ['⌘', 'K'], desc: 'Open command palette' },
+        { keys: ['/'], desc: 'Focus the board search' },
+        { keys: ['g', 'b'], desc: 'Open boards (mobile sidebar)' },
+        { keys: ['g', 'm'], desc: 'Open My Work' },
+      ],
+    },
+    {
+      title: 'Help',
+      rows: [
+        { keys: ['?'], desc: 'Show this dialog' },
+      ],
+    },
+  ];
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9998,
+        background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(2px)',
+        display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+        paddingTop: '10vh',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: 540, maxWidth: '94vw', maxHeight: '80vh', overflowY: 'auto',
+          background: 'var(--card-bg, #fff)',
+          color: 'var(--text-primary, #172b4d)',
+          border: '1px solid var(--border-color, #dfe1e6)',
+          borderRadius: 14,
+          boxShadow: '0 24px 60px rgba(9,30,66,0.35)',
+        }}
+      >
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 18px 10px', borderBottom: '1px solid var(--border-color, #dfe1e6)',
+        }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>⌨️ Keyboard shortcuts</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+              Press <kbd style={kbdStyle}>?</kbd> anywhere to open this dialog.
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ fontSize: 20, lineHeight: 1, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
+            aria-label="Close"
+          >×</button>
+        </div>
+        <div style={{ padding: '8px 18px 18px' }}>
+          {groups.map(g => (
+            <div key={g.title} style={{ marginTop: 14 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)',
+                textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6,
+              }}>{g.title}</div>
+              {g.rows.map((r, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border-color, #f0f0f0)' }}>
+                  <div style={{ fontSize: 13 }}>{r.desc}</div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                    <KeysDisplay keys={r.keys} />
+                    {r.alt && (
+                      <>
+                        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>or</span>
+                        <KeysDisplay keys={r.alt} />
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const kbdStyle = {
+  display: 'inline-block',
+  padding: '1px 6px',
+  fontSize: 11,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  background: 'var(--bg-secondary, #f0f2f8)',
+  border: '1px solid var(--border-color, #dfe1e6)',
+  borderBottomWidth: 2,
+  borderRadius: 4,
+  color: 'var(--text-primary, #172b4d)',
+  minWidth: 18,
+  textAlign: 'center',
+};
+function KeysDisplay({ keys }) {
+  return (
+    <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
+      {keys.map((k, i) => (
+        <React.Fragment key={i}>
+          <kbd style={kbdStyle}>{k}</kbd>
+          {i < keys.length - 1 && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>then</span>}
+        </React.Fragment>
+      ))}
+    </span>
+  );
+}
+
 // ── Group totals helper (per-column footer aggregate) ────────────────────────
 // Returns a small object the summary row renderer can display, by column type:
 //   number / formula-numeric → { kind: 'number', sum, avg, count }
@@ -815,13 +939,14 @@ function colWidth(col) {
 }
 
 // ── Item row ──────────────────────────────────────────────────────────────────
-const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
+const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, onItemUpdate, onItemDelete, onItemCopy, onValueChange,
   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
   isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand, onRunCascade }) {
   const [hovered, setHovered] = useState(false);
   const rowBg = isSelected ? 'rgba(0,115,234,0.1)' : hovered ? 'var(--hover-bg)' : 'var(--bg-primary)';
   return (
     <tr
+      data-board-item-id={item.id}
       draggable
       onDragStart={e => onDragStart(e, item, group.id)}
       onDragEnd={onDragEnd}
@@ -833,7 +958,18 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate
           onToggleSelect?.(item.id, { shift: e.shiftKey });
         }
       }}
-      style={{ borderBottom: '1px solid var(--border-color)', background: rowBg, height: 40, cursor: 'grab', transition: 'background 0.1s' }}
+      style={{
+        borderBottom: '1px solid var(--border-color)',
+        background: rowBg,
+        height: 40,
+        cursor: 'grab',
+        transition: 'background 0.1s',
+        // Subtle focus ring + slightly stronger left bar when this row is the
+        // current keyboard target. Different from `isSelected` (bulk-select).
+        boxShadow: isFocused ? 'inset 3px 0 0 #0073ea' : undefined,
+        outline: isFocused ? '1px solid rgba(0,115,234,0.45)' : 'none',
+        outlineOffset: isFocused ? '-1px' : 0,
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -967,6 +1103,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, onItemUpdate
   return (
     prev.item === next.item &&
     prev.isSelected === next.isSelected &&
+    prev.isFocused === next.isFocused &&
     prev.isExpanded === next.isExpanded &&
     prev.columns === next.columns &&
     prev.canEdit === next.canEdit &&
@@ -2945,7 +3082,7 @@ function matchesFilter(item, rule) {
 
 // ── VirtualisedGroups — renders all groups with row-level virtualisation ──────
 function VirtualisedGroups({
-  filteredGroups, cols, allCols, isManager, canEdit, scrollContainerRef,
+  filteredGroups, cols, allCols, isManager, canEdit, scrollContainerRef, selectedRowItemId,
   dropTarget, groupDragSrc, groupDropOver, selectedItems,
   handleGroupUpdate, handleGroupDelete, handleItemCreate, handleItemUpdate,
   handleItemDelete, handleItemCopy, handleValueChange, handleColumnSettingsSave,
@@ -3098,6 +3235,7 @@ function VirtualisedGroups({
                 columns={cols}
                 canEdit={canEdit}
                 isManager={isManager}
+                isFocused={selectedRowItemId === item.id}
                 onItemUpdate={handleItemUpdate}
                 onItemDelete={handleItemDelete}
                 onItemCopy={handleItemCopy}
@@ -3296,6 +3434,151 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const importFileRef = React.useRef(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  // ── Keyboard navigation state (Linear-style j/k/e/o/?/Esc + chord shortcuts) ──
+  // selectedRowItemId tracks which item row is "focused" for arrow-key navigation.
+  // It's distinct from detailItemId (detail panel open) and selectedItems (bulk-op
+  // checkboxes) — three orthogonal concepts that can each be in any combination.
+  const [selectedRowItemId, setSelectedRowItemId] = useState(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const chordRef = useRef(null); // 'g' while waiting for second key, otherwise null
+  const chordTimerRef = useRef(null);
+  const boardSearchRef = useRef(null); // assigned by the search input below
+
+  // Whether a typing surface owns the keyboard. We don't want j/k to navigate
+  // away when the user is mid-edit in a cell or the search box.
+  const typingFocused = () => {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  };
+
+  // Scroll an item-row into view by its data attribute. Falls back gracefully
+  // when virtualization hasn't realized the row yet (rare, but possible).
+  const scrollRowIntoView = (itemId) => {
+    if (itemId == null) return;
+    const el = document.querySelector(`[data-board-item-id="${itemId}"]`);
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  // Global keyboard navigation. Bound to window so it works no matter where
+  // focus is (except inside inputs / contenteditable, see typingFocused).
+  // The chord state machine waits up to ~1.2s for a second key after `g`.
+  useEffect(() => {
+    const onKey = (e) => {
+      // Let Cmd-K and other modifier shortcuts through — App.jsx handles those.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (typingFocused()) return;
+
+      const ids = visibleItemIdsRef.current || [];
+
+      // Chord: `g` then `b` / `m`
+      if (chordRef.current === 'g') {
+        clearTimeout(chordTimerRef.current);
+        chordRef.current = null;
+        if (e.key === 'b') {
+          // "go to Boards" = open mobile sidebar; on desktop, just no-op (sidebar visible)
+          window.dispatchEvent(new CustomEvent('wb-shortcut', { detail: 'open-sidebar' }));
+          e.preventDefault();
+          return;
+        }
+        if (e.key === 'm') {
+          window.dispatchEvent(new CustomEvent('wb-shortcut', { detail: 'open-mywork' }));
+          e.preventDefault();
+          return;
+        }
+        // Any other key after 'g' silently cancels the chord.
+        return;
+      }
+
+      switch (e.key) {
+        case 'g':
+          chordRef.current = 'g';
+          chordTimerRef.current = setTimeout(() => { chordRef.current = null; }, 1200);
+          e.preventDefault();
+          return;
+
+        case 'j':
+        case 'ArrowDown': {
+          if (!ids.length) return;
+          const idx = ids.indexOf(selectedRowItemId);
+          const next = idx < 0 ? ids[0] : ids[Math.min(idx + 1, ids.length - 1)];
+          setSelectedRowItemId(next);
+          scrollRowIntoView(next);
+          e.preventDefault();
+          return;
+        }
+
+        case 'k':
+        case 'ArrowUp': {
+          if (!ids.length) return;
+          const idx = ids.indexOf(selectedRowItemId);
+          const next = idx <= 0 ? ids[0] : ids[idx - 1];
+          setSelectedRowItemId(next);
+          scrollRowIntoView(next);
+          e.preventDefault();
+          return;
+        }
+
+        case 'Enter':
+        case 'e':
+        case 'o':
+          if (selectedRowItemId != null) {
+            setDetailItemId(selectedRowItemId);
+            e.preventDefault();
+          }
+          return;
+
+        case 'x': {
+          // Toggle the bulk-select checkbox for the currently focused row.
+          if (selectedRowItemId != null) {
+            setSelectedItems(prev => {
+              const n = new Set(prev);
+              n.has(selectedRowItemId) ? n.delete(selectedRowItemId) : n.add(selectedRowItemId);
+              return n;
+            });
+            e.preventDefault();
+          }
+          return;
+        }
+
+        case '/':
+          if (boardSearchRef.current) {
+            boardSearchRef.current.focus();
+            boardSearchRef.current.select?.();
+            e.preventDefault();
+          }
+          return;
+
+        case '?':
+          setShowShortcuts(s => !s);
+          e.preventDefault();
+          return;
+
+        case 'Escape':
+          if (showShortcuts) { setShowShortcuts(false); e.preventDefault(); return; }
+          if (detailItemId)  { setDetailItemId(null);   e.preventDefault(); return; }
+          if (selectedRowItemId != null) { setSelectedRowItemId(null); e.preventDefault(); return; }
+          return;
+
+        default:
+          return;
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      clearTimeout(chordTimerRef.current);
+    };
+    // We deliberately depend on the few state values the handler reads so the
+    // closure stays current. visibleItemIdsRef is a ref so it doesn't need to
+    // be a dep.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRowItemId, detailItemId, showShortcuts]);
 
   const handleShare = async () => {
     const url = `${window.location.origin}/board/${board.id}`;
@@ -4384,6 +4667,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <span style={{ position: 'absolute', left: 8, fontSize: 12, color: '#9699a6', pointerEvents: 'none' }}>🔍</span>
             <input
+              ref={boardSearchRef}
               type="text"
               value={boardSearch}
               onChange={e => setBoardSearch(e.target.value)}
@@ -4666,6 +4950,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               cols={cols}
               allCols={allCols}
               isManager={isManager}
+              selectedRowItemId={selectedRowItemId}
               canEdit={canEdit}
               scrollContainerRef={scrollContainerRef}
               dropTarget={dropTarget}
@@ -4733,6 +5018,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           onMembers={() => setShowMembers(true)}
           onTrash={() => setShowTrash(true)}
         />
+      )}
+
+      {/* ── Keyboard shortcuts help (press ?) ── */}
+      {showShortcuts && (
+        <KeyboardShortcutsDialog onClose={() => setShowShortcuts(false)} />
       )}
 
       {/* ── Modals & panels ── */}

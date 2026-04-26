@@ -33,8 +33,10 @@ const ACTIONS_FOR = {
     { value: 'send_email',    label: '✉️ Send email' },
   ],
   date_arrives: [
-    { value: 'notify',     label: 'Show notification' },
-    { value: 'send_email', label: '✉️ Send email' },
+    { value: 'set_status',   label: 'Set status to…' },
+    { value: 'set_due_date', label: '📅 Set due date to a weekday' },
+    { value: 'notify',       label: 'Show notification' },
+    { value: 'send_email',   label: '✉️ Send email' },
   ],
   email_received: [
     { value: 'create_item_in_group', label: 'Create item in group' },
@@ -96,7 +98,13 @@ function Summary({ auto, columns, groups }) {
   }
   if (auto.trigger_type === 'date_arrives') {
     const col = columns.find(c => String(c.id) === String(cfg.column_id));
-    trigText = `${col?.title || 'Date'} arrives`;
+    if (cfg.mode === 'after') {
+      trigText = `${col?.title || 'Date'} has passed`;
+    } else {
+      const offset = parseInt(cfg.offset_days, 10) || 0;
+      const when = offset === 0 ? 'arrives today' : `${offset} day${offset > 1 ? 's' : ''} before`;
+      trigText = `${col?.title || 'Date'} ${when}`;
+    }
   }
   if (auto.trigger_type === 'email_received') {
     const field = cfg.match_field === 'body' ? 'body' : cfg.match_field === 'either' ? 'subject/body' : 'subject';
@@ -250,11 +258,40 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
 
         {triggerType === 'date_arrives' && (
           <div style={{ marginTop: 8 }}>
-            <p style={label}>Date column</p>
-            <select value={triggerConfig.column_id || ''} onChange={e => setTC({ column_id: e.target.value })} style={sel}>
-              <option value="">Select date column…</option>
-              {dateCols.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-            </select>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1.4 }}>
+                <p style={label}>Date column</p>
+                <select value={triggerConfig.column_id || ''} onChange={e => setTC({ column_id: e.target.value })} style={sel}>
+                  <option value="">Select date column…</option>
+                  {dateCols.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={label}>Fire when</p>
+                <select
+                  value={triggerConfig.mode === 'after' ? 'after' : String(triggerConfig.offset_days ?? 0)}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v === 'after') setTC({ mode: 'after', offset_days: undefined });
+                    else                setTC({ mode: 'on',    offset_days: parseInt(v, 10) });
+                  }}
+                  style={sel}
+                >
+                  <option value="0">Date is today</option>
+                  <option value="1">1 day before</option>
+                  <option value="2">2 days before</option>
+                  <option value="3">3 days before</option>
+                  <option value="7">1 week before</option>
+                  <option value="after">⏰ Date has passed (overdue)</option>
+                </select>
+              </div>
+            </div>
+            {triggerConfig.mode === 'after' && (
+              <div style={{ marginTop: 6, fontSize: 11, color: '#7a5a00', background: '#fff8e1', borderRadius: 6, padding: '7px 10px', lineHeight: 1.5 }}>
+                ⏰ Fires once per item when its date is in the past. Pair with a
+                "Set status to Overdue" action for automatic SLA tracking.
+              </div>
+            )}
           </div>
         )}
 
