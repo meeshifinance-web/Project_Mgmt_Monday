@@ -9,6 +9,7 @@ import BoardMembersPanel from './BoardMembersPanel';
 import DefaultValueEditor from './DefaultValueEditor';
 import ItemDetailPanel from './ItemDetailPanel';
 import FormulaEditor from './FormulaEditor';
+import { evaluateFormula, parseDate } from '../utils/formulaEngine';
 import {
   createGroup, updateGroup, deleteGroup, reorderGroups,
   createItem, updateItem, deleteItem, copyItem, moveItem,
@@ -22,6 +23,120 @@ import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
 
 const GROUP_COLORS = ['#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1'];
+
+// ── Group totals helper (per-column footer aggregate) ────────────────────────
+// Returns a small object the summary row renderer can display, by column type:
+//   number / formula-numeric → { kind: 'number', sum, avg, count }
+//   date                     → { kind: 'date',   min, max }
+//   status / dropdown        → { kind: 'tally',  top: [{label,count}, …] }
+//   person                   → { kind: 'count',  count: total assignees }
+//   anything else            → { kind: 'count',  count: items with a value }
+// `items` is the visible row set for the group; `allCols` lets formula cells
+// resolve {Column Name} references when computed at footer time.
+function computeColumnSummary(col, items, allCols) {
+  const itemCount = items.length;
+  if (!col || itemCount === 0) return null;
+
+  // Resolve cell value for an item — formula cells are computed on the fly
+  // because their result is never persisted in item.values.
+  const cellValue = (item) => {
+    if (col.type === 'formula') {
+      const formula = col.settings?.formula || '';
+      if (!formula.trim()) return '';
+      return evaluateFormula(formula, item, allCols);
+    }
+    return item.values?.[col.id] ?? '';
+  };
+
+  // Numeric aggregate works for both "number" and formula columns whose
+  // result happens to parse as a number — common case for "days between".
+  if (col.type === 'number' || col.type === 'formula') {
+    let sum = 0, count = 0;
+    for (const it of items) {
+      const v = cellValue(it);
+      const n = Number(v);
+      if (v !== '' && v !== null && v !== undefined && !Number.isNaN(n)) {
+        sum += n; count++;
+      }
+    }
+    if (count === 0) return null;
+    return { kind: 'number', sum, avg: sum / count, count };
+  }
+
+  if (col.type === 'date') {
+    let min = null, max = null;
+    for (const it of items) {
+      const d = parseDate(cellValue(it));
+      if (isNaN(d)) continue;
+      if (!min || d < min) min = d;
+      if (!max || d > max) max = d;
+    }
+    if (!min) return null;
+    return { kind: 'date', min, max };
+  }
+
+  if (col.type === 'status' || col.type === 'dropdown') {
+    const counts = new Map();
+    for (const it of items) {
+      const v = String(cellValue(it) || '').trim();
+      if (!v) continue;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    if (!counts.size) return null;
+    const top = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([label, count]) => ({ label, count }));
+    // Pull the configured color for the top option so the badge matches
+    // what users see in the cells.
+    const opts = Array.isArray(col.settings?.options) ? col.settings.options : [];
+    for (const t of top) {
+      const opt = opts.find(o => (typeof o === 'string' ? o : o.label) === t.label);
+      t.color = (opt && typeof opt === 'object' ? opt.color : null) || '#7a869a';
+    }
+    return { kind: 'tally', top, total: counts.size };
+  }
+
+  if (col.type === 'person') {
+    let count = 0;
+    for (const it of items) {
+      const raw = it.values?.[col.id];
+      if (!raw) continue;
+      try {
+        const arr = JSON.parse(raw);
+        count += Array.isArray(arr) ? arr.length : (arr ? 1 : 0);
+      } catch {
+        if (String(raw).trim()) count++;
+      }
+    }
+    if (count === 0) return null;
+    return { kind: 'count', count, label: count === 1 ? 'person' : 'people' };
+  }
+
+  // Generic fallback — count of non-empty cells
+  let count = 0;
+  for (const it of items) {
+    const v = cellValue(it);
+    if (v !== '' && v !== null && v !== undefined) count++;
+  }
+  if (count === 0) return null;
+  return { kind: 'count', count, label: count === 1 ? 'value' : 'values' };
+}
+
+// Compact number for summary cells: 1234 → "1,234", 12345 → "12.3K", 1234567 → "1.23M".
+function formatSummaryNumber(n) {
+  if (!Number.isFinite(n)) return '';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return (n / 1_000_000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+  if (abs >= 10_000)    return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  if (Number.isInteger(n)) return n.toLocaleString('en-IN');
+  return parseFloat(n.toFixed(2)).toLocaleString('en-IN');
+}
+
+function formatSummaryDate(d) {
+  if (!(d instanceof Date) || isNaN(d)) return '';
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
 
 // Simple CSV parser: returns array of objects keyed by header row
 function parseCSV(text) {
@@ -2830,7 +2945,7 @@ function matchesFilter(item, rule) {
 
 // ── VirtualisedGroups — renders all groups with row-level virtualisation ──────
 function VirtualisedGroups({
-  filteredGroups, cols, isManager, canEdit, scrollContainerRef,
+  filteredGroups, cols, allCols, isManager, canEdit, scrollContainerRef,
   dropTarget, groupDragSrc, groupDropOver, selectedItems,
   handleGroupUpdate, handleGroupDelete, handleItemCreate, handleItemUpdate,
   handleItemDelete, handleItemCopy, handleValueChange, handleColumnSettingsSave,
@@ -2867,6 +2982,10 @@ function VirtualisedGroups({
           }
           rows.push({ type: 'add-subitem', item, group, id: `add-sub-${item.id}` });
         }
+      }
+      // Group totals row — only meaningful when the group has items.
+      if ((group.items || []).length > 0) {
+        rows.push({ type: 'group-summary', group, id: `sum-${group.id}` });
       }
       rows.push({ type: 'add-item', group, id: `add-${group.id}` });
     }
@@ -3032,6 +3151,70 @@ function VirtualisedGroups({
                   </button>
                 )}
               </td>
+            </tr>
+          );
+        }
+
+        // ── Group totals / summary row ──
+        // Renders one cell per visible column with an aggregate appropriate
+        // to the column's type — sum for numbers/formula, date range for
+        // dates, top-status tally for status, count for everything else.
+        if (row.type === 'group-summary') {
+          const { group } = row;
+          const items = group.items || [];
+          return (
+            <tr key={row.id} style={{ height: 32, background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-color)', fontSize: 12 }}>
+              <td style={{ padding: 0, background: group.color, opacity: 0.4 }} />
+              <td />
+              <td style={{ padding: '4px 12px', color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: 0.3, fontSize: 11, textTransform: 'uppercase', position: 'sticky', left: 42, background: 'var(--bg-secondary)', zIndex: 5 }}>
+                Σ Total <span style={{ color: 'var(--text-tertiary, #999)', fontWeight: 500, marginLeft: 4 }}>({items.length})</span>
+              </td>
+              {cols.map(col => {
+                const summary = computeColumnSummary(col, items, allCols);
+                if (!summary) return <td key={col.id} style={{ padding: '4px 8px' }} />;
+                return (
+                  <td key={col.id} style={{ padding: '4px 8px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {summary.kind === 'number' && (
+                      <span title={`Sum ${formatSummaryNumber(summary.sum)} · Avg ${formatSummaryNumber(summary.avg)} · Count ${summary.count}`}
+                        style={{ fontWeight: 700, color: '#0073ea' }}>
+                        {formatSummaryNumber(summary.sum)}
+                        <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4, fontSize: 10 }}>
+                          · avg {formatSummaryNumber(summary.avg)}
+                        </span>
+                      </span>
+                    )}
+                    {summary.kind === 'date' && (
+                      <span title={`Earliest ${formatSummaryDate(summary.min)} → Latest ${formatSummaryDate(summary.max)}`}
+                        style={{ color: 'var(--text-secondary)' }}>
+                        {formatSummaryDate(summary.min)}
+                        {summary.max > summary.min && (
+                          <>
+                            <span style={{ margin: '0 4px', opacity: 0.6 }}>→</span>
+                            {formatSummaryDate(summary.max)}
+                          </>
+                        )}
+                      </span>
+                    )}
+                    {summary.kind === 'tally' && (
+                      <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                        {summary.top.map((t, i) => (
+                          <span key={i} title={`${t.count} × ${t.label}`}
+                            style={{ background: t.color, color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
+                            {t.label} · {t.count}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    {summary.kind === 'count' && (
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {summary.count} <span style={{ opacity: 0.65 }}>{summary.label}</span>
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
+              <td />
+              {isManager && <td />}
             </tr>
           );
         }
@@ -4016,13 +4199,64 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     })).filter(g => g.items.length > 0)
     : applyViewFilters(applyFilters(groups));
 
+  // Look up the sort column's metadata once per render so the comparator
+  // doesn't have to scan `allCols` for every pair-wise comparison. Use
+  // `allCols` rather than `cols` because a formula could reference a column
+  // that the user has chosen to hide in the current view.
+  const sortCol = sortConfig && sortConfig.colId !== '_name'
+    ? allCols.find(c => String(c.id) === String(sortConfig.colId))
+    : null;
+
+  // Cell-value extractor that knows about formula columns (compute on the fly)
+  // and about the date format actually stored ("DD/MM/YYYY") so date sort is
+  // chronological, not alphabetical.
+  const cellSortValue = (item) => {
+    if (!sortConfig) return '';
+    if (sortConfig.colId === '_name') return item.name;
+    if (sortCol?.type === 'formula') {
+      const formula = (sortCol.settings && (sortCol.settings.formula || sortCol.settings.expression)) || '';
+      return evaluateFormula(formula, item, allCols);
+    }
+    return item.values?.[sortConfig.colId] ?? '';
+  };
+
+  // Comparator: numeric when both sides parse as numbers, chronological for
+  // date columns, otherwise locale-aware string compare with numeric option.
+  const compareCells = (a, b) => {
+    const aRaw = cellSortValue(a);
+    const bRaw = cellSortValue(b);
+
+    // Empty values always sort to the bottom regardless of direction so users
+    // see the "data" rows first, not a wall of blanks.
+    const aEmpty = aRaw === '' || aRaw === null || aRaw === undefined;
+    const bEmpty = bRaw === '' || bRaw === null || bRaw === undefined;
+    if (aEmpty && bEmpty) return 0;
+    if (aEmpty) return 1;
+    if (bEmpty) return -1;
+
+    // Date columns: parse both sides into a real Date and compare timestamps
+    if (sortCol?.type === 'date') {
+      const da = parseDate(aRaw);
+      const db = parseDate(bRaw);
+      if (!isNaN(da) && !isNaN(db)) return da - db;
+    }
+
+    // Pure-number sort when both sides are numeric (covers formula columns
+    // returning numbers, plain number columns, and string-typed digits).
+    const an = Number(aRaw);
+    const bn = Number(bRaw);
+    if (!Number.isNaN(an) && !Number.isNaN(bn) && aRaw !== '' && bRaw !== '') {
+      return an - bn;
+    }
+
+    return String(aRaw).localeCompare(String(bRaw), undefined, { numeric: true, sensitivity: 'base' });
+  };
+
   const filteredGroups = (sortConfig
     ? searchedGroups.map(g => ({
       ...g,
       items: [...(g.items || [])].sort((a, b) => {
-        const aVal = sortConfig.colId === '_name' ? a.name : (a.values?.[sortConfig.colId] || '');
-        const bVal = sortConfig.colId === '_name' ? b.name : (b.values?.[sortConfig.colId] || '');
-        const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true, sensitivity: 'base' });
+        const cmp = compareCells(a, b);
         return sortConfig.dir === 'asc' ? cmp : -cmp;
       }),
     }))
@@ -4430,6 +4664,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             <VirtualisedGroups
               filteredGroups={filteredGroups}
               cols={cols}
+              allCols={allCols}
               isManager={isManager}
               canEdit={canEdit}
               scrollContainerRef={scrollContainerRef}

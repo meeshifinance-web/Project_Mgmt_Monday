@@ -37,6 +37,37 @@ function isTruthy(v) {
   return true;
 }
 
+// Robust date parser used by every date function below.
+// Accepts:
+//   - ISO strings  "2026-04-30"  /  "2026-04-30T12:34:56Z"  (preferred)
+//   - DD/MM/YYYY   "30/04/2026"  / "30-04-2026" / "30.04.2026"
+//   - JS Date objects
+// Returns a Date or NaN when nothing parses. NaN is the same signal Date
+// returns for unparseable input, so callers can keep using `isNaN(d)`.
+function parseDate(v) {
+  if (v === null || v === undefined || v === '') return NaN;
+  if (v instanceof Date) return v;
+
+  const s = String(v).trim();
+  // 1. ISO / native — handles "2026-04-30", "2026-04-30T…", "Apr 30, 2026", etc.
+  let d = new Date(s);
+  if (!isNaN(d)) return d;
+
+  // 2. DD/MM/YYYY (or DD-MM-YYYY, DD.MM.YYYY) — the format actually written
+  //    by the date cell editor when input is hand-typed in IST/IN locales.
+  const m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(s);
+  if (m) {
+    const dd = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    let   yy = parseInt(m[3], 10);
+    if (yy < 100) yy += yy < 50 ? 2000 : 1900;
+    d = new Date(yy, mm - 1, dd);
+    if (!isNaN(d) && d.getDate() === dd && d.getMonth() === mm - 1) return d;
+  }
+
+  return NaN;
+}
+
 // ── Tokenizer ─────────────────────────────────────────────────────────────────
 function tokenize(formula, colValues) {
   const tokens = [];
@@ -287,19 +318,19 @@ class Parser {
       // ── Date ─────────────────────────────────────────────────────────────
       case 'TODAY':       return new Date().toISOString().slice(0, 10);
       case 'NOW':         return new Date().toLocaleString('en-IN');
-      case 'YEAR':        { const d = new Date(a[0]); return isNaN(d) ? '#VALUE!' : d.getFullYear(); }
-      case 'MONTH':       { const d = new Date(a[0]); return isNaN(d) ? '#VALUE!' : d.getMonth() + 1; }
-      case 'DAY':         { const d = new Date(a[0]); return isNaN(d) ? '#VALUE!' : d.getDate(); }
-      case 'WEEKDAY':     { const d = new Date(a[0]); return isNaN(d) ? '#VALUE!' : d.getDay() + 1; }
-      case 'HOUR':        { const d = new Date(a[0]); return isNaN(d) ? '#VALUE!' : d.getHours(); }
-      case 'MINUTE':      { const d = new Date(a[0]); return isNaN(d) ? '#VALUE!' : d.getMinutes(); }
+      case 'YEAR':        { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getFullYear(); }
+      case 'MONTH':       { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getMonth() + 1; }
+      case 'DAY':         { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getDate(); }
+      case 'WEEKDAY':     { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getDay() + 1; }
+      case 'HOUR':        { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getHours(); }
+      case 'MINUTE':      { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getMinutes(); }
       case 'DAYS': {
-        const d1 = new Date(a[0]), d2 = new Date(a[1]);
+        const d1 = parseDate(a[0]), d2 = parseDate(a[1]);
         if (isNaN(d1) || isNaN(d2)) return '#VALUE!';
         return Math.round((d1 - d2) / 86400000);
       }
       case 'DATEADD': {
-        const d = new Date(a[0]);
+        const d = parseDate(a[0]);
         if (isNaN(d)) return '#VALUE!';
         const n = toNum(a[1]);
         const unit = String(a[2] ?? 'day').toLowerCase();
@@ -309,7 +340,7 @@ class Parser {
         return d.toISOString().slice(0, 10);
       }
       case 'EDATE': {
-        const d = new Date(a[0]);
+        const d = parseDate(a[0]);
         if (isNaN(d)) return '#VALUE!';
         d.setMonth(d.getMonth() + toNum(a[1]));
         return d.toISOString().slice(0, 10);
@@ -341,6 +372,10 @@ class Parser {
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
+
+// Re-export the date parser so other modules (sorting, filtering, charts)
+// can recognise the same date formats this engine accepts.
+export { parseDate };
 
 /**
  * Evaluate a formula expression for a specific item row.
