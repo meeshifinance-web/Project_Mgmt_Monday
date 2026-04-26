@@ -5,6 +5,7 @@ import { useAutomation } from '../hooks/useAutomation';
 import StepTemplateConfig from './automation/StepTemplateConfig';
 import AutomationRuleConfig from './automation/AutomationRuleConfig';
 import DateCascadeIndicator from './automation/DateCascadeIndicator';
+import EmptyState from './EmptyState';
 
 // ── Trigger definitions ───────────────────────────────────────────────────────
 const TRIGGERS = [
@@ -968,11 +969,12 @@ export default function AutomationsPanel({
               )}
 
               {automations.length === 0 && !showForm && (
-                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#aaa' }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>⚡</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>No automations yet</div>
-                  <div style={{ fontSize: 12 }}>Click "+ Add Automation" to create your first rule</div>
-                </div>
+                <EmptyState
+                  icon="⚡"
+                  title="Automate the boring parts"
+                  description="Auto-assign owners, set due dates, send emails, and more — all triggered by status changes, item creation, or incoming email."
+                  primaryAction={{ label: '+ Create your first automation', onClick: () => setShowForm(true) }}
+                />
               )}
 
               {automations.map(auto => (

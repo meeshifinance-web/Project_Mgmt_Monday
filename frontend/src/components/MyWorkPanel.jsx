@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getMyWork } from '../api';
 import { parseOwners } from './ColumnCell';
+import EmptyState from './EmptyState';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -260,15 +261,11 @@ export default function MyWorkPanel({ onClose, onNavigateToBoard }) {
             </div>
           )}
           {!loading && !error && items.length === 0 && (
-            <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                No items assigned to you
-              </div>
-              <div style={{ fontSize: 13 }}>
-                Items where you are set as owner in a Person column will appear here.
-              </div>
-            </div>
+            <EmptyState
+              icon="🎉"
+              title="Inbox zero — you're all clear"
+              description="Items where someone assigns you in a Person / Owner column will land here. Until then, take a breath."
+            />
           )}
           {!loading && !error && boards.map(b => (
             <BoardGroup

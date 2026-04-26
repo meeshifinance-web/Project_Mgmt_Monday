@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getNotifications, markNotificationRead } from '../api';
 import { useNotifications } from '../context/NotificationContext';
+import EmptyState from './EmptyState';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr)) / 1000;
@@ -29,7 +30,11 @@ export default function NotificationBell({ onOpenItem }) {
     if (!open) return;
     setLoading(true);
     getNotifications()
-      .then(r => setNotifications(r.data))
+      // Only surface unread items in the dropdown — once a user has clicked
+      // (or marked all read), those rows shouldn't reappear when the bell
+      // is reopened. The server still keeps the read history for any future
+      // "all activity" view.
+      .then(r => setNotifications((r.data || []).filter(n => !n.is_read)))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [open]);
@@ -44,14 +49,17 @@ export default function NotificationBell({ onOpenItem }) {
   }, [open]);
 
   const handleClick = useCallback(async (notif) => {
-    // Mark read
+    // Mark read on the server, then drop it from the visible list so the
+    // user gets a clear "this is dealt with" signal — same model as
+    // Slack/Linear/Gmail. The DB row remains for history; only the
+    // dropdown view is cleared.
     if (!notif.is_read) {
       try {
         await markNotificationRead(notif.id);
-        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
         decrementUnread();
-      } catch { /* silent */ }
+      } catch { /* silent — list still updates locally */ }
     }
+    setNotifications(prev => prev.filter(n => n.id !== notif.id));
     // Navigate if we have the necessary IDs
     if (notif.board_id && notif.item_id && onOpenItem) {
       setOpen(false);
@@ -59,9 +67,11 @@ export default function NotificationBell({ onOpenItem }) {
     }
   }, [decrementUnread, onOpenItem]);
 
+  // "Mark all read" also wipes the visible list — consistent with the
+  // per-notification click behavior. DB rows are preserved server-side.
   const handleMarkAllRead = useCallback(async () => {
     await markAllRead();
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setNotifications([]);
   }, [markAllRead]);
 
   return (
@@ -128,10 +138,11 @@ export default function NotificationBell({ onOpenItem }) {
             {loading ? (
               <div style={{ textAlign: 'center', padding: 32, color: '#aaa' }}>Loading…</div>
             ) : notifications.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 48, color: '#aaa' }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>🔕</div>
-                <div style={{ fontSize: 13 }}>No notifications yet</div>
-              </div>
+              <EmptyState
+                icon="🔔"
+                title="You're all caught up"
+                description="When someone assigns you, comments on your items, or replies to a thread, you'll see it here."
+              />
             ) : (
               notifications.map(n => {
                 const meta = notifMeta(n.message);

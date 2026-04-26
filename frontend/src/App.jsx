@@ -17,6 +17,7 @@ import PublicForm from './pages/PublicForm';
 import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, moveFolderToParent, cloneBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
 import CommandPalette from './components/CommandPalette';
+import EmptyState from './components/EmptyState';
 import ApiKeysPanel from './components/ApiKeysPanel';
 import MyWorkPanel from './components/MyWorkPanel';
 import DashboardPage from './components/DashboardPage';
@@ -400,8 +401,17 @@ function MainApp() {
     try {
       const r = await getBoard(id);
       setActiveBoard(r.data);
-    } catch {
-      toast('Failed to load board', 'error');
+    } catch (err) {
+      const status = err.response?.status;
+      // Friendlier copy for the most common failures so users understand
+      // *why* and can move on, instead of a generic "Failed to load".
+      if (status === 404) {
+        toast('That board no longer exists — it may have been deleted', 'warning');
+      } else if (status === 403) {
+        toast('You no longer have access to that board', 'warning');
+      } else {
+        toast('Failed to load board', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -626,7 +636,12 @@ function MainApp() {
               </div>
             ) : null)}
             {folders.length === 0 && !b.folder_id && (
-              <div style={{ padding: '6px 12px', fontSize: 11, color: '#aaa', fontStyle: 'italic' }}>No folders yet</div>
+              <EmptyState
+                compact
+                icon="📁"
+                title="No folders yet"
+                primaryAction={isManager ? { label: 'Create one', onClick: () => handleCreateFolder() } : null}
+              />
             )}
             {isManager && (
               <>
@@ -1250,16 +1265,14 @@ function MainApp() {
           <Board board={activeBoard} onBoardChange={handleBoardChange} openItemId={openItemId} onOpenItemDone={() => setOpenItemId(null)} />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center', color: '#888' }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-              <div style={{ fontSize: 16, marginBottom: 8 }}>No boards yet</div>
-              {isManager && (
-                <button onClick={() => setShowNewBoard(true)}
-                  style={{ padding: '10px 20px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 600 }}>
-                  Create Your First Board
-                </button>
-              )}
-            </div>
+            <EmptyState
+              icon="📋"
+              title={isManager ? "Let's create your first board" : 'No boards shared with you yet'}
+              description={isManager
+                ? 'Boards are where work lives — track tasks, deadlines, and ownership across your team. Pick a board on the left or create a new one to get started.'
+                : 'Ask your team admin or a manager to add you to a board. Once you\'re a member, it\'ll appear in the sidebar on the left.'}
+              primaryAction={isManager ? { label: '+ Create your first board', onClick: () => setShowNewBoard(true) } : null}
+            />
           </div>
         )}
       </div>

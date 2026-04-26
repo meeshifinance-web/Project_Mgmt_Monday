@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { addBoardMember, removeBoardMember, searchUsers, setBoardMemberOwner, updateBoard } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
+import EmptyState from './EmptyState';
 
 const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', user: '#0073ea' };
 
@@ -291,12 +292,11 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
               />
               <span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#323338', display: 'block' }}>
-                  🔒 Restrict items to assignees only
+                  🔒 Private mode — only owners see their items
                 </span>
                 <span style={{ fontSize: 11, color: '#676879', display: 'block', marginTop: 3, lineHeight: 1.5 }}>
-                  When ON, only Board Owners (★) and system admins see every item.
-                  Everyone else — including managers / VPs / AVPs — sees only items
-                  where they're listed in an Owner column.
+                  Each member sees only the items where their name is listed in an Owner column.
+                  Board Owners (★) and admins keep full visibility across the board.
                 </span>
               </span>
             </label>
@@ -326,10 +326,11 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
         {/* Member list */}
         <div style={{ flex: 1, padding: '12px 20px' }}>
           {members.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#aaa' }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>👤</div>
-              <div style={{ fontSize: 13 }}>No members yet</div>
-            </div>
+            <EmptyState
+              icon="👥"
+              title="Just you here so far"
+              description="Add teammates by name or email so they can see and update this board's tasks."
+            />
           ) : (
             members.map(m => (
               <div key={m.id} style={{
