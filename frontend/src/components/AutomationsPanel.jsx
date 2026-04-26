@@ -589,16 +589,15 @@ function BoardEmailSettings({ emailFrom, onChange }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
         <span style={{ fontSize: 16 }}>✉️</span>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 13, color: '#323338' }}>Board Sender Email</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#323338' }}>Sender email for this board</div>
           <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>
-            Outbound automation emails for this board will be sent from this address.
-            Leave blank to use the system default.
+            Choose which address this board's automated emails come from.
           </div>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <input value={draft} onChange={e => setDraft(e.target.value)}
-          placeholder="e.g. board-alerts@ddecor.com (leave blank for system default)"
+          placeholder="Leave blank to use the default — recommended"
           style={{ ...inp, flex: 1 }} type="email" />
         <button onClick={handleSave} disabled={saving} style={{
           padding: '7px 16px', background: '#0073ea', color: '#fff',
@@ -608,9 +607,25 @@ function BoardEmailSettings({ emailFrom, onChange }) {
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
+
+      {/* Friendly guidance — sets expectations so admins don't paste a random
+          address that O365 will silently reject. */}
+      <div style={{
+        marginTop: 10, padding: '8px 10px', borderRadius: 6,
+        background: '#fff8e1', border: '1px solid #ffe58f',
+        fontSize: 11, color: '#7a5a00', lineHeight: 1.55,
+      }}>
+        💡 <strong>Most boards should leave this blank.</strong> Emails will
+        come from the system default and replies will route back automatically.
+        <br />
+        Only set a custom address if this board emails people outside D'Decor —
+        and only after IT has connected that mailbox to your sender account.
+        Otherwise messages may land in spam or fail to send.
+      </div>
+
       {draft.trim() && (
-        <div style={{ marginTop: 6, fontSize: 11, color: '#555' }}>
-          Outbound emails will use: <strong>{draft.trim()}</strong>
+        <div style={{ marginTop: 8, fontSize: 11, color: '#555' }}>
+          This board will send from: <strong>{draft.trim()}</strong>
         </div>
       )}
     </div>
