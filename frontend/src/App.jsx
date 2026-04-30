@@ -411,6 +411,19 @@ function MainApp() {
       .catch(() => { toast('Failed to load boards', 'error'); setLoading(false); });
   }, []);
 
+  // React to URL changes after initial mount — e.g. when Cmd-K (or any other
+  // navigate(...) call) switches /board/:id while the app is already loaded.
+  // The initial-mount effect above only runs once with `[]` deps, so without
+  // this the URL would change but the board wouldn't reload.
+  useEffect(() => {
+    if (!urlBoardId) return;
+    if (activeBoard && String(activeBoard.id) === String(urlBoardId)) return;
+    if (!boards.length) return; // initial-mount effect will handle it
+    const target = boards.find(b => String(b.id) === String(urlBoardId));
+    if (target) loadBoard(target.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlBoardId]);
+
   const loadBoard = async (id) => {
     setActiveDashboardId(null); // always clear dashboard when opening a board
     setLoading(true);
