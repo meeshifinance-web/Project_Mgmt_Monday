@@ -22,6 +22,14 @@
  *   Each (rule, item, past_date) combination fires at most once, so a
  *   set_status action re-fires only if the date changes.
  *
+ *   'after' mode also accepts an optional `min_days_past` integer. When
+ *   set, the rule only fires once an item is at least N days past the
+ *   date column. Lets users build SLA-style escalation tiers — e.g. four
+ *   parallel rules with thresholds 10 / 20 / 30 / 50 each flipping the
+ *   status to a more urgent value as time passes. Each rule has its own
+ *   automation_id so the dedup table keeps them independent: a single
+ *   item walks up the ladder as the days roll, firing each tier once.
+ *
  * Action types supported (re-uses existing dispatchers from items.js etc.):
  *   - send_email     → services/automationEmail.sendAutomationEmail
  *   - set_status     → writes to column_values
@@ -156,9 +164,15 @@ async function runDateArrivesEngine() {
 
   let rules;
   try {
+    // Order rules by min_days_past ascending so when an item is past multiple
+    // tiers in the same tick (common when rules are first created against
+    // already-overdue items), the HIGHEST tier fires last and its status
+    // wins. NULL threshold ('after' with no min) sorts first.
     rules = await pool.query(
       `SELECT a.* FROM automations a
-        WHERE a.trigger_type='date_arrives' AND a.enabled=true`
+        WHERE a.trigger_type='date_arrives' AND a.enabled=true
+        ORDER BY COALESCE((a.trigger_config->>'min_days_past')::int, 0) ASC,
+                 a.id ASC`
     );
   } catch (err) {
     console.error('[dateArrivesEngine] fetch rules failed:', err.message);
@@ -210,6 +224,21 @@ async function runDateArrivesEngine() {
         // the date to a different past date, this fires again. If they fix
         // it to a future date, no fire.
         if (itemDate >= today) continue;
+
+        // Optional SLA-tier gate — only fire once N days have passed since
+        // the date column. Lets users build "10/20/30/50-days past"
+        // escalation chains using four parallel rules with no extra schema.
+        const minDaysPast = parseInt(tcfg.min_days_past, 10);
+        if (Number.isFinite(minDaysPast) && minDaysPast > 0) {
+          // Day-difference between two YYYY-MM-DD strings, exclusive of time.
+          const [y1, m1, d1] = itemDate.split('-').map(Number);
+          const [y2, m2, d2] = today.split('-').map(Number);
+          const a = new Date(y1, m1 - 1, d1);
+          const b = new Date(y2, m2 - 1, d2);
+          const daysPast = Math.round((b - a) / (24 * 60 * 60 * 1000));
+          if (daysPast < minDaysPast) continue;
+        }
+
         fireDate = itemDate; // dedup keyed on the actual past date
       } else {
         // 'on' mode: fire today if itemDate === today + offset_days

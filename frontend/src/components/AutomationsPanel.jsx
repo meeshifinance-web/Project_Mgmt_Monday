@@ -99,7 +99,10 @@ function Summary({ auto, columns, groups }) {
   if (auto.trigger_type === 'date_arrives') {
     const col = columns.find(c => String(c.id) === String(cfg.column_id));
     if (cfg.mode === 'after') {
-      trigText = `${col?.title || 'Date'} has passed`;
+      const minPast = parseInt(cfg.min_days_past, 10);
+      trigText = Number.isFinite(minPast) && minPast > 0
+        ? `${col?.title || 'Date'} is ${minPast}+ days past`
+        : `${col?.title || 'Date'} has passed`;
     } else {
       const offset = parseInt(cfg.offset_days, 10) || 0;
       const when = offset === 0 ? 'arrives today' : `${offset} day${offset > 1 ? 's' : ''} before`;
@@ -267,29 +270,58 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <p style={label}>Fire when</p>
+                <p style={label}>Direction</p>
                 <select
-                  value={triggerConfig.mode === 'after' ? 'after' : String(triggerConfig.offset_days ?? 0)}
+                  value={triggerConfig.mode === 'after' ? 'after' : 'on'}
                   onChange={e => {
-                    const v = e.target.value;
-                    if (v === 'after') setTC({ mode: 'after', offset_days: undefined });
-                    else                setTC({ mode: 'on',    offset_days: parseInt(v, 10) });
+                    if (e.target.value === 'after') {
+                      setTC({ mode: 'after', offset_days: undefined, min_days_past: 0 });
+                    } else {
+                      setTC({ mode: 'on', offset_days: 0, min_days_past: undefined });
+                    }
                   }}
                   style={sel}
                 >
-                  <option value="0">Date is today</option>
-                  <option value="1">1 day before</option>
-                  <option value="2">2 days before</option>
-                  <option value="3">3 days before</option>
-                  <option value="7">1 week before</option>
-                  <option value="after">⏰ Date has passed (overdue)</option>
+                  <option value="on">📅 Before / on the date</option>
+                  <option value="after">⏰ After the date has passed</option>
                 </select>
               </div>
             </div>
+
+            {/* Days input — single number that means different things per mode.
+                For "on" mode: 0 = today, 1+ = N days before the date.
+                For "after" mode: 0 = any time past, 1+ = at least N days past. */}
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: '#676879' }}>Fire when item is</span>
+              <input
+                type="number"
+                min="0"
+                value={
+                  triggerConfig.mode === 'after'
+                    ? (triggerConfig.min_days_past ?? 0)
+                    : (triggerConfig.offset_days ?? 0)
+                }
+                onChange={e => {
+                  const n = Math.max(0, parseInt(e.target.value, 10) || 0);
+                  if (triggerConfig.mode === 'after') setTC({ min_days_past: n });
+                  else                                 setTC({ offset_days: n });
+                }}
+                style={{ ...inp, width: 80 }}
+              />
+              <span style={{ fontSize: 12, color: '#676879' }}>
+                {triggerConfig.mode === 'after'
+                  ? <>day(s) past the date <span style={{ color: '#aaa' }}>(0 = any past date)</span></>
+                  : <>day(s) before the date <span style={{ color: '#aaa' }}>(0 = on the date)</span></>
+                }
+              </span>
+            </div>
+
             {triggerConfig.mode === 'after' && (
-              <div style={{ marginTop: 6, fontSize: 11, color: '#7a5a00', background: '#fff8e1', borderRadius: 6, padding: '7px 10px', lineHeight: 1.5 }}>
-                ⏰ Fires once per item when its date is in the past. Pair with a
-                "Set status to Overdue" action for automatic SLA tracking.
+              <div style={{ marginTop: 8, fontSize: 11, color: '#7a5a00', background: '#fff8e1', borderRadius: 6, padding: '7px 10px', lineHeight: 1.55 }}>
+                {parseInt(triggerConfig.min_days_past, 10) > 0
+                  ? <>⏰ Fires once per item when it crosses the threshold. Tip: build escalation tiers by stacking rules at 10 / 20 / 30 / 50 days, each setting a more urgent status.</>
+                  : <>⏰ Fires once per item when its date is in the past. Pair with a "Set status to Overdue" action for automatic SLA tracking.</>
+                }
               </div>
             )}
           </div>
