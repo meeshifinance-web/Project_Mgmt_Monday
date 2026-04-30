@@ -245,21 +245,26 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
           ) : (
             /* ── Options list + footer ── */
             <div>
-              {options.map(opt => (
-                <div
-                  key={opt.label}
-                  onClick={() => { onChange(opt.label); setOpen(false); }}
-                  title={opt.label}
-                  style={{
-                    background: opt.color, color: '#fff', fontWeight: 600,
-                    padding: '6px 12px', borderRadius: 4, cursor: 'pointer',
-                    marginBottom: 4, fontSize: 12, textAlign: 'center',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}
-                >
-                  {opt.label}
-                </div>
-              ))}
+              {/* Scroll cap so a column with many statuses (e.g. 20+) stays
+                  navigable — the bottom options were unreachable when the
+                  dropdown extended past the viewport. */}
+              <div style={{ maxHeight: 280, overflowY: 'auto', paddingRight: 2 }}>
+                {options.map(opt => (
+                  <div
+                    key={opt.label}
+                    onClick={() => { onChange(opt.label); setOpen(false); }}
+                    title={opt.label}
+                    style={{
+                      background: opt.color, color: '#fff', fontWeight: 600,
+                      padding: '6px 12px', borderRadius: 4, cursor: 'pointer',
+                      marginBottom: 4, fontSize: 12, textAlign: 'center',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {opt.label}
+                  </div>
+                ))}
+              </div>
               <div
                 onClick={() => { onChange(''); setOpen(false); }}
                 style={{ padding: '4px 8px', color: '#1a1a2e', cursor: 'pointer', fontSize: 12, textAlign: 'center' }}
@@ -1125,12 +1130,36 @@ export function parseOwners(val) {
 // ── Person cell: multi-select with avatar pills ───────────────────────────────
 function PersonCell({ value, settings, onChange }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searchInputRef = useRef(null);
   const popupRef = useRef(null);
   const { resolvedTheme } = useThemeContext();
   const isDark = resolvedTheme === 'dark';
   const options = settings?.options || [];
   const selected = parseOwners(value);
   const readOnly = !onChange;
+
+  // Filter members by search term — shows selected first, then alphabetical.
+  // Keeps the picker usable when a board has many members.
+  const filteredOptions = (() => {
+    const q = search.trim().toLowerCase();
+    const list = q ? options.filter(n => n.toLowerCase().includes(q)) : options;
+    // Pin currently-selected names to the top so a quick re-toggle is easy
+    return [...list].sort((a, b) => {
+      const aSel = selected.includes(a) ? 0 : 1;
+      const bSel = selected.includes(b) ? 0 : 1;
+      if (aSel !== bSel) return aSel - bSel;
+      return a.localeCompare(b);
+    });
+  })();
+
+  // Reset search and focus the box every time the picker opens
+  useEffect(() => {
+    if (open) {
+      setSearch('');
+      setTimeout(() => searchInputRef.current?.focus(), 30);
+    }
+  }, [open]);
 
   // Close on outside click or Escape
   useEffect(() => {
@@ -1184,15 +1213,49 @@ function PersonCell({ value, settings, onChange }) {
           background: isDark ? 'var(--card-bg)' : '#fff',
           borderRadius: 10, boxShadow: isDark ? '0 6px 24px rgba(0,0,0,0.5)' : '0 6px 24px rgba(0,0,0,0.15)',
           border: `1px solid ${isDark ? 'var(--border-color)' : '#e6e9ef'}`,
-          minWidth: 210, padding: '6px 0', overflow: 'hidden',
+          minWidth: 240, maxHeight: 360, padding: 0, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
         }}>
-          <div style={{ padding: '6px 12px 4px', fontSize: 11, fontWeight: 700, color: isDark ? 'var(--text-secondary)' : '#555', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Assign people
+          {/* Sticky header with title + search box. Searching keeps the
+              picker usable when a board has 30+ members — without it the
+              bottom names get pushed off the screen with no way to reach. */}
+          <div style={{
+            padding: '8px 10px 6px', flexShrink: 0,
+            background: isDark ? 'var(--card-bg)' : '#fff',
+            borderBottom: `1px solid ${isDark ? 'var(--border-color)' : '#f0f0f0'}`,
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: isDark ? 'var(--text-secondary)' : '#555', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+              Assign people
+            </div>
+            {options.length > 6 && (
+              <input
+                ref={searchInputRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Type to filter…"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '6px 10px', fontSize: 13, borderRadius: 6,
+                  border: `1px solid ${isDark ? 'var(--border-color)' : '#e6e9ef'}`,
+                  background: isDark ? 'var(--bg-secondary)' : '#fafbfc',
+                  color: isDark ? 'var(--text-primary)' : '#1a1a2e',
+                  outline: 'none',
+                }}
+              />
+            )}
           </div>
+
+          {/* Scrollable list */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
           {options.length === 0 && (
             <div style={{ padding: '8px 14px', fontSize: 12, color: isDark ? 'var(--text-secondary)' : '#aaa' }}>No members in this board</div>
           )}
-          {options.map(name => {
+          {options.length > 0 && filteredOptions.length === 0 && (
+            <div style={{ padding: '12px 14px', fontSize: 12, color: isDark ? 'var(--text-secondary)' : '#aaa', textAlign: 'center' }}>
+              No matches for "{search}"
+            </div>
+          )}
+          {filteredOptions.map(name => {
             const isSelected = selected.includes(name);
             const rowBgSelected = isDark ? 'rgba(0,115,234,0.18)' : '#f0f6ff';
             const rowBgNormal = isDark ? 'transparent' : '#fff';
@@ -1221,16 +1284,20 @@ function PersonCell({ value, settings, onChange }) {
               </div>
             );
           })}
+          </div>{/* /scrollable list */}
           {selected.length > 0 && (
-            <>
-              <div style={{ height: 1, background: isDark ? 'var(--border-color)' : '#f0f0f0', margin: '4px 0' }} />
+            <div style={{
+              flexShrink: 0,
+              borderTop: `1px solid ${isDark ? 'var(--border-color)' : '#f0f0f0'}`,
+              background: isDark ? 'var(--card-bg)' : '#fff',
+            }}>
               <div
                 onClick={() => { onChange(''); setOpen(false); }}
-                style={{ padding: '7px 14px', fontSize: 12, color: '#e2445c', cursor: 'pointer', fontWeight: 600 }}
+                style={{ padding: '8px 14px', fontSize: 12, color: '#e2445c', cursor: 'pointer', fontWeight: 600 }}
                 onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(226,68,92,0.12)' : '#fff5f7'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >✕ Clear all</div>
-            </>
+            </div>
           )}
         </div>
       )}
