@@ -9,14 +9,37 @@ api.interceptors.request.use(config => {
   return config;
 });
 
-// On 401: clear token and redirect to login
+// Routes that should never trigger a redirect on 401 — public pages where
+// the visitor is expected to be unauthenticated (forms, login, password reset, etc.)
+const PUBLIC_PATH_PREFIXES = [
+  '/form/', '/login', '/register', '/forgot-password',
+  '/reset-password', '/auth/callback',
+];
+
+function isPublicPath(pathname) {
+  return PUBLIC_PATH_PREFIXES.some(p => pathname === p || pathname.startsWith(p));
+}
+
+// On 401: clear token, but only redirect when we're on a *protected* page
+// and the failing call was not the silent /auth/me bootstrap probe.
 api.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401) {
+      const url = error.config?.url || '';
+      const isAuthMeProbe = url.endsWith('/auth/me');
+      const onPublicPage  = isPublicPath(window.location.pathname);
+
+      // Always clear stale credentials so the app doesn't loop on a bad token.
       localStorage.removeItem('wb_token');
       delete api.defaults.headers.common['Authorization'];
-      if (window.location.pathname !== '/login') window.location.href = '/login';
+
+      // Don't redirect when:
+      //   • the visitor is already on a public page (e.g. a public form link), or
+      //   • this 401 was just the AuthProvider's /auth/me bootstrap probe.
+      if (!onPublicPage && !isAuthMeProbe && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
