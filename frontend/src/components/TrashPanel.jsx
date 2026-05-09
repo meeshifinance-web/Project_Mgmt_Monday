@@ -172,7 +172,7 @@ export default function TrashPanel({ boardId, onClose, onRestore, onCountChange 
                     <span style={{
                       fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 12,
                       background: urgent ? '#ffe8ec' : '#f0f6ff',
-                      color: urgent ? '#e2445c' : '#0073ea',
+                      color: urgent ? '#e2445c' : '#9b72f5',
                       flexShrink: 0, whiteSpace: 'nowrap',
                     }}>
                       {left}d left

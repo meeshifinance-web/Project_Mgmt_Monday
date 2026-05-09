@@ -4,7 +4,7 @@ export function SkeletonPulse({ height = 100 }) {
   return (
     <div style={{
       height, borderRadius: 8,
-      background: 'linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)',
+      background: 'linear-gradient(90deg, var(--bg-primary,#f0f0f0) 25%, var(--hover-bg,#e8e8e8) 50%, var(--bg-primary,#f0f0f0) 75%)',
       backgroundSize: '400% 100%',
       animation: 'shimmer 1.4s ease-in-out infinite',
     }} />
@@ -15,7 +15,7 @@ export function EmptyWidgetState({ text }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20, textAlign: 'center' }}>
       <span style={{ fontSize: 28 }}>📭</span>
-      <span style={{ fontSize: 12, color: '#9699a6' }}>{text}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted,#9699a6)' }}>{text}</span>
     </div>
   );
 }
@@ -53,9 +53,9 @@ export function WidgetCard({ widget, onEdit, onDelete, isManager, children }) {
         {isManager && hovered && (
           <div style={{ display: 'flex', gap: 4 }} onMouseDown={e => e.stopPropagation()}>
             <button onClick={() => onEdit(widget)} title="Configure"
-              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: '#f0f4ff', color: '#0073ea', fontSize: 13, cursor: 'pointer' }}>⚙</button>
+              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'rgba(155,114,245,0.18)', color: '#9b72f5', fontSize: 13, cursor: 'pointer' }}>⚙</button>
             <button onClick={() => onDelete(widget.id)} title="Delete"
-              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: '#fff5f5', color: '#e2445c', fontSize: 14, cursor: 'pointer' }}>×</button>
+              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'rgba(226,68,92,0.14)', color: '#e2445c', fontSize: 14, cursor: 'pointer' }}>×</button>
           </div>
         )}
       </div>
@@ -73,7 +73,7 @@ export const selectStyle = {
   background: 'var(--bg-primary,#fff)', color: 'var(--text-primary,#323338)',
   outline: 'none', boxSizing: 'border-box',
 };
-export const labelStyle = { fontSize: 12, fontWeight: 600, color: '#676879', display: 'block', marginBottom: 4 };
+export const labelStyle = { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary,#676879)', display: 'block', marginBottom: 4 };
 
 export function Field({ label, children }) {
   return (
@@ -89,7 +89,7 @@ export function ButtonGroup({ value, onChange, options }) {
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {options.map(([v, l]) => (
         <button key={v} onClick={() => onChange(v)}
-          style={{ flex: 1, minWidth: 60, padding: '7px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `2px solid ${value === v ? '#0073ea' : 'var(--border-color,#e6e9ef)'}`, background: value === v ? '#e8f0fe' : 'transparent', color: value === v ? '#0073ea' : '#676879' }}>
+          style={{ flex: 1, minWidth: 60, padding: '7px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${value === v ? '#9b72f5' : 'var(--border-color,#e6e9ef)'}`, background: value === v ? 'rgba(155,114,245,0.18)' : 'transparent', color: value === v ? '#9b72f5' : 'var(--text-secondary,#676879)' }}>
           {l}
         </button>
       ))}
@@ -99,8 +99,8 @@ export function ButtonGroup({ value, onChange, options }) {
 
 export function Toggle({ checked, onChange, label }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: '#323338' }}>
-      <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)} style={{ accentColor: '#0073ea' }} />
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: 'var(--text-primary,#323338)' }}>
+      <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)} style={{ accentColor: '#9b72f5' }} />
       {label}
     </label>
   );
@@ -131,7 +131,7 @@ export function GroupFilter({ groups, value, onChange }) {
                 const ids = value || [];
                 onChange(e.target.checked ? [...ids, String(g.id)] : ids.filter(x => x !== String(g.id)));
               }}
-              style={{ accentColor: '#0073ea' }}
+              style={{ accentColor: '#9b72f5' }}
             />
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color || '#579bfc' }} />

@@ -1,11 +1,11 @@
 {
-  "name": "D'Decor Workboard",
-  "short_name": "Workboard",
-  "description": "D'Decor Home Fabrics Project Management",
+  "name": "Simplix",
+  "short_name": "Simplix",
+  "description": "Simplix project management",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1f2d3d",
-  "theme_color": "#0073ea",
+  "theme_color": "#9b72f5",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },

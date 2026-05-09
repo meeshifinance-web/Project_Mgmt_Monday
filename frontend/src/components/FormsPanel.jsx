@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getForms, createForm, getForm, updateForm, deleteForm, saveFormFields } from '../api';
 import { useToast } from './Toast';
+import { useThemeContext } from '../context/ThemeContext';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SKIP_TYPES = ['formula', 'creation_log', 'time_tracking'];
@@ -8,7 +9,7 @@ const BASE_URL   = window.location.origin;
 
 const ACCENT_PRESETS = [
   // Vibrant
-  '#0073ea','#00c875','#e2445c','#fdab3d','#a25ddc','#037f4c','#ff5ac4','#0086c0','#ff642e','#333333',
+  '#9b72f5','#00c875','#e2445c','#fdab3d','#a25ddc','#037f4c','#ff5ac4','#0086c0','#ff642e','#333333',
   // Light / muted
   '#94a3b8','#a8b8c8','#b0c4b1','#c9b8d8','#f4a96a','#f9c6c6','#b2d8d8','#c8daf4','#d4c5a9','#d9d9d9',
 ];
@@ -20,12 +21,12 @@ const TYPE_META = {
   email:        { icon: '@',  color: '#3b82f6' },
   phone:        { icon: '✆',  color: '#10b981' },
   date:         { icon: '📅', color: '#f59e0b' },
-  status:       { icon: '◉',  color: '#0073ea' },
+  status:       { icon: '◉',  color: '#9b72f5' },
   priority:     { icon: '▲',  color: '#e2445c' },
   dropdown:     { icon: '▾',  color: '#7c3aed' },
   rating:       { icon: '★',  color: '#f59e0b' },
   checkbox:     { icon: '✓',  color: '#00c875' },
-  progress:     { icon: '%',  color: '#0073ea' },
+  progress:     { icon: '%',  color: '#9b72f5' },
   link:         { icon: '🔗', color: '#3b82f6' },
   timeline:     { icon: '⟷', color: '#f59e0b' },
   tags:         { icon: '🏷', color: '#8b5cf6' },
@@ -48,7 +49,7 @@ function copyTextToClipboard(text) {
 }
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
-function Toggle({ on, onChange, color = '#0073ea', size = 'md' }) {
+function Toggle({ on, onChange, color = '#9b72f5', size = 'md' }) {
   const w = size === 'sm' ? 32 : 40, h = size === 'sm' ? 18 : 22, d = size === 'sm' ? 12 : 16;
   return (
     <div onClick={e => { e.stopPropagation(); onChange(); }}
@@ -93,10 +94,10 @@ function PreviewField({ field, color }) {
   })();
 
   const inputBase = {
-    width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 8,
+    width: '100%', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 8,
     padding: '10px 13px', fontSize: 13, outline: 'none',
-    boxSizing: 'border-box', background: '#f8fafc', color: '#94a3b8',
-    opacity: 0.8,
+    boxSizing: 'border-box', background: 'var(--input-bg, #f8fafc)', color: 'var(--text-secondary, #94a3b8)',
+    opacity: 0.9,
   };
 
   let input;
@@ -165,7 +166,7 @@ function PreviewField({ field, color }) {
 
   return (
     <div style={{ marginBottom: 18 }}>
-      <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#334155' }}>
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #334155)' }}>
         {label}{required && <span style={{ color: '#dc2626', marginLeft: 3 }}>*</span>}
       </label>
       {input}
@@ -175,23 +176,23 @@ function PreviewField({ field, color }) {
 
 // ── Live preview panel ────────────────────────────────────────────────────────
 function FormPreview({ form, fields, itemNameLabel, accentColor }) {
-  const color = accentColor || form.cover_color || '#0073ea';
+  const color = accentColor || form.cover_color || '#9b72f5';
   const visible = fields.filter(f => f.is_visible);
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* Browser chrome mockup */}
-      <div style={{ background: '#e2e8f0', borderRadius: '12px 12px 0 0', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ background: 'var(--bg-secondary, #e2e8f0)', borderRadius: '12px 12px 0 0', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'flex', gap: 5 }}>
           {['#f87171','#fbbf24','#34d399'].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />)}
         </div>
-        <div style={{ flex: 1, background: '#fff', borderRadius: 6, height: 22, padding: '0 10px', display: 'flex', alignItems: 'center', fontSize: 10, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ flex: 1, background: 'var(--input-bg, #fff)', borderRadius: 6, height: 22, padding: '0 10px', display: 'flex', alignItems: 'center', fontSize: 10, color: 'var(--text-secondary, #94a3b8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {BASE_URL}/form/…
         </div>
       </div>
 
       {/* Page chrome */}
-      <div style={{ background: 'linear-gradient(150deg,#f8fafc,#eef2f7)', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 12px 12px', overflow: 'hidden', maxHeight: 520, overflowY: 'auto' }}>
+      <div style={{ background: 'var(--bg-secondary, linear-gradient(150deg,#f8fafc,#eef2f7))', border: '1px solid var(--border-color, #e2e8f0)', borderTop: 'none', borderRadius: '0 0 12px 12px', overflow: 'hidden', maxHeight: 520, overflowY: 'auto' }}>
         {/* Cover */}
         <div style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)`, padding: '24px 20px 32px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
@@ -200,13 +201,13 @@ function FormPreview({ form, fields, itemNameLabel, accentColor }) {
         </div>
 
         {/* Form body */}
-        <div style={{ background: '#fff', margin: '0 12px', borderRadius: '0 0 10px 10px', padding: '20px 18px', boxShadow: '0 4px 20px rgba(0,0,0,0.07)', marginBottom: 14 }}>
+        <div style={{ background: 'var(--card-bg, #fff)', margin: '0 12px', borderRadius: '0 0 10px 10px', padding: '20px 18px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)', marginBottom: 14 }}>
           {/* Item name */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 5, fontSize: 12, fontWeight: 600, color: '#334155' }}>
+            <label style={{ display: 'block', marginBottom: 5, fontSize: 12, fontWeight: 600, color: 'var(--text-primary, #334155)' }}>
               {itemNameLabel || 'Item Name'} <span style={{ color: '#dc2626' }}>*</span>
             </label>
-            <input type="text" disabled placeholder="Enter a name…" style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 7, padding: '8px 11px', fontSize: 12, outline: 'none', boxSizing: 'border-box', background: '#f8fafc', opacity: 0.7 }} />
+            <input type="text" disabled placeholder="Enter a name…" style={{ width: '100%', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 7, padding: '8px 11px', fontSize: 12, outline: 'none', boxSizing: 'border-box', background: 'var(--input-bg, #f8fafc)', color: 'var(--text-primary, #334155)', opacity: 0.9 }} />
           </div>
 
           {visible.map(f => <PreviewField key={f.id || f.column_id} field={f} color={color} />)}
@@ -233,7 +234,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
 
   const [title,       setTitle]       = useState('Untitled Form');
   const [description, setDesc]        = useState('');
-  const [coverColor,  setColor]       = useState('#0073ea');
+  const [coverColor,  setColor]       = useState('#9b72f5');
   const [targetGroup, setGroup]       = useState('');
   const [thankYou,    setThankYou]    = useState('Thank you! Your response has been submitted.');
   const [isActive,    setActive]      = useState(true);
@@ -249,7 +250,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
       const f = r.data;
       setTitle(f.title || '');
       setDesc(f.description || '');
-      setColor(f.cover_color || '#0073ea');
+      setColor(f.cover_color || '#9b72f5');
       setGroup(f.target_group_id ? String(f.target_group_id) : '');
       setThankYou(f.thank_you_message || '');
       setActive(f.is_active !== false);
@@ -334,13 +335,13 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', fontFamily: "'Inter', -apple-system, sans-serif" }}>
 
       {/* ── Left: builder panel ── */}
-      <div style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', borderRight: '1px solid #e2e8f0', overflow: 'hidden' }}>
+      <div className="forms-builder-editor" style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--card-bg, #fff)', borderRight: '1px solid var(--border-color, #e2e8f0)', overflow: 'hidden' }}>
 
         {/* Header */}
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-color, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
           <button onClick={onBack}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#0073ea', fontWeight: 600, padding: '5px 0', background: 'none', border: 'none', cursor: 'pointer' }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="#0073ea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#9b72f5', fontWeight: 600, padding: '5px 0', background: 'none', border: 'none', cursor: 'pointer' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="#9b72f5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             Back
           </button>
 
@@ -354,7 +355,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
             </div>
             <button onClick={handleSave} disabled={saving}
               style={{
-                padding: '7px 18px', background: '#0073ea', color: '#fff', borderRadius: 8,
+                padding: '7px 18px', background: '#9b72f5', color: '#fff', borderRadius: 8,
                 fontWeight: 700, fontSize: 13, cursor: saving ? 'wait' : 'pointer',
                 opacity: saving ? 0.7 : 1, border: 'none',
                 boxShadow: '0 2px 8px rgba(0,115,234,0.3)',
@@ -365,20 +366,20 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
         </div>
 
         {/* Section tabs */}
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: 4, flexShrink: 0 }}>
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-color, #f1f5f9)', display: 'flex', gap: 4, flexShrink: 0 }}>
           {SECTIONS.map(s => (
             <button key={s.key} onClick={() => setSection(s.key)}
               style={{
                 padding: '7px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: activeSection === s.key ? 700 : 500,
-                border: `1.5px solid ${activeSection === s.key ? '#0073ea' : '#e2e8f0'}`,
-                background: activeSection === s.key ? '#eff6ff' : '#fff',
-                color: activeSection === s.key ? '#0073ea' : '#64748b',
+                border: `1.5px solid ${activeSection === s.key ? '#9b72f5' : 'var(--border-color, #e2e8f0)'}`,
+                background: activeSection === s.key ? 'rgba(155,114,245,0.18)' : 'var(--bg-primary, #fff)',
+                color: activeSection === s.key ? '#9b72f5' : 'var(--text-secondary, #64748b)',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
                 transition: 'all 0.15s',
               }}>
               <span>{s.icon}</span> {s.label}
               {s.key === 'fields' && visibleCount > 0 && (
-                <span style={{ background: '#0073ea', color: '#fff', borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 800, marginLeft: 2 }}>{visibleCount}</span>
+                <span style={{ background: '#9b72f5', color: '#fff', borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 800, marginLeft: 2 }}>{visibleCount}</span>
               )}
             </button>
           ))}
@@ -446,13 +447,13 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
 
               {/* Item Name — always on */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#eff6ff', marginBottom: 10, border: '1.5px solid #bfdbfe' }}>
-                <Toggle on size="sm" onChange={() => {}} color="#0073ea" />
+                <Toggle on size="sm" onChange={() => {}} color="#9b72f5" />
                 <div style={{ width: 28, height: 28, borderRadius: 7, background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#3b82f6', fontWeight: 800, flexShrink: 0 }}>Aa</div>
                 <input
                   value={itemNameLabel}
                   onChange={e => setItemNameLabel(e.target.value)}
                   style={{ flex: 1, border: '1.5px solid #bfdbfe', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontWeight: 600, color: '#1d4ed8', background: '#fff', outline: 'none', minWidth: 0 }}
-                  onFocus={e => e.target.style.borderColor = '#0073ea'}
+                  onFocus={e => e.target.style.borderColor = '#9b72f5'}
                   onBlur={e => e.target.style.borderColor = '#bfdbfe'}
                 />
                 <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 700, letterSpacing: 0.3, flexShrink: 0 }}>REQUIRED</span>
@@ -468,7 +469,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
                   transition: 'all 0.15s',
                   opacity: f.is_visible ? 1 : 0.55,
                 }}>
-                  <Toggle on={f.is_visible} onChange={() => toggleField(f.column_id)} color="#0073ea" size="sm" />
+                  <Toggle on={f.is_visible} onChange={() => toggleField(f.column_id)} color="#9b72f5" size="sm" />
                   <TypeBadge type={f.column_type} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <input
@@ -480,7 +481,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
                         color: f.is_visible ? '#0f172a' : '#94a3b8', width: '100%',
                         outline: 'none', padding: '1px 0',
                       }}
-                      onFocus={e => { e.target.style.borderBottom = '1.5px solid #0073ea'; }}
+                      onFocus={e => { e.target.style.borderBottom = '1.5px solid #9b72f5'; }}
                       onBlur={e => { e.target.style.borderBottom = 'none'; }}
                     />
                     <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 1, fontWeight: 500, letterSpacing: 0.3 }}>{f.column_type}</div>
@@ -517,7 +518,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
               <Field label="Public URL">
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input readOnly value={publicUrl} style={{ ...inp, flex: 1, background: '#f8fafc', fontSize: 12, color: '#64748b', cursor: 'text' }} />
-                  <button onClick={() => copyToClipboard(publicUrl, 'URL')} style={shareBtn('#0073ea')}>Copy</button>
+                  <button onClick={() => copyToClipboard(publicUrl, 'URL')} style={shareBtn('#9b72f5')}>Copy</button>
                   <button onClick={() => window.open(`/form/${slug}`, '_blank')} style={shareBtn('#64748b')} title="Open in new tab">↗</button>
                 </div>
               </Field>
@@ -540,7 +541,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
       </div>
 
       {/* ── Right: live preview ── */}
-      <div style={{ flex: 1, background: '#f1f5f9', overflowY: 'auto', padding: '28px 32px' }}>
+      <div className="forms-live-preview-pane" style={{ flex: 1, background: 'var(--bg-secondary, #f1f5f9)', overflowY: 'auto', padding: '28px 32px' }}>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, justifyContent: 'center' }}>
             <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
@@ -565,12 +566,12 @@ const inp = {
   fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#0f172a',
   transition: 'border-color 0.15s, box-shadow 0.15s',
 };
-const foc = e => { e.target.style.borderColor = '#0073ea'; e.target.style.boxShadow = '0 0 0 3px rgba(0,115,234,0.12)'; };
+const foc = e => { e.target.style.borderColor = '#9b72f5'; e.target.style.boxShadow = '0 0 0 3px rgba(0,115,234,0.12)'; };
 const blr = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; };
 
 const shareBtn = (color) => ({
-  padding: '8px 14px', background: color === '#0073ea' ? '#eff6ff' : '#f8fafc',
-  color, border: `1.5px solid ${color === '#0073ea' ? '#bfdbfe' : '#e2e8f0'}`,
+  padding: '8px 14px', background: color === '#9b72f5' ? '#eff6ff' : '#f8fafc',
+  color, border: `1.5px solid ${color === '#9b72f5' ? '#bfdbfe' : '#e2e8f0'}`,
   borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
   whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
 });
@@ -614,7 +615,7 @@ function FormsList({ boardId, onOpenBuilder }) {
           Create shareable forms that add items directly to your board
         </div>
         <button onClick={() => onOpenBuilder(null)}
-          style={{ padding: '8px 18px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', boxShadow: '0 2px 8px rgba(0,115,234,0.3)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+          style={{ padding: '8px 18px', background: '#9b72f5', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', boxShadow: '0 2px 8px rgba(0,115,234,0.3)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Create Form
         </button>
       </div>
@@ -622,7 +623,7 @@ function FormsList({ boardId, onOpenBuilder }) {
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#0073ea', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
+            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#9b72f5', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
             Loading forms…
           </div>
         ) : forms.length === 0 ? (
@@ -631,7 +632,7 @@ function FormsList({ boardId, onOpenBuilder }) {
             <div style={{ fontSize: 17, fontWeight: 700, color: '#334155', marginBottom: 8 }}>No forms yet</div>
             <div style={{ fontSize: 13, marginBottom: 28, lineHeight: 1.6 }}>Create a form to collect submissions directly into this board — no account needed for respondents.</div>
             <button onClick={() => onOpenBuilder(null)}
-              style={{ padding: '11px 28px', background: '#0073ea', color: '#fff', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', border: 'none', boxShadow: '0 4px 14px rgba(0,115,234,0.35)' }}>
+              style={{ padding: '11px 28px', background: '#9b72f5', color: '#fff', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', border: 'none', boxShadow: '0 4px 14px rgba(0,115,234,0.35)' }}>
               + Create Your First Form
             </button>
           </div>
@@ -655,7 +656,7 @@ function FormsList({ boardId, onOpenBuilder }) {
 }
 
 function FormCard({ form, onEdit, onCopyLink, onCopyEmbed, onPreview, onDelete }) {
-  const color = form.cover_color || '#0073ea';
+  const color = form.cover_color || '#9b72f5';
   return (
     <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0', transition: 'transform 0.2s, box-shadow 0.2s' }}
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.11)'; }}
@@ -710,22 +711,27 @@ export default function FormsPanel({ boardId, groups, columns, onClose }) {
   const [view, setView]               = useState('list');
   const [editingFormId, setEditingId] = useState(null);
   const [savedFormId, setSavedId]     = useState(null);
+  const { resolvedTheme } = useThemeContext();
+  const isDark = resolvedTheme === 'dark';
 
   const openBuilder = id => { setEditingId(id); setSavedId(id); setView('builder'); };
   const handleSaved = f  => { setSavedId(f.id); setEditingId(f.id); };
   const handleBack  = () => { setView('list'); setEditingId(null); setSavedId(null); };
+  const closeBg = isDark ? 'rgba(255,255,255,0.14)' : '#f1f5f9';
+  const closeHoverBg = isDark ? 'rgba(255,255,255,0.22)' : '#e2e8f0';
+  const closeColor = isDark ? '#E6EAF6' : '#64748b';
 
   return (
     <div className="wb-side-panel-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 400, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }}
       onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
         className="wb-side-panel"
-        style={{ width: view === 'builder' ? '90vw' : 720, maxWidth: '100vw', background: '#f8fafc', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 48px rgba(0,0,0,0.18)', overflow: 'hidden', fontFamily: "'Inter', sans-serif" }}>
+        style={{ width: view === 'builder' ? '90vw' : 720, maxWidth: '100vw', background: 'var(--bg-primary, #f8fafc)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 48px rgba(0,0,0,0.18)', overflow: 'hidden', fontFamily: "'Inter', sans-serif" }}>
 
         {/* Panel header */}
-        <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div className="forms-panel-header" style={{ background: 'var(--card-bg, #fff)', borderBottom: '1px solid var(--border-color, #e2e8f0)', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
-            <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 7, letterSpacing: -0.2 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)', display: 'flex', alignItems: 'center', gap: 7, letterSpacing: -0.2 }}>
               <span style={{ fontSize: 18 }}>📋</span> Forms
             </h2>
             <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0', fontWeight: 500 }}>
@@ -733,9 +739,9 @@ export default function FormsPanel({ boardId, groups, columns, onClose }) {
             </p>
           </div>
           <button onClick={onClose}
-            style={{ width: 32, height: 32, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#64748b', transition: 'background 0.15s' }}
-            onMouseEnter={e => e.target.style.background = '#e2e8f0'}
-            onMouseLeave={e => e.target.style.background = '#f1f5f9'}>
+            style={{ width: 32, height: 32, borderRadius: '50%', background: closeBg, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: closeColor, transition: 'background 0.15s, color 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = closeHoverBg}
+            onMouseLeave={e => e.currentTarget.style.background = closeBg}>
             ×
           </button>
         </div>

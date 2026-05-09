@@ -33,11 +33,11 @@ function PersonPills({ colVal }) {
       {names.map(name => (
         <span key={name} style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
-          background: '#e3f0ff', color: '#0073ea',
+          background: '#e3f0ff', color: '#9b72f5',
           borderRadius: 12, padding: '2px 8px', fontSize: 11, fontWeight: 600,
         }}>
           <span style={{
-            width: 16, height: 16, borderRadius: '50%', background: '#0073ea',
+            width: 16, height: 16, borderRadius: '50%', background: '#9b72f5',
             color: '#fff', fontSize: 9, fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
@@ -133,7 +133,7 @@ function BoardGroup({ boardName, boardId, items, onNavigate }) {
           {boardName}
         </span>
         <span style={{
-          fontSize: 11, fontWeight: 600, background: '#e3f0ff', color: '#0073ea',
+          fontSize: 11, fontWeight: 600, background: '#e3f0ff', color: '#9b72f5',
           borderRadius: 12, padding: '1px 8px',
         }}>
           {items.length}
@@ -141,8 +141,8 @@ function BoardGroup({ boardName, boardId, items, onNavigate }) {
         <button
           onClick={e => { e.stopPropagation(); onNavigate(boardId); }}
           style={{
-            fontSize: 11, color: '#0073ea', background: 'transparent',
-            border: '1px solid #0073ea', borderRadius: 4, padding: '2px 8px',
+            fontSize: 11, color: '#9b72f5', background: 'transparent',
+            border: '1px solid #9b72f5', borderRadius: 4, padding: '2px 8px',
             cursor: 'pointer', fontWeight: 600,
           }}
           title="Open board"
@@ -228,7 +228,7 @@ export default function MyWorkPanel({ onClose, onNavigateToBoard }) {
           </div>
           {!loading && !error && (
             <span style={{
-              fontSize: 12, fontWeight: 700, background: '#e3f0ff', color: '#0073ea',
+              fontSize: 12, fontWeight: 700, background: '#e3f0ff', color: '#9b72f5',
               borderRadius: 12, padding: '2px 10px',
             }}>
               {items.length} item{items.length !== 1 ? 's' : ''}

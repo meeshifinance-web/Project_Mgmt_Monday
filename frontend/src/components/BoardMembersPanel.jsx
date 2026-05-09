@@ -4,14 +4,14 @@ import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
 import EmptyState from './EmptyState';
 
-const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', user: '#0073ea' };
+const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', user: '#9b72f5' };
 
 function Avatar({ name, url, size = 36 }) {
   const initials = (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
   if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />;
   return (
     <div style={{
-      width: size, height: size, borderRadius: '50%', background: '#0073ea',
+      width: size, height: size, borderRadius: '50%', background: '#9b72f5',
       color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontWeight: 700, fontSize: size * 0.38, flexShrink: 0,
     }}>{initials}</div>
@@ -94,7 +94,7 @@ function UserSearchInput({ members, onSelect }) {
               width: '100%', border: '1.5px solid #ddd', borderRadius: 8,
               padding: '8px 32px 8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box',
             }}
-            onFocusCapture={e => e.target.style.borderColor = '#0073ea'}
+            onFocusCapture={e => e.target.style.borderColor = '#9b72f5'}
             onBlur={e => e.target.style.borderColor = '#ddd'}
             autoComplete="off"
           />
@@ -139,8 +139,8 @@ function UserSearchInput({ members, onSelect }) {
               </div>
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10, flexShrink: 0,
-                background: `${ROLE_COLORS[u.role] || '#0073ea'}20`,
-                color: ROLE_COLORS[u.role] || '#0073ea',
+                background: `${ROLE_COLORS[u.role] || '#9b72f5'}20`,
+                color: ROLE_COLORS[u.role] || '#9b72f5',
                 textTransform: 'capitalize',
               }}>{u.role}</span>
             </div>
@@ -278,7 +278,7 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
 
         {/* Strict-visibility toggle (board-level) */}
         {isManager && (
-          <div style={{
+          <div className="theme-notice" style={{
             padding: '14px 20px', borderBottom: '1px solid #f0f0f0',
             background: enforceVisibility ? '#fff7e6' : '#fafbfc',
           }}>
@@ -311,7 +311,7 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
             </p>
 
             {adding && (
-              <div style={{ fontSize: 12, color: '#0073ea', marginBottom: 8 }}>Adding…</div>
+              <div style={{ fontSize: 12, color: '#9b72f5', marginBottom: 8 }}>Adding…</div>
             )}
 
             <UserSearchInput members={members} onSelect={handleSelect} />
@@ -339,17 +339,17 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
               }}>
                 <Avatar name={m.name} url={m.avatar_url} size={36} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#323338', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div className="board-member-name" style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary, #323338)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {m.name}
                     {m.id === currentUser?.id && <span style={{ fontSize: 10, color: '#888' }}>(you)</span>}
                     {m.is_owner && (
-                      <span style={{
+                      <span className="theme-chip" style={{
                         fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8,
                         background: '#fff3d6', color: '#b87a00', textTransform: 'uppercase', letterSpacing: 0.4,
                       }}>Board Owner</span>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
+                  <div className="board-member-email" style={{ fontSize: 11, color: 'var(--text-primary, #888)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
                 </div>
                 {/* Board Owner star — managers can promote/demote any member */}
                 {isManager && (
@@ -365,7 +365,7 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
                     onMouseLeave={e => { e.currentTarget.style.color = m.is_owner ? '#fdab3d' : '#ddd'; e.currentTarget.style.transform = 'scale(1)'; }}
                   >★</button>
                 )}
-                <span style={{
+                <span className="theme-chip" style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
                   background: `${ROLE_COLORS[m.role]}20`, color: ROLE_COLORS[m.role],
                   textTransform: 'capitalize', flexShrink: 0,

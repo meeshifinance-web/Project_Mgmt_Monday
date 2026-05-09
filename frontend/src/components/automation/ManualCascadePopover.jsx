@@ -160,7 +160,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
                               checked={direction === o.v}
                               onChange={() => !o.disabled && setDirection(o.v)}
                               disabled={o.disabled}
-                              style={{ accentColor: '#0073ea' }} />
+                              style={{ accentColor: '#9b72f5' }} />
                             {o.icon} {o.label}
                           </label>
                         ))}
@@ -180,7 +180,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
                   onClick={handleRun}
                   disabled={running || !anchorId || !anchorDate}
                   style={{
-                    padding: '7px 0', background: '#0073ea', color: '#fff',
+                    padding: '7px 0', background: '#9b72f5', color: '#fff',
                     border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600,
                     cursor: (running || !anchorId || !anchorDate) ? 'not-allowed' : 'pointer',
                     opacity: (running || !anchorId || !anchorDate) ? 0.65 : 1,

@@ -46,7 +46,7 @@ const KpiWidget = {
   View({ boardData, config, filters }) {
     if (!boardData) return <SkeletonPulse height={80} />;
     const value = computeKpi(boardData, config, filters);
-    const color = config.color || '#0073ea';
+    const color = config.color || '#9b72f5';
     const label = config.label || (config.metric === 'count' ? 'Total Items' : config.metric || 'Total');
     const formatted = typeof value === 'number' && Math.abs(value) >= 1000 ? value.toLocaleString() : String(value);
     return (
@@ -95,7 +95,7 @@ const KpiDeltaWidget = {
     if (!boardData) return <SkeletonPulse height={80} />;
     const { value, prev, curr, delta } = computeKpiWithDelta(boardData, config, filters);
     const up = delta >= 0;
-    const color = config.color || '#0073ea';
+    const color = config.color || '#9b72f5';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 6 }}>
         <div style={{ fontSize: 44, fontWeight: 800, color, lineHeight: 1 }}>{value.toLocaleString()}</div>
@@ -142,7 +142,7 @@ const SparklineKpiWidget = {
     if (!boardData) return <SkeletonPulse height={100} />;
     const series = computeSparklineSeries(boardData, config, filters);
     const total = computeKpi(boardData, config, filters);
-    const color = config.color || '#0073ea';
+    const color = config.color || '#9b72f5';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 4 }}>
         <div style={{ fontSize: 36, fontWeight: 800, color, lineHeight: 1 }}>{total.toLocaleString()}</div>
@@ -227,7 +227,7 @@ const MultiMetricWidget = {
             )}
           </div>
         ))}
-        {metrics.length < 4 && <button onClick={addM} style={{ padding: '6px 12px', background: '#0073ea', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>+ Add Metric</button>}
+        {metrics.length < 4 && <button onClick={addM} style={{ padding: '6px 12px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>+ Add Metric</button>}
       </>
     );
   },
@@ -242,7 +242,7 @@ const GoalWidget = {
     const value = computeKpi(boardData, config, filters);
     const target = Number(config.target) || 100;
     const pct = target > 0 ? Math.min(100, Math.round((Number(value) / target) * 100)) : 0;
-    const color = config.color || '#0073ea';
+    const color = config.color || '#9b72f5';
     const reached = pct >= 100;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center', flex: 1, padding: '8px 4px' }}>
@@ -336,7 +336,7 @@ const ChartWidget = {
           <XAxis dataKey="name" {...axisProps} />
           <YAxis tick={{ fontSize: 11, fill: '#9699a6' }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
-          <Line type="monotone" dataKey="value" stroke="#0073ea" strokeWidth={2.5} dot={{ r: 4, fill: '#0073ea' }}>
+          <Line type="monotone" dataKey="value" stroke="#9b72f5" strokeWidth={2.5} dot={{ r: 4, fill: '#9b72f5' }}>
             {showLabels && <LabelList dataKey="value" position="top" style={{ fontSize: 11, fontWeight: 700, fill: '#323338' }} />}
           </Line>
         </LineChart>
@@ -476,15 +476,15 @@ const TrendWidget = {
         <AreaChart data={data} margin={{ top: 22, right: 16, left: -10, bottom: 6 }}>
           <defs>
             <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0073ea" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#0073ea" stopOpacity={0} />
+              <stop offset="0%" stopColor="#9b72f5" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="#9b72f5" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e6e9ef" vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#9699a6' }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fontSize: 11, fill: '#9699a6' }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
-          <Area type="monotone" dataKey="value" stroke="#0073ea" strokeWidth={2.5} fill="url(#trendFill)">
+          <Area type="monotone" dataKey="value" stroke="#9b72f5" strokeWidth={2.5} fill="url(#trendFill)">
             {config.show_labels !== false && <LabelList dataKey="value" position="top" style={{ fontSize: 10, fontWeight: 700, fill: '#323338' }} />}
           </Area>
         </AreaChart>
@@ -520,7 +520,7 @@ const CumulativeWidget = {
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
           <Bar dataKey="value" radius={[3,3,0,0]}>
             {data.map((e, i) => (
-              <Cell key={i} fill={config.multicolor ? CHART_COLORS[i % CHART_COLORS.length] : '#0073ea88'} />
+              <Cell key={i} fill={config.multicolor ? CHART_COLORS[i % CHART_COLORS.length] : '#9b72f588'} />
             ))}
           </Bar>
           <Line type="monotone" dataKey="cumulative" stroke="#e2445c" strokeWidth={3} dot={false} />
@@ -638,7 +638,7 @@ const RadarWidget = {
           <PolarGrid stroke="#e6e9ef" />
           <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fill: '#676879' }} />
           <PolarRadiusAxis tick={{ fontSize: 10, fill: '#9699a6' }} />
-          <Radar dataKey="value" stroke="#0073ea" fill="#0073ea" fillOpacity={0.4} />
+          <Radar dataKey="value" stroke="#9b72f5" fill="#9b72f5" fillOpacity={0.4} />
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
         </RadarChart>
       </ResponsiveContainer>
@@ -682,7 +682,7 @@ const ScatterWidget = {
           <YAxis type="number" dataKey="y" name="Y" tick={{ fontSize: 11, fill: '#9699a6' }} />
           <ZAxis type="number" dataKey="z" range={[60, 400]} />
           <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
-          <Scatter data={data} fill="#0073ea" />
+          <Scatter data={data} fill="#9b72f5" />
         </ScatterChart>
       </ResponsiveContainer>
     );
@@ -714,7 +714,7 @@ const TreemapWidget = {
     if (!data.length) return <EmptyWidgetState text="Pick a status column" />;
     return (
       <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-        <Treemap data={data} dataKey="value" stroke="#fff" fill="#0073ea" content={<TreemapNode />} />
+        <Treemap data={data} dataKey="value" stroke="#fff" fill="#9b72f5" content={<TreemapNode />} />
       </ResponsiveContainer>
     );
   },
@@ -783,7 +783,7 @@ const GaugeWidget = {
     const value = computeKpi(boardData, config, filters);
     const target = Number(config.target) || 100;
     const pct = Math.min(100, Math.max(0, (Number(value) / target) * 100));
-    const data = [{ name: 'val', value: pct, fill: pct >= 100 ? '#00c875' : (config.color || '#0073ea') }];
+    const data = [{ name: 'val', value: pct, fill: pct >= 100 ? '#00c875' : (config.color || '#9b72f5') }];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
         <ResponsiveContainer width="100%" height="100%" minHeight={200}>
@@ -792,7 +792,7 @@ const GaugeWidget = {
             <RadialBar dataKey="value" cornerRadius={8} background={{ fill: '#f0f0f0' }} />
           </RadialBarChart>
         </ResponsiveContainer>
-        <div style={{ marginTop: -50, fontSize: 24, fontWeight: 800, color: config.color || '#0073ea' }}>{Math.round(pct)}%</div>
+        <div style={{ marginTop: -50, fontSize: 24, fontWeight: 800, color: config.color || '#9b72f5' }}>{Math.round(pct)}%</div>
         <div style={{ fontSize: 11, color: '#676879', marginTop: 30 }}>{value} / {target} {config.label || ''}</div>
       </div>
     );
@@ -838,7 +838,7 @@ const ComboChartWidget = {
           <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: '#e2445c' }} axisLine={false} tickLine={false} />
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
           <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: 11, color: '#676879' }}>{v}</span>} />
-          <Bar yAxisId="l" dataKey="value" fill="#0073ea" radius={[3,3,0,0]} name="New" />
+          <Bar yAxisId="l" dataKey="value" fill="#9b72f5" radius={[3,3,0,0]} name="New" />
           <Line yAxisId="r" type="monotone" dataKey="cumulative" stroke="#e2445c" strokeWidth={3} dot={false} name="Total" />
         </ComposedChart>
       </ResponsiveContainer>
@@ -910,7 +910,7 @@ const TopNWidget = {
           <div key={r.id} onClick={() => onOpenItem?.(r.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: i === 0 ? '#fff8e1' : '#f5f6f8', cursor: onOpenItem ? 'pointer' : 'default' }}>
             <span style={{ width: 22, height: 22, borderRadius: '50%', background: i < 3 ? ['#fdab3d','#9699a6','#a0522d'][i] : '#e6e9ef', color: i < 3 ? '#fff' : '#676879', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
             <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#0073ea' }}>{r.value}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#9b72f5' }}>{r.value}</span>
           </div>
         ))}
       </div>
@@ -1043,7 +1043,7 @@ const ItemsListWidget = {
               <input type="checkbox" checked={(config.display_columns || []).includes(String(c.id))} onChange={e => {
                 const arr = config.display_columns || [];
                 onChange({ ...config, display_columns: e.target.checked ? [...arr, String(c.id)] : arr.filter(x => x !== String(c.id)) });
-              }} style={{ accentColor: '#0073ea' }} />
+              }} style={{ accentColor: '#9b72f5' }} />
               {c.title}
             </label>
           ))}
@@ -1073,7 +1073,7 @@ const ActivityWidget = {
           const ago = humanAgo(d);
           return (
             <div key={it.id} onClick={() => onOpenItem?.(it.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 8, background: '#f5f6f8', cursor: onOpenItem ? 'pointer' : 'default' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: it._groupColor || '#0073ea' }} />
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: it._groupColor || '#9b72f5' }} />
               <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</span>
               <span style={{ fontSize: 11, color: '#9699a6' }}>{ago}</span>
             </div>
@@ -1167,9 +1167,9 @@ const CalendarWidget = {
             const items = map[key] || [];
             const isToday = today.getFullYear() === yr && today.getMonth() === mo && today.getDate() === day;
             return (
-              <div key={i} title={items.map(i => i.name).join('\n')} style={{ aspectRatio: '1/1', borderRadius: 6, background: items.length ? `rgba(0,115,234,${0.15 + Math.min(items.length, 5) * 0.15})` : '#f5f6f8', border: isToday ? '2px solid #0073ea' : '1px solid transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: items.length ? 'pointer' : 'default' }} onClick={() => items[0] && onOpenItem?.(items[0].id)}>
+              <div key={i} title={items.map(i => i.name).join('\n')} style={{ aspectRatio: '1/1', borderRadius: 6, background: items.length ? `rgba(0,115,234,${0.15 + Math.min(items.length, 5) * 0.15})` : '#f5f6f8', border: isToday ? '2px solid #9b72f5' : '1px solid transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: items.length ? 'pointer' : 'default' }} onClick={() => items[0] && onOpenItem?.(items[0].id)}>
                 <span style={{ fontSize: 11, color: '#323338' }}>{day}</span>
-                {items.length > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: '#0073ea' }}>{items.length}</span>}
+                {items.length > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: '#9b72f5' }}>{items.length}</span>}
               </div>
             );
           })}
@@ -1349,9 +1349,9 @@ const LeaderboardWidget = {
             <span style={{ width: 22, height: 22, borderRadius: '50%', background: i < 3 ? ['#fdab3d','#9699a6','#a0522d'][i] : '#e6e9ef', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i+1}</span>
             <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
             <div style={{ width: 80, height: 6, background: '#e6e9ef', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${(value/max)*100}%`, height: '100%', background: '#0073ea' }} />
+              <div style={{ width: `${(value/max)*100}%`, height: '100%', background: '#9b72f5' }} />
             </div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#0073ea', minWidth: 24, textAlign: 'right' }}>{value}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#9b72f5', minWidth: 24, textAlign: 'right' }}>{value}</span>
           </div>
         ))}
       </div>
@@ -1452,10 +1452,10 @@ const TextWidget = {
     const save = () => { setEditing(false); onUpdate?.({ content: draft }); };
     if (editing) return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} style={{ flex: 1, minHeight: 100, resize: 'vertical', border: '1.5px solid #0073ea', borderRadius: 6, padding: 10, fontSize: 13, outline: 'none' }} />
+        <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} style={{ flex: 1, minHeight: 100, resize: 'vertical', border: '1.5px solid #9b72f5', borderRadius: 6, padding: 10, fontSize: 13, outline: 'none' }} />
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={() => { setEditing(false); setDraft(config.content || ''); }} style={{ padding: '5px 12px', border: '1px solid #e6e9ef', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'transparent', color: '#676879' }}>Cancel</button>
-          <button onClick={save} style={{ padding: '5px 14px', background: '#0073ea', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
+          <button onClick={save} style={{ padding: '5px 14px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Save</button>
         </div>
       </div>
     );
@@ -1565,7 +1565,7 @@ const HistogramWidget = {
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
           <Bar dataKey="value" radius={[4,4,0,0]}>
             {buckets.map((_, i) => (
-              <Cell key={i} fill={config.multicolor ? CHART_COLORS[i % CHART_COLORS.length] : '#0073ea'} />
+              <Cell key={i} fill={config.multicolor ? CHART_COLORS[i % CHART_COLORS.length] : '#9b72f5'} />
             ))}
           </Bar>
         </BarChart>
@@ -1604,7 +1604,7 @@ const QuickStatsWidget = {
       done = items.filter(i => i.values?.[config.column_id] === config.done_label).length;
     }
     const tiles = [
-      { label: 'Total Items', value: total, color: '#0073ea' },
+      { label: 'Total Items', value: total, color: '#9b72f5' },
       { label: 'New Today', value: newToday, color: '#00c875' },
       { label: 'Last 7 Days', value: last7, color: '#fdab3d' },
       { label: 'Completed', value: done, color: '#a25ddc' },

@@ -139,7 +139,7 @@ export default function EmailStatusPanel({ onClose }) {
                 disabled={triggering}
                 style={{
                   width: '100%', padding: '8px 0',
-                  background: triggering ? '#c5c7d0' : '#0073ea',
+                  background: triggering ? '#c5c7d0' : '#9b72f5',
                   color: '#fff', borderRadius: 7, fontSize: 13,
                   fontWeight: 700, cursor: triggering ? 'not-allowed' : 'pointer',
                 }}

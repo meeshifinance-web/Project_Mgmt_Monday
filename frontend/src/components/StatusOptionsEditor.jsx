@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 const PALETTE = [
-  '#c4c4c4','#00c875','#e2445c','#fdab3d','#0073ea',
+  '#c4c4c4','#00c875','#e2445c','#fdab3d','#9b72f5',
   '#a25ddc','#037f4c','#ff5ac4','#784bd1','#ffcb00',
   '#ff642e','#9aadbd','#66ccff','#bb3354','#333333',
 ];
@@ -40,11 +40,11 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
       ];
   const [options, setOptions] = useState(
     (column.settings?.options?.length ? column.settings.options : defaultOptions)
-      .map(o => typeof o === 'string' ? { label: o, color: '#0073ea' } : { ...o })
+      .map(o => typeof o === 'string' ? { label: o, color: '#9b72f5' } : { ...o })
   );
   const [openPickerIdx, setOpenPickerIdx] = useState(null); // index of option whose picker is open
   const [newLabel, setNewLabel] = useState('');
-  const [newColor, setNewColor] = useState('#0073ea');
+  const [newColor, setNewColor] = useState('#9b72f5');
   const [showNewPicker, setShowNewPicker] = useState(false);
 
   const updateLabel = (i, val) =>
@@ -64,7 +64,7 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
     if (!newLabel.trim()) return;
     setOptions(o => [...o, { label: newLabel.trim(), color: newColor }]);
     setNewLabel('');
-    setNewColor('#0073ea');
+    setNewColor('#9b72f5');
     setShowNewPicker(false);
   };
 
@@ -125,7 +125,7 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
                     flex: 1, border: '1.5px solid #e0e0e0', borderRadius: 6,
                     padding: '5px 10px', fontSize: 13, outline: 'none',
                   }}
-                  onFocus={e => e.target.style.borderColor = '#0073ea'}
+                  onFocus={e => e.target.style.borderColor = '#9b72f5'}
                   onBlur={e => e.target.style.borderColor = '#e0e0e0'}
                 />
 
@@ -189,7 +189,7 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
                 flex: 1, border: '1.5px solid #e0e0e0', borderRadius: 6,
                 padding: '5px 10px', fontSize: 13, outline: 'none',
               }}
-              onFocus={e => e.target.style.borderColor = '#0073ea'}
+              onFocus={e => e.target.style.borderColor = '#9b72f5'}
               onBlur={e => e.target.style.borderColor = '#e0e0e0'}
             />
 
@@ -197,7 +197,7 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
               onMouseDown={e => { e.stopPropagation(); addOption(); }}
               disabled={!newLabel.trim()}
               style={{
-                background: newLabel.trim() ? '#0073ea' : '#e0e0e0',
+                background: newLabel.trim() ? '#9b72f5' : '#e0e0e0',
                 color: '#fff', borderRadius: 6, padding: '6px 14px',
                 fontWeight: 700, fontSize: 13, cursor: newLabel.trim() ? 'pointer' : 'not-allowed',
                 flexShrink: 0,
@@ -214,7 +214,7 @@ export default function StatusOptionsEditor({ column, onSave, onClose }) {
           >Cancel</button>
           <button
             onMouseDown={e => { e.stopPropagation(); onSave(options); }}
-            style={{ padding: '8px 20px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+            style={{ padding: '8px 20px', background: '#9b72f5', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
           >Save</button>
         </div>
 

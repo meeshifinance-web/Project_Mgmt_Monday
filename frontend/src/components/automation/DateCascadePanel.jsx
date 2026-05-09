@@ -90,13 +90,13 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
                 <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>Step Template</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {totalDays > 0 && (
-                    <span style={{ background: '#e8f0fe', color: '#0073ea', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                    <span style={{ background: '#e8f0fe', color: '#9b72f5', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
                       {totalDays}d total
                     </span>
                   )}
                   <button
                     onClick={() => setShowTemplate(true)}
-                    style={{ padding: '4px 10px', border: '1px solid #0073ea', color: '#0073ea', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'none' }}
+                    style={{ padding: '4px 10px', border: '1px solid #9b72f5', color: '#9b72f5', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'none' }}
                   >
                     {steps.length ? 'Edit' : 'Configure'}
                   </button>

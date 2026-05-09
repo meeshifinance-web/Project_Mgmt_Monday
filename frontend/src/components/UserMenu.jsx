@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useThemeContext } from '../context/ThemeContext';
 
-const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', member: '#00c875', user: '#0073ea' };
+const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', member: '#00c875', user: '#9b72f5' };
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: '☀️' },
@@ -13,27 +14,64 @@ const THEME_OPTIONS = [
 
 export default function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState(null);
   const { user, logout, isAdmin } = useAuth();
   const themeCtx = useThemeContext();
   const theme = themeCtx?.theme ?? 'system';
   const setTheme = themeCtx?.setTheme ?? (() => {});
   const navigate = useNavigate();
   const ref = useRef(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const computeMenuPos = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return { top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) };
+  };
 
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (
+        ref.current && !ref.current.contains(e.target) &&
+        menuRef.current && !menuRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const update = () => {
+      const pos = computeMenuPos();
+      if (pos) setMenuPos(pos);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
+
   if (!user) return null;
 
   const initials = (user.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  const openMenu = () => {
+    const pos = computeMenuPos();
+    if (pos) setMenuPos(pos);
+    setOpen(o => !o);
+  };
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onClick={openMenu}
         style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px',
           borderRadius: 8, cursor: 'pointer', border: '1px solid transparent',
@@ -46,7 +84,7 @@ export default function UserMenu() {
           <img src={user.avatar_url} alt={user.name} style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
         ) : (
           <div style={{
-            width: 32, height: 32, borderRadius: '50%', background: '#0073ea',
+            width: 32, height: 32, borderRadius: '50%', background: '#9b72f5',
             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700, fontSize: 13,
           }}>{initials}</div>
@@ -61,13 +99,13 @@ export default function UserMenu() {
         <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 2 }}>▼</span>
       </button>
 
-      {open && (
+      {open && menuPos && createPortal((
         <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 200,
+          position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 10000,
           background: 'var(--card-bg)', borderRadius: 10,
           boxShadow: 'var(--shadow)', border: '1px solid var(--border-color)',
-          minWidth: 210, padding: 6,
-        }}>
+          width: 210, padding: 6,
+        }} ref={menuRef}>
           <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', marginBottom: 4 }}>
             <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{user.name}</div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{user.email}</div>
@@ -97,7 +135,7 @@ export default function UserMenu() {
               >
                 <span style={{ fontSize: 14 }}>{opt.icon}</span>
                 <span style={{ flex: 1 }}>{opt.label}</span>
-                {theme === opt.value && <span style={{ fontSize: 12, color: '#0073ea' }}>✓</span>}
+                {theme === opt.value && <span style={{ fontSize: 12, color: '#9b72f5' }}>✓</span>}
               </button>
             ))}
           </div>
@@ -106,7 +144,7 @@ export default function UserMenu() {
             <MenuItem icon="🚪" label="Sign Out" onClick={() => { logout(); navigate('/login'); }} danger />
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

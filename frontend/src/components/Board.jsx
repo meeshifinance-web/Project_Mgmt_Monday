@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import ManualCascadePopover from './automation/ManualCascadePopover';
-import ColumnCell, { parseOwners } from './ColumnCell';
+import ColumnCell, { parseOwners, getSoftStyle } from './ColumnCell';
 import AddColumnModal from './AddColumnModal';
 import StatusOptionsEditor from './StatusOptionsEditor';
 import TrashPanel from './TrashPanel';
@@ -21,8 +22,49 @@ import {
 } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
+import { useThemeContext } from '../context/ThemeContext';
 
-const GROUP_COLORS = ['#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1'];
+const GROUP_COLORS = ['#9b72f5', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1'];
+
+const SUMMARY_LABEL_COLORS = {
+  'not started': '#c4c4c4',
+  'in progress': '#fdab3d',
+  done: '#00c875',
+  stuck: '#e2445c',
+  review: '#a25ddc',
+  critical: '#e2445c',
+  high: '#ff642e',
+  medium: '#fdab3d',
+  low: '#00c875',
+};
+
+function getSummaryLabelColor(label, fallback = '#7a869a') {
+  return SUMMARY_LABEL_COLORS[String(label || '').trim().toLowerCase()] || fallback;
+}
+
+const DARK_SUMMARY_STATUS = {
+  '#c4c4c4': { bg: 'rgba(226, 232, 240, 0.14)', text: '#E6EAF6', glow: 'rgba(226, 232, 240, 0.10)' },
+  '#fdab3d': { bg: 'linear-gradient(135deg, rgba(255,179,138,0.95), rgba(255,120,178,0.74))', text: '#2B1220', glow: 'rgba(255,179,138,0.24)' },
+  '#00c875': { bg: 'linear-gradient(135deg, rgba(103,232,183,0.92), rgba(45,212,191,0.72))', text: '#061D1A', glow: 'rgba(103,232,183,0.22)' },
+  '#e2445c': { bg: 'linear-gradient(135deg, rgba(255,143,171,0.95), rgba(244,63,94,0.76))', text: '#2A0D16', glow: 'rgba(255,120,178,0.24)' },
+  '#9b72f5': { bg: 'linear-gradient(135deg, rgba(180,92,255,0.90), rgba(108,76,255,0.74))', text: '#F6EFFF', glow: 'rgba(180,92,255,0.24)' },
+  '#a25ddc': { bg: 'linear-gradient(135deg, rgba(180,92,255,0.90), rgba(108,76,255,0.74))', text: '#F6EFFF', glow: 'rgba(180,92,255,0.24)' },
+};
+
+const DARK_SUMMARY_LABEL_STATUS = {
+  'in progress': { bg: '#E8D9FF', text: '#6C3DFF', glow: 'rgba(108, 61, 255, 0.22)' },
+  done: { bg: '#FFE9D6', text: '#FF8A1F', glow: 'rgba(255, 138, 31, 0.22)' },
+  stuck: { bg: '#FFD9DF', text: '#FF4D4F', glow: 'rgba(255, 77, 79, 0.22)' },
+  review: { bg: '#DDF4FF', text: '#1D8FFF', glow: 'rgba(29, 143, 255, 0.22)' },
+  completed: { bg: '#DDF8E8', text: '#16A34A', glow: 'rgba(22, 163, 74, 0.22)' },
+  success: { bg: '#DDF8E8', text: '#16A34A', glow: 'rgba(22, 163, 74, 0.22)' },
+};
+
+function darkSummaryStatusStyle(color, label = '') {
+  const labelKey = String(label || '').trim().toLowerCase();
+  if (DARK_SUMMARY_LABEL_STATUS[labelKey]) return DARK_SUMMARY_LABEL_STATUS[labelKey];
+  return DARK_SUMMARY_STATUS[color?.toLowerCase()] || { bg: 'rgba(255,255,255,0.12)', text: '#E6EAF6', glow: 'rgba(255,255,255,0.10)' };
+}
 
 // ── Keyboard shortcuts help dialog ───────────────────────────────────────────
 // Triggered by `?`. Closes on Esc, click-outside, or the × button. Listing
@@ -216,7 +258,7 @@ function computeColumnSummary(col, items, allCols) {
     const opts = Array.isArray(col.settings?.options) ? col.settings.options : [];
     for (const t of top) {
       const opt = opts.find(o => (typeof o === 'string' ? o : o.label) === t.label);
-      t.color = (opt && typeof opt === 'object' ? opt.color : null) || '#7a869a';
+      t.color = (opt && typeof opt === 'object' ? opt.color : null) || getSummaryLabelColor(t.label);
     }
     return { kind: 'tally', top, total: counts.size };
   }
@@ -364,7 +406,7 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
     btn: (primary) => ({
       padding: '7px 20px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer',
       border: primary ? 'none' : '1.5px solid #e6e9ef',
-      background: primary ? '#0073ea' : '#fff',
+      background: primary ? '#9b72f5' : '#fff',
       color: primary ? '#fff' : '#676879',
     }),
     btnDanger: { padding: '7px 20px', borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer', border: 'none', background: '#e2445c', color: '#fff' },
@@ -478,7 +520,7 @@ function ImportPreviewModal({ csvRows, boardColumns, boardGroups, onConfirm, onC
 
           {/* ── New groups that will be auto-created ── */}
           {newGroups.length > 0 && (
-            <div style={S.alertBox('#0073ea33', '#e8f0fe')}>
+            <div style={S.alertBox('#9b72f533', '#ede8ff')}>
               <span style={{ fontSize: 16 }}>🆕</span>
               <div>
                 <strong>{newGroups.length} new group{newGroups.length > 1 ? 's' : ''} will be created</strong>
@@ -566,7 +608,7 @@ function InlineEdit({ value, onSave, style, placeholder, singleClick = false }) 
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
         type="text"
-        style={{ border: '1.5px solid #0073ea', borderRadius: 4, padding: '2px 6px', outline: 'none', background: 'var(--input-bg)', color: 'var(--text-primary)', fontWeight: 'inherit', fontSize: 'inherit', width: '100%', boxSizing: 'border-box' }}
+        style={{ border: '1.5px solid #9b72f5', borderRadius: 4, padding: '2px 6px', outline: 'none', background: 'var(--input-bg)', color: 'var(--text-primary)', fontWeight: 'inherit', fontSize: 'inherit', width: '100%', boxSizing: 'border-box' }}
       />
     );
   }
@@ -635,11 +677,9 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
     if (menuOpen) { setMenuOpen(false); return; }
     const rect = (btnRef.current || e.currentTarget).getBoundingClientRect();
     const menuW = 200;
-    let left = rect.right - menuW;
-    if (left < 8) left = rect.left;
+    let left = rect.left;
     if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
-    const top = rect.bottom + 4;
-    setMenuPos({ top, left: Math.max(8, left) });
+    setMenuPos({ top: rect.bottom + 4, left: Math.max(8, left) });
     setMenuOpen(true);
   };
 
@@ -696,8 +736,8 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
   const menuItem = (onClick, children, danger) => (
     <div
       onClick={onClick}
-      style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: danger ? '#e2445c' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 9 }}
-      onMouseEnter={e => e.currentTarget.style.background = danger ? 'rgba(226,68,92,0.08)' : 'var(--hover-bg)'}
+      style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: danger ? '#e2445c' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 9, transition: 'background 0.12s ease' }}
+      onMouseEnter={e => e.currentTarget.style.background = danger ? 'var(--menu-danger-hover)' : 'var(--menu-hover)'}
       onMouseLeave={e => e.currentTarget.style.background = ''}
     >{children}</div>
   );
@@ -712,13 +752,13 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
         style={{
           flex: 1, minWidth: 0,
           fontSize: 12, fontWeight: 700,
-          color: renaming ? '#0073ea' : '#676879',
+          color: renaming ? '#9b72f5' : '#676879',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           cursor: 'default', userSelect: 'none',
           fontStyle: renaming ? 'italic' : 'normal',
         }}
       >{col.title}{sortConfig?.colId === col.id && (
-        <span style={{ marginLeft: 3, fontSize: 10, color: '#0073ea', fontWeight: 900 }}>
+        <span style={{ marginLeft: 3, fontSize: 10, color: '#9b72f5', fontWeight: 900 }}>
           {sortConfig.dir === 'asc' ? '↑' : '↓'}
         </span>
       )}</span>
@@ -735,7 +775,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
             background: '#fff',
             borderRadius: 10,
             boxShadow: '0 8px 32px rgba(0,0,0,0.20)',
-            border: '2px solid #0073ea',
+            border: '2px solid #9b72f5',
             padding: '12px 14px 10px',
           }}
           onMouseDown={e => e.stopPropagation()}
@@ -758,7 +798,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
               padding: '8px 12px', outline: 'none', background: '#fafbfc',
               transition: 'border-color 0.15s',
             }}
-            onFocusCapture={e => { e.currentTarget.style.borderColor = '#0073ea'; e.currentTarget.style.background = '#fff'; }}
+            onFocusCapture={e => { e.currentTarget.style.borderColor = '#9b72f5'; e.currentTarget.style.background = '#fff'; }}
             onBlurCapture={e => { e.currentTarget.style.borderColor = '#c4c7d0'; }}
           />
           <div style={{ fontSize: 11, color: '#9699a6', marginTop: 7, textAlign: 'right' }}>
@@ -769,7 +809,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
 
       {/* Lock badge */}
       {col.type === 'person' && col.settings?.isOwnerColumn && (
-        <span title="Visibility Control active" style={{ fontSize: 10, color: '#0073ea', flexShrink: 0 }}>🔒</span>
+        <span title="Visibility Control active" style={{ fontSize: 10, color: '#9b72f5', flexShrink: 0 }}>🔒</span>
       )}
 
       {/* Options button — always visible so it's easy to click on narrow columns */}
@@ -782,17 +822,17 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
             flexShrink: 0, width: 22, height: 22,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: 4, border: 'none', cursor: 'pointer',
-            fontSize: 13, color: menuOpen ? '#0073ea' : '#9699a6',
-            background: menuOpen ? '#dce9ff' : 'transparent',
+            fontSize: 13, color: menuOpen ? '#9b72f5' : '#9699a6',
+            background: menuOpen ? 'var(--column-button-active-bg)' : 'transparent',
             transition: 'color 0.12s, background 0.12s',
           }}
-          onMouseEnter={e => { if (!menuOpen) { e.currentTarget.style.color = '#323338'; e.currentTarget.style.background = '#e6e9ef'; } }}
+          onMouseEnter={e => { if (!menuOpen) { e.currentTarget.style.color = 'var(--column-button-hover-text)'; e.currentTarget.style.background = 'var(--column-button-hover-bg)'; } }}
           onMouseLeave={e => { if (!menuOpen) { e.currentTarget.style.color = '#9699a6'; e.currentTarget.style.background = 'transparent'; } }}
         >▾</button>
       )}
 
       {/* Dropdown — fixed positioning, never clips */}
-      {menuOpen && (
+      {menuOpen && createPortal((
         <div
           ref={menuRef}
           style={{
@@ -800,12 +840,14 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
             top: menuPos.top,
             left: menuPos.left,
             zIndex: 9999,
-            background: '#fff',
+            background: 'var(--menu-bg)',
             borderRadius: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-            border: '1px solid #e0e3e8',
+            boxShadow: 'var(--menu-shadow)',
+            border: '1px solid var(--menu-border)',
             minWidth: 200,
             overflow: 'hidden',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
           }}
         >
           {/* Header: column type + title */}
@@ -824,7 +866,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
               <div
                 onClick={() => setShowTypePicker(v => !v)}
                 style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
                 onMouseLeave={e => e.currentTarget.style.background = ''}
               >
                 <span>🔄 Change Type</span>
@@ -851,7 +893,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
                           style={{
                             padding: '5px 4px', borderRadius: 6, textAlign: 'center',
                             cursor: isCurrent ? 'default' : 'pointer',
-                            border: `1.5px solid ${isCurrent ? '#0073ea' : 'var(--border-color)'}`,
+                            border: `1.5px solid ${isCurrent ? '#9b72f5' : 'var(--border-color)'}`,
                             background: isCurrent ? '#e3f0ff' : 'var(--card-bg)',
                             opacity: isCurrent ? 1 : 0.9,
                           }}
@@ -859,7 +901,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
                           onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--card-bg)'; }}
                         >
                           <div style={{ fontSize: 14 }}>{t.icon}</div>
-                          <div style={{ fontSize: 9, marginTop: 2, color: isCurrent ? '#0073ea' : 'var(--text-secondary)', fontWeight: isCurrent ? 700 : 400, lineHeight: 1.2 }}>{t.label}</div>
+                          <div style={{ fontSize: 9, marginTop: 2, color: isCurrent ? '#9b72f5' : 'var(--text-secondary)', fontWeight: isCurrent ? 700 : 400, lineHeight: 1.2 }}>{t.label}</div>
                         </div>
                       );
                     })}
@@ -880,22 +922,22 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
           )}
           {!NO_DEFAULT_TYPES.includes(col.type) && isManager && menuItem(
             handleSetDefault,
-            <>⚡ Default Value{(col.settings?.defaultValue !== undefined && col.settings?.defaultValue !== null && String(col.settings.defaultValue) !== '') ? <span style={{ color: '#0073ea', marginLeft: 4 }}>✓</span> : null}</>
+            <>⚡ Default Value{(col.settings?.defaultValue !== undefined && col.settings?.defaultValue !== null && String(col.settings.defaultValue) !== '') ? <span style={{ color: '#9b72f5', marginLeft: 4 }}>✓</span> : null}</>
           )}
 
-          <div style={{ borderTop: '1px solid #f0f1f4', margin: '4px 0' }} />
+          <div style={{ borderTop: '1px solid var(--menu-divider)', margin: '4px 0' }} />
           {menuItem(() => { setMenuOpen(false); onSort(col.id, 'asc'); }, <><span style={{ fontSize: 12 }}>↑</span> Sort A → Z</>)}
           {menuItem(() => { setMenuOpen(false); onSort(col.id, 'desc'); }, <><span style={{ fontSize: 12 }}>↓</span> Sort Z → A</>)}
           {sortConfig?.colId === col.id && menuItem(() => { setMenuOpen(false); onSort(null); }, <><span style={{ fontSize: 12 }}>✕</span> Clear Sort</>)}
 
           {isManager && (
             <>
-              <div style={{ height: 1, background: '#f0f0f0', margin: '3px 0' }} />
+              <div style={{ height: 1, background: 'var(--menu-divider)', margin: '3px 0' }} />
               {menuItem(handleDelete, '🗑️ Delete Column', true)}
             </>
           )}
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }
@@ -916,7 +958,7 @@ function ResizeHandle({ onMouseDown }) {
     >
       <div style={{
         width: 2, height: '60%', borderRadius: 2,
-        background: hovered ? '#0073ea' : 'transparent',
+        background: hovered ? '#9b72f5' : 'transparent',
         transition: 'background 0.15s',
       }} />
     </div>
@@ -943,7 +985,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
   onEditSettings, onDragStart, onDragEnd, onDragOver, onDrop, canEdit, isManager, onOpenDetail,
   isSelected, onToggleSelect, subitems, isExpanded, onToggleExpand, onRunCascade }) {
   const [hovered, setHovered] = useState(false);
-  const rowBg = isSelected ? 'rgba(0,115,234,0.1)' : hovered ? 'var(--hover-bg)' : 'var(--bg-primary)';
+  const rowBg = isSelected ? '#26346a' : hovered ? 'var(--hover-bg)' : 'var(--bg-primary)';
   return (
     <tr
       data-board-item-id={item.id}
@@ -966,7 +1008,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
         transition: 'background 0.1s',
         // Subtle focus ring + slightly stronger left bar when this row is the
         // current keyboard target. Different from `isSelected` (bulk-select).
-        boxShadow: isFocused ? 'inset 3px 0 0 #0073ea' : undefined,
+        boxShadow: isFocused ? 'inset 3px 0 0 #9b72f5' : undefined,
         outline: isFocused ? '1px solid rgba(0,115,234,0.45)' : 'none',
         outlineOffset: isFocused ? '-1px' : 0,
       }}
@@ -976,7 +1018,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
       {/* Color stripe */}
       <td style={{ width: 6, padding: 0, background: group.color, position: 'sticky', left: 0, zIndex: 2 }} />
       {/* Drag handle / checkbox */}
-      <td style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
+      <td className="wb-sticky-row-cell" style={{ width: 36, padding: '0 8px', textAlign: 'center', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
         {hovered || isSelected
           ? <input
             type="checkbox"
@@ -989,7 +1031,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
         }
       </td>
       {/* Item name */}
-      <td style={{ padding: '4px 8px 4px 8px', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: 'none' }}>
+      <td className="wb-sticky-row-cell wb-item-name-cell" style={{ padding: '4px 8px 4px 8px', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {/* Expand/collapse toggle for subitems */}
           <button
@@ -1011,7 +1053,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
               flexShrink: 0, position: 'relative',
               width: 22, height: 22, borderRadius: 4,
               background: hovered ? 'var(--hover-bg)' : 'transparent',
-              color: item.comment_count > 0 ? '#0073ea' : (hovered ? '#676879' : 'transparent'),
+              color: item.comment_count > 0 ? '#9b72f5' : (hovered ? '#676879' : 'transparent'),
               fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
               border: 'none', cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
             }}
@@ -1020,7 +1062,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
             {item.comment_count > 0 && (
               <span style={{
                 position: 'absolute', top: -4, right: -4,
-                background: '#0073ea', color: '#fff',
+                background: '#9b72f5', color: '#fff',
                 fontSize: 9, fontWeight: 700,
                 borderRadius: 8, padding: '1px 4px',
                 lineHeight: 1.4, minWidth: 14, textAlign: 'center',
@@ -1040,7 +1082,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
               onClick={e => { e.stopPropagation(); onToggleExpand?.(); }}
               title="Click to expand subitems"
               style={{
-                fontSize: 10, color: '#0073ea', background: '#e8f0fe',
+                fontSize: 10, color: '#9b72f5', background: '#ede8ff',
                 borderRadius: 10, padding: '1px 6px', fontWeight: 600,
                 flexShrink: 0, cursor: 'pointer', whiteSpace: 'nowrap',
               }}
@@ -1055,6 +1097,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
           <td key={col.id} style={{
             padding: (col.type === 'status' || col.type === 'priority') ? 0 : '3px 6px',
             borderRight: '1px solid var(--border-color)',
+            background: rowBg,
             height: 34,
           }}>
             <ColumnCell
@@ -1076,7 +1119,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
               onClick={e => { e.stopPropagation(); onItemCopy?.(item.id); }}
               style={{ color: '#c5c7d0', fontSize: 13, lineHeight: 1, marginRight: 4, transition: 'color 0.15s' }}
               title="Duplicate item"
-              onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+              onMouseEnter={e => e.currentTarget.style.color = '#9b72f5'}
               onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
             >⧉</button>
             {onRunCascade && (
@@ -1124,14 +1167,14 @@ function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange
       {/* Color stripe (faded) */}
       <td style={{ width: 6, padding: 0, background: group.color, opacity: 0.3, position: 'sticky', left: 0, zIndex: 2 }} />
       {/* Indent marker */}
-      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
+      <td className="wb-sticky-row-cell" style={{ width: 36, textAlign: 'center', borderRight: '1px solid var(--border-color)', background: rowBg, position: 'sticky', left: 6, zIndex: 2 }}>
         <span style={{
           display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
           border: '1.5px solid #c5c7d0', verticalAlign: 'middle',
         }} />
       </td>
       {/* Subitem name — indented */}
-      <td style={{ padding: '4px 8px 4px 28px', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.08)' }}>
+      <td className="wb-sticky-row-cell wb-item-name-cell" style={{ padding: '4px 8px 4px 28px', background: rowBg, position: 'sticky', left: 42, zIndex: 2, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {hovered && (
             <button
@@ -1139,7 +1182,7 @@ function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange
               title="Open detail panel"
               style={{
                 flexShrink: 0, width: 18, height: 18, borderRadius: 3,
-                background: '#0073ea', color: '#fff', fontSize: 10,
+                background: '#9b72f5', color: '#fff', fontSize: 10,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 border: 'none', cursor: 'pointer',
               }}
@@ -1219,13 +1262,13 @@ function AddSubitemRow({ parentItemId, groupId, onAdd, colSpan }) {
             }}
             onBlur={() => { if (!name.trim()) setAdding(false); }}
             placeholder="Subitem name — press Enter to save"
-            style={{ width: 260, border: '1.5px solid #0073ea', borderRadius: 5, padding: '4px 8px', outline: 'none', fontSize: 12, background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+            style={{ width: 260, border: '1.5px solid #9b72f5', borderRadius: 5, padding: '4px 8px', outline: 'none', fontSize: 12, background: 'var(--input-bg)', color: 'var(--text-primary)' }}
           />
         ) : (
           <button
             onClick={() => setAdding(true)}
             style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600 }}
-            onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+            onMouseEnter={e => e.currentTarget.style.color = '#9b72f5'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >+ Add Subitem</button>
         )}
@@ -1240,8 +1283,8 @@ function DropLine({ colSpan }) {
     <tr style={{ height: 3, pointerEvents: 'none' }}>
       <td colSpan={colSpan} style={{
         padding: 0, height: 3,
-        background: 'linear-gradient(90deg,#0073ea,#40a9ff)',
-        boxShadow: '0 0 6px #0073ea80',
+        background: 'linear-gradient(90deg,#9b72f5,#40a9ff)',
+        boxShadow: '0 0 6px #9b72f580',
       }} />
     </tr>
   );
@@ -1286,15 +1329,17 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
   return (
     <div style={{
       position: 'sticky', bottom: 0, zIndex: 50,
-      background: '#1f2d3d', color: '#fff',
+      background: 'rgba(248,245,255,0.98)',
+      backdropFilter: 'blur(8px)',
+      color: '#3a2d5c',
       padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 14,
-      boxShadow: '0 -3px 12px rgba(0,0,0,0.25)',
-      borderTop: '2px solid #0073ea',
+      boxShadow: '0 -3px 16px rgba(155,114,245,0.18)',
+      borderTop: '2px solid #9b72f5',
     }}>
-      <span style={{ fontWeight: 700, fontSize: 13, background: '#0073ea', borderRadius: 20, padding: '2px 10px' }}>
+      <span style={{ fontWeight: 700, fontSize: 13, background: 'linear-gradient(90deg,#c9b4ff,#d99fe0,#f5c89a)', borderRadius: 20, padding: '2px 10px', color: '#fff' }}>
         {count} selected
       </span>
-      <span style={{ fontSize: 13, color: '#c5c7d0' }}>
+      <span style={{ fontSize: 13, color: 'rgba(58,45,92,0.55)' }}>
         {count === 1 ? '1 item' : `${count} items`}
       </span>
 
@@ -1303,12 +1348,12 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
         <button
           onClick={() => setOpen(o => !o)}
           style={{
-            background: open ? '#0073ea' : '#2d3f55', border: '1px solid #3d5166',
-            color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
+            background: open ? '#9b72f5' : 'rgba(155,114,245,0.10)', border: '1px solid rgba(155,114,245,0.30)',
+            color: open ? '#fff' : '#3a2d5c', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
-          onMouseEnter={e => { if (!open) e.currentTarget.style.background = '#3d5166'; }}
-          onMouseLeave={e => { if (!open) e.currentTarget.style.background = '#2d3f55'; }}
+          onMouseEnter={e => { if (!open) { e.currentTarget.style.background = 'rgba(155,114,245,0.18)'; } }}
+          onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'rgba(155,114,245,0.10)'; }}
         >
           ↗ Move to group ▾
         </button>
@@ -1343,12 +1388,12 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
           <button
             onClick={() => { setChangeOpen(o => !o); setChangeCol(null); }}
             style={{
-              background: changeOpen ? '#0073ea' : '#2d3f55', border: '1px solid #3d5166',
-              color: '#fff', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
+              background: changeOpen ? '#9b72f5' : 'rgba(155,114,245,0.10)', border: '1px solid rgba(155,114,245,0.30)',
+              color: changeOpen ? '#fff' : '#3a2d5c', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 6,
             }}
-            onMouseEnter={e => { if (!changeOpen) e.currentTarget.style.background = '#3d5166'; }}
-            onMouseLeave={e => { if (!changeOpen) e.currentTarget.style.background = '#2d3f55'; }}
+            onMouseEnter={e => { if (!changeOpen) { e.currentTarget.style.background = 'rgba(155,114,245,0.18)'; } }}
+            onMouseLeave={e => { if (!changeOpen) e.currentTarget.style.background = 'rgba(155,114,245,0.10)'; }}
           >
             ✎ Change ▾
           </button>
@@ -1430,7 +1475,7 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
                     style={{ flex: 1, border: '1px solid #ddd', borderRadius: 4, padding: '6px 8px', fontSize: 13 }}
                   />
                   <button onClick={() => applyBulk(textDraft)}
-                    style={{ background: '#0073ea', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>
+                    style={{ background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>
                     Apply
                   </button>
                 </div>
@@ -1445,7 +1490,7 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
                     style={{ flex: 1, border: '1px solid #ddd', borderRadius: 4, padding: '6px 8px', fontSize: 13 }}
                   />
                   <button onClick={() => applyBulk(textDraft)}
-                    style={{ background: '#0073ea', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>
+                    style={{ background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 12px', fontSize: 13, cursor: 'pointer' }}>
                     Apply
                   </button>
                   <button onClick={() => applyBulk('')}
@@ -1468,12 +1513,12 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
         <button
           onClick={onExportSelected}
           style={{
-            background: 'transparent', border: '1px solid #3d5166', color: '#c5c7d0',
+            background: 'transparent', border: '1px solid rgba(155,114,245,0.30)', color: '#3a2d5c',
             borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,115,234,0.15)'; e.currentTarget.style.borderColor = '#0073ea'; e.currentTarget.style.color = '#fff'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#3d5166'; e.currentTarget.style.color = '#c5c7d0'; }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(155,114,245,0.12)'; e.currentTarget.style.borderColor = '#9b72f5'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(155,114,245,0.30)'; }}
         >
           📥 Export selected
         </button>
@@ -1483,21 +1528,21 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
       <button
         onClick={onDelete}
         style={{
-          background: 'transparent', border: '1px solid #3d5166', color: '#e2445c',
+          background: 'transparent', border: '1px solid rgba(226,68,92,0.30)', color: '#e2445c',
           borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 6,
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(226,68,92,0.15)'; e.currentTarget.style.borderColor = '#e2445c'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#3d5166'; }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(226,68,92,0.10)'; e.currentTarget.style.borderColor = '#e2445c'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(226,68,92,0.30)'; }}
       >
         🗑 Delete
       </button>
 
       <button
         onClick={onClear}
-        style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #3d5166', color: '#c5c7d0', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer' }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#e2445c'; e.currentTarget.style.color = '#e2445c'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#3d5166'; e.currentTarget.style.color = '#c5c7d0'; }}
+        style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid rgba(155,114,245,0.30)', color: 'rgba(58,45,92,0.55)', borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#9b72f5'; e.currentTarget.style.color = '#9b72f5'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(155,114,245,0.30)'; e.currentTarget.style.color = 'rgba(58,45,92,0.55)'; }}
       >× Clear selection</button>
     </div>
   );
@@ -1571,8 +1616,8 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
         onDragOver={onGroupDragOver}
         onDrop={onGroupDrop}
         style={{
-          background: isGroupDropOver ? '#e8f0fe' : '#fff',
-          borderTop: isGroupDropOver ? '3px solid #0073ea' : '6px solid #f5f6f8',
+          background: isGroupDropOver ? '#ede8ff' : '#fff',
+          borderTop: isGroupDropOver ? '3px solid #9b72f5' : '6px solid #f5f6f8',
           opacity: isGroupDragSrc ? 0.45 : 1,
           transition: 'background 0.12s, border-top 0.1s, opacity 0.1s',
           cursor: isManager ? 'grab' : 'default',
@@ -1586,13 +1631,13 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
           padding: 0,
           position: 'sticky', left: 6, zIndex: 3,
           overflow: 'visible',
-          background: isGroupDropOver ? '#e8f0fe' : 'var(--bg-primary, #fff)',
+          background: isGroupDropOver ? '#ede8ff' : 'var(--bg-primary, #fff)',
         }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '7px 12px 7px 6px',
             borderBottom: '1px solid #e6e9ef',
-            background: isGroupDropOver ? '#e8f0fe' : 'var(--bg-primary, #fff)',
+            background: isGroupDropOver ? '#ede8ff' : 'var(--bg-primary, #fff)',
             boxShadow: '2px 0 6px rgba(0,0,0,0.07)',
             whiteSpace: 'nowrap',
             minWidth: 'max-content',
@@ -1643,7 +1688,7 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
         {/* Filler — absorbs the remaining columns; not sticky so it scrolls normally */}
         <td colSpan={spanAll - 2} style={{
           borderBottom: '1px solid #e6e9ef',
-          background: isGroupDropOver ? '#e8f0fe' : 'var(--bg-primary, #fff)',
+          background: isGroupDropOver ? '#ede8ff' : 'var(--bg-primary, #fff)',
         }} />
       </tr>
 
@@ -1729,13 +1774,13 @@ function GroupRows({ group, columns, isManager, canEdit, onGroupUpdate, onGroupD
                     }}
                     onBlur={() => { if (!newItemName.trim()) setAddingItem(false); }}
                     placeholder="Item name — press Enter to save"
-                    style={{ width: 320, border: '1.5px solid #0073ea', borderRadius: 6, padding: '5px 10px', outline: 'none', fontSize: 13 }}
+                    style={{ width: 320, border: '1.5px solid #9b72f5', borderRadius: 6, padding: '5px 10px', outline: 'none', fontSize: 13 }}
                   />
                 ) : (
                   <button
                     onClick={() => setAddingItem(true)}
                     style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, padding: '3px 0' }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+                    onMouseEnter={e => e.currentTarget.style.color = '#9b72f5'}
                     onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                   >+ Add Item</button>
                 )}
@@ -1793,15 +1838,15 @@ function FilterBar({ cols, filters, onFiltersChange }) {
           value={nameFilter?.value || ''}
           onChange={e => setNameFilter(e.target.value)}
           style={{ border: '1.5px solid #ddd', borderRadius: 20, padding: '5px 12px', fontSize: 12, outline: 'none', width: 180, background: nameFilter ? '#fff8e1' : '#fff' }}
-          onFocus={e => e.target.style.borderColor = '#0073ea'}
+          onFocus={e => e.target.style.borderColor = '#9b72f5'}
           onBlur={e => e.target.style.borderColor = nameFilter ? '#fdab3d' : '#ddd'}
         />
       </div>
 
       {/* Column filters */}
       {colFilters.map((f, idx) => (
-        <div key={f.colId} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#e8f0fe', borderRadius: 20, padding: '3px 4px 3px 10px', fontSize: 12 }}>
-          <span style={{ fontWeight: 600, color: '#0073ea', flexShrink: 0 }}>{f.colTitle}:</span>
+        <div key={f.colId} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#ede8ff', borderRadius: 20, padding: '3px 4px 3px 10px', fontSize: 12 }}>
+          <span style={{ fontWeight: 600, color: '#9b72f5', flexShrink: 0 }}>{f.colTitle}:</span>
           {['status', 'dropdown', 'person'].includes(f.colType) && f.options?.length ? (
             <select value={f.value} onChange={e => updateColFilter(idx, e.target.value)}
               style={{ border: 'none', background: 'transparent', fontSize: 12, color: '#323338', outline: 'none', cursor: 'pointer' }}>
@@ -1829,7 +1874,7 @@ function FilterBar({ cols, filters, onFiltersChange }) {
         <div style={{ position: 'relative' }}>
           <button onClick={() => setPickerOpen(o => !o)}
             style={{ fontSize: 12, color: '#676879', border: '1.5px dashed #ddd', borderRadius: 20, padding: '4px 12px', background: '#fff' }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#0073ea'; e.currentTarget.style.borderColor = '#0073ea'; }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#9b72f5'; e.currentTarget.style.borderColor = '#9b72f5'; }}
             onMouseLeave={e => { e.currentTarget.style.color = '#676879'; e.currentTarget.style.borderColor = '#ddd'; }}>
             + Add Filter
           </button>
@@ -1858,7 +1903,7 @@ function FilterBar({ cols, filters, onFiltersChange }) {
 
       {/* Active count badge */}
       {filters.length > 0 && (
-        <span style={{ fontSize: 11, background: '#0073ea', color: '#fff', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>
+        <span style={{ fontSize: 11, background: '#9b72f5', color: '#fff', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>
           {filters.length} active
         </span>
       )}
@@ -1964,8 +2009,8 @@ function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onIt
             <button
               onClick={() => onOpenDetail(item.id)}
               style={{
-                color: '#0073ea', fontSize: 11, padding: '4px 10px',
-                border: '1.5px solid #0073ea', borderRadius: 6,
+                color: '#9b72f5', fontSize: 11, padding: '4px 10px',
+                border: '1.5px solid #9b72f5', borderRadius: 6,
                 fontWeight: 600, flexShrink: 0, background: 'transparent',
                 minHeight: 32,
               }}
@@ -2026,14 +2071,14 @@ function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onIt
                 }}
                 placeholder="Item name…"
                 style={{
-                  flex: 1, border: '1.5px solid #0073ea', borderRadius: 6,
+                  flex: 1, border: '1.5px solid #9b72f5', borderRadius: 6,
                   padding: '10px 12px', fontSize: 16, outline: 'none',
                   background: 'var(--input-bg)', color: 'var(--text-primary)',
                 }}
               />
               <button
                 onClick={handleAddItem}
-                style={{ padding: '10px 16px', background: '#0073ea', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: 13, minHeight: 44 }}
+                style={{ padding: '10px 16px', background: '#9b72f5', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: 13, minHeight: 44 }}
               >Add</button>
               <button
                 onClick={() => { setAddingItem(false); setNewItemName(''); }}
@@ -2127,7 +2172,7 @@ function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, impo
 
 // ── Avatar helpers (used by AdvancedFilterBar) ────────────────────────────────
 const _AVATAR_COLORS = [
-  '#0073ea', '#00c875', '#fdab3d', '#e2445c',
+  '#9b72f5', '#00c875', '#fdab3d', '#e2445c',
   '#a25ddc', '#037f4c', '#ff642e', '#784bd1',
   '#ff5ac4', '#0099cc', '#bb3354', '#666666',
 ];
@@ -2221,10 +2266,10 @@ function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols })
   }));
 
   const filterBtn = (label, isActive) => ({
-    border: `1px solid ${isActive ? '#0073ea' : 'var(--border-color)'}`,
+    border: `1px solid ${isActive ? '#9b72f5' : 'var(--border-color)'}`,
     borderRadius: 20, padding: '5px 12px', fontSize: 13,
-    background: isActive ? '#e8f0fe' : 'var(--bg-primary)',
-    color: isActive ? '#0073ea' : 'var(--text-primary)',
+    background: isActive ? '#ede8ff' : 'var(--bg-primary)',
+    color: isActive ? '#9b72f5' : 'var(--text-primary)',
     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
   });
 
@@ -2238,8 +2283,8 @@ function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols })
 
   const Checkbox = ({ checked }) => (
     <span style={{
-      width: 16, height: 16, borderRadius: 3, border: '2px solid #0073ea',
-      background: checked ? '#0073ea' : '#fff',
+      width: 16, height: 16, borderRadius: 3, border: '2px solid #9b72f5',
+      background: checked ? '#9b72f5' : '#fff',
       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
     }}>
       {checked && <span style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>✓</span>}
@@ -2248,10 +2293,10 @@ function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols })
 
   const Radio = ({ checked }) => (
     <span style={{
-      width: 16, height: 16, borderRadius: '50%', border: '2px solid #0073ea',
+      width: 16, height: 16, borderRadius: '50%', border: '2px solid #9b72f5',
       background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
     }}>
-      {checked && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0073ea' }} />}
+      {checked && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9b72f5' }} />}
     </span>
   );
 
@@ -2444,8 +2489,9 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
 
   return (
     <div style={{
-      height: 38, background: 'var(--bg-primary, #fff)',
-      borderBottom: '1px solid var(--border-color, #e6e9ef)',
+      height: 38, background: 'var(--viewbar-bg)',
+      backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+      borderBottom: '1px solid var(--topbar-border)',
       display: 'flex', alignItems: 'center', padding: '0 16px',
       flexShrink: 0, gap: 0, overflowX: 'auto',
     }}>
@@ -2458,10 +2504,10 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
             key={view.id}
             style={{
               display: 'flex', alignItems: 'center', height: '100%', gap: 4,
-              borderBottom: isActive ? '2px solid #0073ea' : '2px solid transparent',
+              borderBottom: isActive ? '2px solid #9b72f5' : '2px solid transparent',
               padding: '0 4px 0 12px',
               fontSize: 13, fontWeight: 500,
-              color: isActive ? '#0073ea' : '#676879',
+              color: isActive ? '#9b72f5' : 'var(--text-secondary)',
               cursor: 'pointer', userSelect: 'none', flexShrink: 0,
               transition: 'color 0.12s',
             }}
@@ -2473,10 +2519,10 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
             <InlineEdit
               value={view.name}
               onSave={name => onRename(view.id, name)}
-              style={{ fontSize: 13, fontWeight: 500, color: isActive ? '#0073ea' : '#676879', maxWidth: 140 }}
+              style={{ fontSize: 13, fontWeight: 500, color: isActive ? '#9b72f5' : 'var(--text-secondary)', maxWidth: 140 }}
             />
             {isMain && (
-              <span title="Main Table — filters & hidden columns/groups cannot be applied here" style={{ fontSize: 11, color: isActive ? '#0073ea' : '#9699a6', flexShrink: 0 }}>🔒</span>
+              <span title="Main Table — filters & hidden columns/groups cannot be applied here" style={{ fontSize: 11, color: isActive ? '#9b72f5' : '#9699a6', flexShrink: 0 }}>🔒</span>
             )}
             {showDot && (
               <span title="Unsaved changes" style={{ width: 7, height: 7, borderRadius: '50%', background: '#fdab3d', flexShrink: 0 }} />
@@ -2507,7 +2553,7 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
             color: '#676879', border: '1px dashed #c5c7d0',
             borderRadius: 6, background: 'transparent', cursor: 'pointer', flexShrink: 0,
           }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#0073ea'; e.currentTarget.style.borderColor = '#0073ea'; }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#9b72f5'; e.currentTarget.style.borderColor = '#9b72f5'; }}
           onMouseLeave={e => { e.currentTarget.style.color = '#676879'; e.currentTarget.style.borderColor = '#c5c7d0'; }}
         >+ Add View</button>
       )}
@@ -2709,7 +2755,7 @@ function FilterRow({ rule, cols, boardMembers, onChange, onRemove, isFirst }) {
               style={{
                 ...inputStyle, display: 'flex', alignItems: 'center', gap: 4,
                 cursor: 'pointer', minWidth: 130, flexWrap: 'wrap', maxWidth: 240,
-                borderColor: valueDropOpen ? '#0073ea' : '#e6e9ef',
+                borderColor: valueDropOpen ? '#9b72f5' : '#e6e9ef',
                 userSelect: 'none',
               }}
             >
@@ -2717,7 +2763,7 @@ function FilterRow({ rule, cols, boardMembers, onChange, onRemove, isFirst }) {
                 <span style={{ color: '#aaa', fontSize: 12, flex: 1 }}>Any…</span>
               ) : multiValues.map(v => (
                 <span key={v} style={{
-                  background: '#e8f0fe', color: '#0073ea', borderRadius: 10,
+                  background: '#ede8ff', color: '#9b72f5', borderRadius: 10,
                   padding: '1px 7px', fontSize: 11, fontWeight: 600,
                   display: 'flex', alignItems: 'center', gap: 3,
                 }}>
@@ -2754,8 +2800,8 @@ function FilterRow({ rule, cols, boardMembers, onChange, onRemove, isFirst }) {
                     onMouseLeave={e => { if (!multiValues.includes(opt)) e.currentTarget.style.background = multiValues.includes(opt) ? '#f0f6ff' : 'transparent'; }}
                   >
                     <span style={{
-                      width: 14, height: 14, borderRadius: 3, border: '2px solid #0073ea', flexShrink: 0,
-                      background: multiValues.includes(opt) ? '#0073ea' : '#fff',
+                      width: 14, height: 14, borderRadius: 3, border: '2px solid #9b72f5', flexShrink: 0,
+                      background: multiValues.includes(opt) ? '#9b72f5' : '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       {multiValues.includes(opt) && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
@@ -2857,7 +2903,7 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
       <span style={{ fontSize: 11, color: '#9699a6', transition: 'transform 0.15s', display: 'inline-block', transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #323338)' }}>{label}</span>
       {count > 0 && (
-        <span style={{ fontSize: 11, background: '#0073ea', color: '#fff', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>{count}</span>
+        <span style={{ fontSize: 11, background: '#9b72f5', color: '#fff', borderRadius: 10, padding: '1px 7px', fontWeight: 700 }}>{count}</span>
       )}
     </div>
   );
@@ -2913,7 +2959,7 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
         <button
           onClick={addRule}
           style={{
-            fontSize: 12, color: '#0073ea', fontWeight: 600, alignSelf: 'flex-start',
+            fontSize: 12, color: '#9b72f5', fontWeight: 600, alignSelf: 'flex-start',
             background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
             display: 'flex', alignItems: 'center', gap: 4,
           }}
@@ -2935,7 +2981,7 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
                     type="checkbox"
                     checked={!isHidden}
                     onChange={() => toggleColumn(col.id)}
-                    style={{ accentColor: '#0073ea', cursor: 'pointer' }}
+                    style={{ accentColor: '#9b72f5', cursor: 'pointer' }}
                   />
                   <span style={{ color: isHidden ? '#9699a6' : 'var(--text-primary, #323338)', textDecoration: isHidden ? 'line-through' : 'none' }}>
                     {col.title}
@@ -2961,7 +3007,7 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
                     type="checkbox"
                     checked={!isHidden}
                     onChange={() => toggleGroup(grp.id)}
-                    style={{ accentColor: '#0073ea', cursor: 'pointer' }}
+                    style={{ accentColor: '#9b72f5', cursor: 'pointer' }}
                   />
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: isHidden ? '#9699a6' : 'var(--text-primary, #323338)', textDecoration: isHidden ? 'line-through' : 'none' }}>
                     <span style={{ width: 10, height: 10, borderRadius: 2, background: grp.color || '#579bfc', flexShrink: 0 }} />
@@ -2983,12 +3029,12 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
           onClick={onSave}
           style={{
             padding: '6px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-            background: '#0073ea', color: '#fff', border: 'none', cursor: 'pointer',
+            background: '#9b72f5', color: '#fff', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: 5,
             opacity: !hasAnySettings && !unsavedChanges ? 0.6 : 1,
           }}
           onMouseEnter={e => { e.currentTarget.style.background = '#0060c0'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#0073ea'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#9b72f5'; }}
         >
           Save to this view{unsavedChanges ? ' ●' : ''}
         </button>
@@ -3096,6 +3142,8 @@ function VirtualisedGroups({
   const [expandedItems, setExpandedItems] = useState(new Set());
   const [addingInGroup, setAddingInGroup] = useState(null);
   const [newItemName, setNewItemName] = useState('');
+  const { resolvedTheme } = useThemeContext();
+  const isDark = resolvedTheme === 'dark';
   const toast = useToast();
 
   const toggleGroup = (gid) => setCollapsedGroups(prev => {
@@ -3179,7 +3227,7 @@ function VirtualisedGroups({
             }
           };
           return (
-            <tr key={row.id} style={{ height: ROW_HEIGHT, background: groupDropOver === group.id ? '#e8f0fe' : 'var(--bg-primary)', borderTop: groupDropOver === group.id ? '3px solid #0073ea' : '6px solid var(--bg-secondary)', cursor: isManager ? 'grab' : 'default' }}
+            <tr key={row.id} style={{ height: ROW_HEIGHT, background: groupDropOver === group.id ? '#ede8ff' : 'var(--bg-primary)', borderTop: groupDropOver === group.id ? '3px solid #9b72f5' : '6px solid var(--bg-secondary)', cursor: isManager ? 'grab' : 'default' }}
               draggable={isManager}
               onDragStart={isManager ? e => handleGroupDragStart(e, group.id) : undefined}
               onDragEnd={isManager ? handleGroupDragEnd : undefined}
@@ -3228,7 +3276,7 @@ function VirtualisedGroups({
           const isDropTarget = dropTarget?.groupId === group.id && dropTarget?.beforeItemId === item.id;
           return (
             <React.Fragment key={row.id}>
-              {isDropTarget && <tr><td colSpan={spanAll} style={{ height: 3, background: '#0073ea', padding: 0 }} /></tr>}
+              {isDropTarget && <tr><td colSpan={spanAll} style={{ height: 3, background: '#9b72f5', padding: 0 }} /></tr>}
               <ItemRow
                 item={item}
                 group={group}
@@ -3284,7 +3332,7 @@ function VirtualisedGroups({
               <td colSpan={spanAll} style={{ paddingLeft: 60 }}>
                 {canEdit && (
                   <button onClick={() => handleSubitemCreate(item.id, group.id, 'New subitem')}
-                    style={{ fontSize: 12, color: '#0073ea', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    style={{ fontSize: 12, color: '#9b72f5', background: 'none', border: 'none', cursor: 'pointer' }}>
                     + Add subitem
                   </button>
                 )}
@@ -3301,20 +3349,20 @@ function VirtualisedGroups({
           const { group } = row;
           const items = group.items || [];
           return (
-            <tr key={row.id} style={{ height: 32, background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-color)', fontSize: 12 }}>
-              <td style={{ padding: 0, background: group.color, opacity: 0.4 }} />
-              <td />
-              <td style={{ padding: '4px 12px', color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: 0.3, fontSize: 11, textTransform: 'uppercase', position: 'sticky', left: 42, background: 'var(--bg-secondary)', zIndex: 5 }}>
+            <tr className="wb-group-summary-row" key={row.id} style={{ height: 32, background: 'var(--summary-row-bg)', borderTop: '2px solid var(--border-color)', fontSize: 12 }}>
+              <td style={{ padding: 0, background: 'var(--summary-row-bg)' }} />
+              <td style={{ background: 'var(--summary-row-bg)' }} />
+              <td style={{ padding: '4px 12px', color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: 0.3, fontSize: 11, textTransform: 'uppercase', position: 'sticky', left: 42, background: 'var(--summary-row-bg)', zIndex: 5 }}>
                 Σ Total <span style={{ color: 'var(--text-tertiary, #999)', fontWeight: 500, marginLeft: 4 }}>({items.length})</span>
               </td>
               {cols.map(col => {
                 const summary = computeColumnSummary(col, items, allCols);
-                if (!summary) return <td key={col.id} style={{ padding: '4px 8px' }} />;
+                if (!summary) return <td key={col.id} style={{ padding: '4px 8px', background: 'var(--summary-row-bg)' }} />;
                 return (
-                  <td key={col.id} style={{ padding: '4px 8px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td key={col.id} style={{ padding: '4px 8px', background: 'var(--summary-row-bg)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {summary.kind === 'number' && (
                       <span title={`Sum ${formatSummaryNumber(summary.sum)} · Avg ${formatSummaryNumber(summary.avg)} · Count ${summary.count}`}
-                        style={{ fontWeight: 700, color: '#0073ea' }}>
+                        style={{ fontWeight: 700, color: '#9b72f5' }}>
                         {formatSummaryNumber(summary.sum)}
                         <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4, fontSize: 10 }}>
                           · avg {formatSummaryNumber(summary.avg)}
@@ -3335,12 +3383,31 @@ function VirtualisedGroups({
                     )}
                     {summary.kind === 'tally' && (
                       <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-                        {summary.top.map((t, i) => (
-                          <span key={i} title={`${t.count} × ${t.label}`}
-                            style={{ background: t.color, color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
-                            {t.label} · {t.count}
-                          </span>
-                        ))}
+                        {summary.top.map((t, i) => {
+                          const soft = getSoftStyle(t.color, isDark, t.label);
+                          return (
+                            <span
+                              className="status-pill-label"
+                              key={i}
+                              title={`${t.count} × ${t.label}`}
+                              style={{
+                                '--status-pill-text': soft.text,
+                                background: soft.bg,
+                                color: soft.text,
+                                borderRadius: 6,
+                                padding: '6px 12px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                textAlign: 'center',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                letterSpacing: 0.3,
+                              }}>
+                              {t.label} · {t.count}
+                            </span>
+                          );
+                        })}
                       </span>
                     )}
                     {summary.kind === 'count' && (
@@ -3351,8 +3418,8 @@ function VirtualisedGroups({
                   </td>
                 );
               })}
-              <td />
-              {isManager && <td />}
+              <td style={{ background: 'var(--summary-row-bg)' }} />
+              {isManager && <td style={{ background: 'var(--summary-row-bg)' }} />}
             </tr>
           );
         }
@@ -3373,7 +3440,7 @@ function VirtualisedGroups({
                         onKeyDown={e => { if (e.key === 'Enter') handleAddItem(group); if (e.key === 'Escape') { setAddingInGroup(null); setNewItemName(''); } }}
                         onBlur={() => { if (newItemName.trim()) handleAddItem(group); else { setAddingInGroup(null); setNewItemName(''); } }}
                         placeholder="Item name…"
-                        style={{ border: '1.5px solid #0073ea', borderRadius: 4, padding: '3px 8px', fontSize: 13, outline: 'none', background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+                        style={{ border: '1.5px solid #9b72f5', borderRadius: 4, padding: '3px 8px', fontSize: 13, outline: 'none', background: 'var(--input-bg)', color: 'var(--text-primary)' }}
                       />
                     </div>
                   ) : (
@@ -4572,20 +4639,21 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   }, [allVisibleSelected, allVisibleItemIds.join(',')]); // join for stable dep
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontFamily: 'Figtree, Roboto, -apple-system, sans-serif' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--workspace-bg, var(--bg-primary))', color: 'var(--text-primary)', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
 
       {/* ── Toolbar ── */}
       {isMobile ? (
         /* Mobile toolbar: Add Group + ⋯ More */
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 12px', background: 'var(--bg-primary)',
-          borderBottom: showFilters ? 'none' : '1px solid var(--border-color)', flexShrink: 0,
+          padding: '8px 12px', background: 'var(--board-toolbar-bg)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: showFilters ? 'none' : '1px solid rgba(155,114,245,0.10)', flexShrink: 0,
         }}>
           {isManager && (
             <button onClick={handleGroupCreate} style={{
-              padding: '8px 14px', background: '#0073ea', color: '#fff',
-              borderRadius: 6, fontWeight: 600, fontSize: 13, minHeight: 44,
+              padding: '8px 14px', background: 'linear-gradient(90deg,#c9b4ff 0%,#d99fe0 60%,#f5c89a 100%)', color: '#fff',
+              borderRadius: 6, fontWeight: 700, fontSize: 13, minHeight: 44, border: 'none',
             }}>+ Add Group</button>
           )}
           <button
@@ -4615,17 +4683,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         /* Desktop toolbar: full button row */
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 20px', background: 'var(--bg-primary)',
+          padding: '8px 20px', background: 'var(--board-toolbar-bg)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           borderBottom: 'none', flexShrink: 0, flexWrap: 'wrap',
         }}>
           {isManager && (
             <>
               <button onClick={handleGroupCreate} style={{
-                padding: '6px 14px', background: '#0073ea', color: '#fff',
-                borderRadius: 6, fontWeight: 600, fontSize: 13,
+                padding: '6px 14px', background: 'linear-gradient(90deg,#c9b4ff 0%,#d99fe0 60%,#f5c89a 100%)', color: '#fff',
+                borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none',
               }}>+ Add Group</button>
               <button onClick={() => setShowAutomations(true)} style={{
-                padding: '5px 12px', border: '1.5px solid #a25ddc', color: '#a25ddc',
+                padding: '5px 12px', border: '1.5px solid var(--automation-button-border, #a25ddc)', color: 'var(--automation-button-color, #a25ddc)',
                 borderRadius: 6, fontWeight: 600, fontSize: 12,
                 display: 'flex', alignItems: 'center', gap: 5,
               }}>
@@ -4638,7 +4707,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                 )}
               </button>
               <button onClick={() => setShowForms(true)} style={{
-                padding: '5px 12px', border: '1.5px solid #0073ea', color: '#0073ea',
+                padding: '5px 12px', border: '1.5px solid var(--forms-button-border, #9b72f5)', color: 'var(--forms-button-color, #9b72f5)',
                 borderRadius: 6, fontWeight: 600, fontSize: 12,
               }}>
                 📋 Forms
@@ -4652,10 +4721,10 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             const isActive = filterPanelOpen || totalCount > 0;
             return (
               <button onClick={() => setFilterPanelOpen(f => !f)} style={{
-                padding: '5px 12px', border: `1.5px solid ${isActive ? '#0073ea' : 'var(--border-color)'}`,
+                padding: '5px 12px', border: `1.5px solid ${isActive ? '#9b72f5' : 'var(--border-color)'}`,
                 borderRadius: 6, fontSize: 12, fontWeight: 600,
-                color: isActive ? '#0073ea' : '#676879',
-                background: isActive ? '#e8f0fe' : 'var(--bg-primary)',
+                color: isActive ? '#9b72f5' : '#676879',
+                background: isActive ? '#ede8ff' : 'var(--bg-primary)',
                 display: 'flex', alignItems: 'center', gap: 5,
               }}>
                 🔽 Filter{totalCount > 0 ? ` (${totalCount})` : ''}
@@ -4675,7 +4744,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               style={{
                 paddingLeft: 26, paddingRight: boardSearch ? 22 : 8,
                 paddingTop: 5, paddingBottom: 5,
-                border: `1.5px solid ${boardSearch ? '#0073ea' : '#e6e9ef'}`,
+                border: `1.5px solid ${boardSearch ? '#9b72f5' : '#e6e9ef'}`,
                 borderRadius: 6, fontSize: 12, fontWeight: 500,
                 color: 'var(--text-primary)', background: 'var(--bg-primary)',
                 outline: 'none', width: 180, transition: 'border-color 0.15s, width 0.2s',
@@ -4696,8 +4765,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             <button
               onClick={() => setSortConfig(null)}
               style={{
-                padding: '5px 10px', border: '1.5px solid #0073ea', borderRadius: 6,
-                fontSize: 12, fontWeight: 600, color: '#0073ea', background: '#e8f0fe',
+                padding: '5px 10px', border: '1.5px solid #9b72f5', borderRadius: 6,
+                fontSize: 12, fontWeight: 600, color: '#9b72f5', background: '#ede8ff',
                 display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
               }}
               title="Clear sort"
@@ -4817,7 +4886,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       )}
 
       {/* ── Board Content ── */}
-      <div ref={scrollContainerRef} style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div ref={scrollContainerRef} style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', background: 'var(--workspace-bg, var(--bg-primary))' }}>
         {groups.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-secondary)' }}>
             <div style={{ fontSize: 52, marginBottom: 14 }}>📋</div>
@@ -4863,19 +4932,19 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
             {/* ── Sticky header ── */}
             <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
-              <tr style={{ background: 'var(--bg-secondary)', borderBottom: '2px solid var(--border-color)' }}>
-                <th style={{ padding: 0, background: 'var(--bg-secondary)', width: 6, position: 'sticky', left: 0, zIndex: 30 }} />
-                <th style={{ padding: '0 8px', textAlign: 'center', background: 'var(--bg-secondary)', borderRight: '1px solid var(--border-color)', position: 'sticky', left: 6, zIndex: 30 }}>
+              <tr style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1.5px solid rgba(155,114,245,0.12)' }}>
+                <th style={{ padding: 0, background: 'rgba(255,255,255,0.92)', width: 6, position: 'sticky', left: 0, zIndex: 30 }} />
+                <th style={{ padding: '0 8px', textAlign: 'center', background: 'rgba(255,255,255,0.92)', borderRight: '1px solid rgba(155,114,245,0.10)', position: 'sticky', left: 6, zIndex: 30 }}>
                   <input
                     ref={selectAllCheckRef}
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={handleSelectAll}
                     title={allVisibleSelected ? 'Deselect all' : 'Select all items'}
-                    style={{ cursor: 'pointer', accentColor: '#0073ea' }}
+                    style={{ cursor: 'pointer', accentColor: '#9b72f5' }}
                   />
                 </th>
-                <th style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRight: 'none', letterSpacing: '0.3px', position: 'sticky', left: 42, zIndex: 30, boxShadow: '2px 0 5px -2px rgba(0,0,0,0.15)' }}>
+                <th className="board-neon-header-cell" style={{ padding: '9px 12px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#4a4a6a', background: 'rgba(255,255,255,0.92)', borderRight: 'none', letterSpacing: '0.2px', position: 'sticky', left: 42, zIndex: 30, boxShadow: '2px 0 5px -2px rgba(80,60,160,0.08)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}>
                     {isManager
                       ? <InlineEdit
@@ -4890,6 +4959,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                 </th>
                 {cols.map(col => (
                   <th
+                    className="board-neon-header-cell"
                     key={col.id}
                     draggable={isManager}
                     onDragStart={isManager ? e => handleColDragStart(e, col.id) : undefined}
@@ -4898,9 +4968,9 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                     onDragEnd={isManager ? handleColDragEnd : undefined}
                     style={{
                       padding: '6px 8px',
-                      background: colDragOver === col.id ? '#e8f0fe' : colDragSrc === col.id ? '#f0f4ff' : '#f5f6f8',
-                      borderRight: colDragOver === col.id ? '2px solid #0073ea' : '1px solid #e6e9ef',
-                      borderLeft: colDragOver === col.id ? '2px solid #0073ea' : undefined,
+                      background: colDragOver === col.id ? '#ede8ff' : colDragSrc === col.id ? '#f0ecff' : 'rgba(255,255,255,0.92)',
+                      borderRight: colDragOver === col.id ? '2px solid #9b72f5' : '1px solid rgba(155,114,245,0.10)',
+                      borderLeft: colDragOver === col.id ? '2px solid #9b72f5' : undefined,
                       textAlign: 'left',
                       position: 'relative',
                       cursor: isManager ? (colDragSrc === col.id ? 'grabbing' : 'grab') : 'default',
@@ -4924,9 +4994,9 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                     <ResizeHandle onMouseDown={e => startResize(e, col.id, getColWidth(col))} />
                   </th>
                 ))}
-                <th style={{ background: '#f5f6f8', borderRight: '1px solid #e6e9ef' }} />
+                <th style={{ background: 'rgba(255,255,255,0.92)', borderRight: '1px solid rgba(155,114,245,0.10)' }} />
                 {isManager && (
-                  <th style={{ background: '#f5f6f8', textAlign: 'center', padding: '0 4px' }}>
+                  <th style={{ background: 'rgba(255,255,255,0.92)', textAlign: 'center', padding: '0 4px' }}>
                     <button
                       onClick={() => setShowAddColumn(true)}
                       title="Add column"
@@ -4936,7 +5006,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                         alignItems: 'center', justifyContent: 'center', margin: '0 auto',
                         transition: 'background 0.15s, color 0.15s',
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#0073ea'; e.currentTarget.style.color = '#fff'; }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#9b72f5'; e.currentTarget.style.color = '#fff'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = '#e6e9ef'; e.currentTarget.style.color = '#676879'; }}
                     >+</button>
                   </th>
@@ -5178,4 +5248,3 @@ function AutomationsLazy(props) {
     </Suspense>
   );
 }
-

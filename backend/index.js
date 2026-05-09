@@ -398,6 +398,13 @@ async function start() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_cascade_meta_item     ON column_value_meta(item_id)`);
     console.log('✅ Date Cascade tables ready');
 
+    // Board-owner visibility columns
+    await pool.query(`ALTER TABLE board_members ADD COLUMN IF NOT EXISTS is_owner BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS enforce_owner_visibility BOOLEAN DEFAULT false`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_board_members_is_owner ON board_members(board_id, is_owner) WHERE is_owner = true`);
+    // Backfill: mark each board's creator as is_owner so strict-visibility toggle doesn't lock them out
+    await pool.query(`UPDATE board_members bm SET is_owner = true FROM boards b WHERE bm.board_id = b.id AND bm.user_id = b.created_by AND (bm.is_owner IS NULL OR bm.is_owner = false)`);
+
     const { rows } = await pool.query('SELECT COUNT(*) FROM boards');
     if (parseInt(rows[0].count) === 0) {
       console.log('Running seed data...');

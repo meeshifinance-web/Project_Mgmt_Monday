@@ -141,7 +141,7 @@ export default function KanbanView({ groups, columns, onValueChange, onItemCreat
               {/* Add item in this column */}
               {isManager && (
                 addingIn === opt.label ? (
-                  <div style={{ background: 'var(--input-bg)', borderRadius: 8, padding: '8px 10px', border: '1.5px solid #0073ea' }}>
+                  <div style={{ background: 'var(--input-bg)', borderRadius: 8, padding: '8px 10px', border: '1.5px solid #9b72f5' }}>
                     <input
                       autoFocus type="text" value={newName}
                       onChange={e => setNewName(e.target.value)}
@@ -151,7 +151,7 @@ export default function KanbanView({ groups, columns, onValueChange, onItemCreat
                       style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13, background: 'transparent', color: 'var(--text-primary)' }}
                     />
                     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <button onClick={() => handleAddItem(opt.label)} style={{ background: '#0073ea', color: '#fff', borderRadius: 5, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>Add</button>
+                      <button onClick={() => handleAddItem(opt.label)} style={{ background: '#9b72f5', color: '#fff', borderRadius: 5, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>Add</button>
                       <button onClick={() => { setAddingIn(null); setNewName(''); }} style={{ color: '#888', fontSize: 12 }}>Cancel</button>
                     </div>
                   </div>
@@ -159,7 +159,7 @@ export default function KanbanView({ groups, columns, onValueChange, onItemCreat
                   <button
                     onClick={() => { setAddingIn(opt.label); setNewName(''); }}
                     style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, padding: '6px 4px', textAlign: 'left' }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+                    onMouseEnter={e => e.currentTarget.style.color = '#9b72f5'}
                     onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
                   >+ Add Item</button>
                 )

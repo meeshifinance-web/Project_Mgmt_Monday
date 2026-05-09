@@ -83,9 +83,9 @@ export default function EmptyState({
             <button
               onClick={primaryAction.onClick}
               style={{
-                background: isFiltered ? 'transparent' : '#0073ea',
-                color: isFiltered ? '#0073ea' : '#fff',
-                border: isFiltered ? '1.5px solid #0073ea' : 'none',
+                background: isFiltered ? 'transparent' : '#9b72f5',
+                color: isFiltered ? '#9b72f5' : '#fff',
+                border: isFiltered ? '1.5px solid #9b72f5' : 'none',
                 borderRadius: 8, padding: '8px 16px',
                 fontSize: 13, fontWeight: 600, cursor: 'pointer',
                 boxShadow: isFiltered ? 'none' : '0 1px 2px rgba(0,115,234,0.25)',
@@ -127,7 +127,7 @@ export default function EmptyState({
         <button
           onClick={primaryAction.onClick}
           style={{
-            background: 'transparent', color: '#0073ea',
+            background: 'transparent', color: '#9b72f5',
             border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0,
           }}
         >

@@ -98,7 +98,7 @@ export default function FormulaEditor({ column, columns, previewItem, onSave, on
                   background: 'var(--input-bg)', color: 'var(--text-primary)',
                   lineHeight: 1.6,
                 }}
-                onFocus={e => e.currentTarget.style.borderColor = '#0073ea'}
+                onFocus={e => e.currentTarget.style.borderColor = '#9b72f5'}
                 onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
               />
             </div>
@@ -115,7 +115,7 @@ export default function FormulaEditor({ column, columns, previewItem, onSave, on
                     title={`Insert {${c.title}}`}
                     style={{
                       fontSize: 12, padding: '3px 10px', borderRadius: 20,
-                      border: '1.5px solid #0073ea', background: '#e3f0ff', color: '#0073ea',
+                      border: '1.5px solid #9b72f5', background: '#e3f0ff', color: '#9b72f5',
                       cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = '#cce3ff'}
@@ -166,7 +166,7 @@ export default function FormulaEditor({ column, columns, previewItem, onSave, on
                   padding: '5px 8px', outline: 'none',
                   background: 'var(--input-bg)', color: 'var(--text-primary)',
                 }}
-                onFocus={e => e.currentTarget.style.borderColor = '#0073ea'}
+                onFocus={e => e.currentTarget.style.borderColor = '#9b72f5'}
                 onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
               />
             </div>
@@ -184,7 +184,7 @@ export default function FormulaEditor({ column, columns, previewItem, onSave, on
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0073ea', fontFamily: 'monospace' }}>{fn.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#9b72f5', fontFamily: 'monospace' }}>{fn.name}</span>
                   </div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{fn.desc}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'monospace', marginTop: 1, wordBreak: 'break-all' }}>{fn.sig}</div>
@@ -199,7 +199,7 @@ export default function FormulaEditor({ column, columns, previewItem, onSave, on
           <button onClick={onClose} style={{ padding: '7px 18px', borderRadius: 7, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
             Cancel
           </button>
-          <button onClick={handleSave} style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: '#0073ea', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <button onClick={handleSave} style={{ padding: '7px 20px', borderRadius: 7, border: 'none', background: '#9b72f5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
             Save Formula
           </button>
         </div>

@@ -43,9 +43,9 @@ const ACTIONS_FOR = {
   ],
 };
 
-const sel   = { width: '100%', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', fontSize: 13, background: '#fff' };
-const inp   = { width: '100%', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', fontSize: 13, boxSizing: 'border-box' };
-const label = { fontSize: 11, fontWeight: 700, color: '#888', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 };
+const sel   = { width: '100%', border: '1px solid var(--border-color, #ddd)', borderRadius: 6, padding: '7px 10px', fontSize: 13, background: 'var(--input-bg, #fff)', color: 'var(--text-primary, #323338)' };
+const inp   = { width: '100%', border: '1px solid var(--border-color, #ddd)', borderRadius: 6, padding: '7px 10px', fontSize: 13, boxSizing: 'border-box', background: 'var(--input-bg, #fff)', color: 'var(--text-primary, #323338)' };
+const label = { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary, #888)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 };
 
 // ── Variable token chip ───────────────────────────────────────────────────────
 function TokenChip({ token, onInsert }) {
@@ -56,7 +56,7 @@ function TokenChip({ token, onInsert }) {
       title={`Insert ${token}`}
       style={{
         padding: '3px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
-        background: '#e3f0ff', color: '#0073ea', border: '1px solid #b3d4ff',
+        background: '#e3f0ff', color: '#9b72f5', border: '1px solid #b3d4ff',
         fontWeight: 600, whiteSpace: 'nowrap',
       }}
     >
@@ -156,7 +156,7 @@ function Summary({ auto, columns, groups }) {
 
   return (
     <div style={{ fontSize: 12, color: '#555', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-      <span style={{ background: '#e3f0ff', color: '#0073ea', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
+      <span style={{ background: '#e3f0ff', color: '#9b72f5', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
         WHEN {trigText}
       </span>
       <span style={{ background: '#e8f7ee', color: '#037f4c', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
@@ -228,13 +228,13 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
   };
 
   return (
-    <div style={{ background: '#f7f8fc', border: '1.5px solid #d0d0d0', borderRadius: 10, padding: 18, marginBottom: 14 }}>
-      <p style={{ fontSize: 13, fontWeight: 700, color: '#323338', marginBottom: 14 }}>
+    <div className="automation-form-card" style={{ background: 'var(--bg-primary, #f7f8fc)', border: '1.5px solid var(--border-color, #d0d0d0)', borderRadius: 10, padding: 18, marginBottom: 14 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary, #323338)', marginBottom: 14 }}>
         {initial ? 'Edit Automation' : 'New Automation'}
       </p>
 
       {/* WHEN */}
-      <div style={{ background: '#e3f0ff', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+      <div style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.22)', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
         <p style={label}>⚡ WHEN</p>
         <select value={triggerType} onChange={e => handleTriggerChange(e.target.value)} style={sel}>
           {TRIGGERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -349,14 +349,14 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
             <div>
               <p style={label}>From contains (optional)</p>
               <input value={triggerConfig.from_contains || ''} onChange={e => setTC({ from_contains: e.target.value })}
-                placeholder="e.g. director@ddecor.com — leave blank for any sender" style={inp} />
+                placeholder="e.g. director@example.com — leave blank for any sender" style={inp} />
             </div>
           </div>
         )}
       </div>
 
       {/* THEN */}
-      <div style={{ background: '#e8f7ee', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+      <div style={{ background: 'rgba(103,232,183,0.10)', border: '1px solid rgba(103,232,183,0.22)', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
         <p style={label}>✅ THEN</p>
         <select value={actionType} onChange={e => { setActionType(e.target.value); setActionConfig({}); }} style={sel}>
           {availableActions.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
@@ -592,7 +592,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button type="button" onClick={onCancel} style={{ padding: '7px 16px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-        <button type="button" onClick={handleSubmit} style={{ padding: '7px 16px', background: '#0073ea', color: '#fff', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Save</button>
+        <button type="button" onClick={handleSubmit} style={{ padding: '7px 16px', background: '#9b72f5', color: '#fff', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Save</button>
       </div>
     </div>
   );
@@ -617,12 +617,12 @@ function BoardEmailSettings({ emailFrom, onChange }) {
   };
 
   return (
-    <div style={{ background: '#f7f8fc', border: '1.5px solid #e0e0e0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+    <div className="automation-email-settings" style={{ background: 'var(--bg-primary, #f7f8fc)', border: '1.5px solid var(--border-color, #e0e0e0)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
         <span style={{ fontSize: 16 }}>✉️</span>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 13, color: '#323338' }}>Sender email for this board</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary, #323338)' }}>Sender email for this board</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary, #888)', marginTop: 1 }}>
             Choose which address this board's automated emails come from.
           </div>
         </div>
@@ -632,7 +632,7 @@ function BoardEmailSettings({ emailFrom, onChange }) {
           placeholder="Leave blank to use the default — recommended"
           style={{ ...inp, flex: 1 }} type="email" />
         <button onClick={handleSave} disabled={saving} style={{
-          padding: '7px 16px', background: '#0073ea', color: '#fff',
+          padding: '7px 16px', background: '#9b72f5', color: '#fff',
           borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer',
           opacity: saving ? 0.6 : 1, whiteSpace: 'nowrap',
         }}>
@@ -644,13 +644,13 @@ function BoardEmailSettings({ emailFrom, onChange }) {
           address that O365 will silently reject. */}
       <div style={{
         marginTop: 10, padding: '8px 10px', borderRadius: 6,
-        background: '#fff8e1', border: '1px solid #ffe58f',
-        fontSize: 11, color: '#7a5a00', lineHeight: 1.55,
+        background: 'rgba(253, 186, 116, 0.10)', border: '1px solid rgba(253, 186, 116, 0.24)',
+        fontSize: 11, color: 'var(--text-primary, #7a5a00)', lineHeight: 1.55,
       }}>
         💡 <strong>Most boards should leave this blank.</strong> Emails will
         come from the system default and replies will route back automatically.
         <br />
-        Only set a custom address if this board emails people outside D'Decor —
+        Only set a custom address if this board emails people outside your organisation —
         and only after IT has connected that mailbox to your sender account.
         Otherwise messages may land in spam or fail to send.
       </div>
@@ -720,13 +720,13 @@ function DateCascadeTab({ boardId, boardName, columns }) {
           <span>📅 Step Template</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {totalDays > 0 && (
-              <span style={{ background: '#e3f0ff', color: '#0073ea', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
+              <span style={{ background: '#e3f0ff', color: '#9b72f5', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
                 {totalDays}d total
               </span>
             )}
             <button
               onClick={() => setShowTemplate(true)}
-              style={{ padding: '4px 12px', border: '1px solid #0073ea', color: '#0073ea', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: '#fff', fontWeight: 600 }}
+              style={{ padding: '4px 12px', border: '1px solid #9b72f5', color: '#9b72f5', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: '#fff', fontWeight: 600 }}
             >
               {steps.length ? 'Edit' : 'Configure'}
             </button>
@@ -801,7 +801,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: rule.is_active ? '#323338' : '#aaa' }}>{rule.rule_name}</div>
                     <div style={{ fontSize: 11, color: '#888', marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ background: '#e3f0ff', color: '#0073ea', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>
+                      <span style={{ background: '#e3f0ff', color: '#9b72f5', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>
                         WHEN {rule.trigger_type === 'date_entry'
                           ? `"${rule.trigger_column_title || `col #${rule.trigger_column_id}`}" entered`
                           : `Status → "${rule.trigger_status_to}"`}
@@ -819,7 +819,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
                         {rule.is_active ? 'On' : 'Off'}
                       </span>
                     </label>
-                    <button onClick={() => setEditRule(rule)} style={{ color: '#0073ea', fontSize: 12, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer' }}>Edit</button>
+                    <button onClick={() => setEditRule(rule)} style={{ color: '#9b72f5', fontSize: 12, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer' }}>Edit</button>
                     {confirmDel === rule.id ? (
                       <>
                         <button onClick={() => handleDeleteRule(rule.id)} style={{ background: '#e2445c', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', padding: '3px 8px', fontWeight: 600 }}>Delete</button>
@@ -969,12 +969,12 @@ export default function AutomationsPanel({
   // Tab bar styles
   const tabStyle = (active) => ({
     flex: 1, padding: '9px 4px', fontSize: 13, fontWeight: active ? 700 : 500,
-    color: active ? '#0073ea' : '#676879',
-    borderBottom: active ? '2.5px solid #0073ea' : '2.5px solid transparent',
+    color: active ? '#9b72f5' : '#676879',
+    borderBottom: active ? '2.5px solid #9b72f5' : '2.5px solid transparent',
     background: 'none', border: 'none',
     borderBottomWidth: 2.5,
     borderBottomStyle: 'solid',
-    borderBottomColor: active ? '#0073ea' : 'transparent',
+    borderBottomColor: active ? '#9b72f5' : 'transparent',
     cursor: 'pointer', transition: 'color 0.15s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
   });
@@ -984,12 +984,12 @@ export default function AutomationsPanel({
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 400,
       display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
     }} onClick={onClose}>
-      <div className="wb-side-panel" onClick={e => e.stopPropagation()} style={{
-        background: '#fff', width: 520, height: '100vh',
+      <div className="wb-side-panel automations-panel" onClick={e => e.stopPropagation()} style={{
+        background: 'var(--card-bg, #fff)', width: 520, height: '100vh',
         boxShadow: '-4px 0 24px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
-        <div style={{ padding: '20px 20px 0', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
+        <div style={{ padding: '20px 20px 0', borderBottom: '1px solid var(--border-color, #f0f0f0)', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>⚡ Automations</h2>
@@ -1026,7 +1026,7 @@ export default function AutomationsPanel({
 
               <button
                 onClick={() => { setShowForm(true); setEditingId(null); }}
-                style={{ width: '100%', padding: 10, background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, marginBottom: 16, fontSize: 14, cursor: 'pointer' }}
+                style={{ width: '100%', padding: 10, background: '#9b72f5', color: '#fff', borderRadius: 8, fontWeight: 700, marginBottom: 16, fontSize: 14, cursor: 'pointer' }}
               >
                 + Add Automation
               </button>
@@ -1070,13 +1070,13 @@ export default function AutomationsPanel({
                   />
                 ) : (
                   <div key={auto.id} style={{
-                    border: `1.5px solid ${auto.enabled ? '#e0e0e0' : '#f0f0f0'}`,
+                    border: `1.5px solid ${auto.enabled ? 'var(--border-color, #e0e0e0)' : 'var(--border-color, #f0f0f0)'}`,
                     borderRadius: 10, padding: '12px 14px', marginBottom: 10,
-                    background: auto.enabled ? '#fff' : '#fafafa',
+                    background: auto.enabled ? 'var(--bg-primary, #fff)' : 'rgba(255,255,255,0.04)',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: auto.enabled ? '#323338' : '#aaa' }}>{auto.name}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: auto.enabled ? 'var(--text-primary, #323338)' : 'var(--text-muted, #aaa)' }}>{auto.name}</div>
                         <Summary auto={auto} columns={columns} groups={groups} />
                       </div>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
@@ -1084,7 +1084,7 @@ export default function AutomationsPanel({
                           <input type="checkbox" checked={auto.enabled} onChange={() => handleToggle(auto)} style={{ accentColor: '#00c875', cursor: 'pointer' }} />
                           <span style={{ color: auto.enabled ? '#037f4c' : '#aaa', fontWeight: 600 }}>{auto.enabled ? 'On' : 'Off'}</span>
                         </label>
-                        <button onClick={() => { setEditingId(auto.id); setShowForm(false); }} style={{ color: '#0073ea', fontSize: 12, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer' }}>Edit</button>
+                        <button onClick={() => { setEditingId(auto.id); setShowForm(false); }} style={{ color: '#9b72f5', fontSize: 12, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer' }}>Edit</button>
                         <button onClick={() => handleDelete(auto.id)} style={{ color: '#e2445c', fontSize: 12, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer' }}>Delete</button>
                       </div>
                     </div>

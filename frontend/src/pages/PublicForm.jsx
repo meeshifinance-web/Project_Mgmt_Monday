@@ -218,9 +218,9 @@ function FieldInput({ field, value, onChange, error, accentColor }) {
     case 'color_picker':
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <input type="color" value={value || '#0073ea'} onChange={e => onChange(e.target.value)}
+          <input type="color" value={value || '#9b72f5'} onChange={e => onChange(e.target.value)}
             style={{ width: 52, height: 42, border: baseInput.border, borderRadius: 8, cursor: 'pointer', padding: 3 }} />
-          <span style={{ fontSize: 13, color: '#555', fontFamily: 'monospace' }}>{value || '#0073ea'}</span>
+          <span style={{ fontSize: 13, color: '#555', fontFamily: 'monospace' }}>{value || '#9b72f5'}</span>
         </div>
       );
 
@@ -309,7 +309,7 @@ export default function PublicForm() {
     setStatus('ready');
   };
 
-  const accentColor = form?.cover_color || '#0073ea';
+  const accentColor = form?.cover_color || '#9b72f5';
 
   // ── Loading ──
   if (status === 'loading') {

@@ -42,7 +42,7 @@ function TrashEntry({ entry, type, onRestore, onDelete }) {
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
               background: isBoard ? '#e3f0ff' : '#fff8e1',
-              color:      isBoard ? '#0073ea' : '#b05e00',
+              color:      isBoard ? '#9b72f5' : '#b05e00',
               textTransform: 'uppercase', letterSpacing: 0.4,
             }}>{typeLabel}</span>
             <span style={{
@@ -61,7 +61,7 @@ function TrashEntry({ entry, type, onRestore, onDelete }) {
               {' · '}{formatDate(entry.deleted_at)}
             </div>
             {!isBoard && Array.isArray(entry.board_ids_snapshot) && entry.board_ids_snapshot.length > 0 && (
-              <div style={{ color: '#0073ea' }}>
+              <div style={{ color: '#9b72f5' }}>
                 {entry.board_ids_snapshot.length} board{entry.board_ids_snapshot.length > 1 ? 's' : ''} will be re-filed on restore
               </div>
             )}
@@ -72,7 +72,7 @@ function TrashEntry({ entry, type, onRestore, onDelete }) {
         <span style={{
           fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 12,
           background: urgent ? '#ffe8ec' : '#f0f6ff',
-          color:      urgent ? '#e2445c' : '#0073ea',
+          color:      urgent ? '#e2445c' : '#9b72f5',
           flexShrink: 0, whiteSpace: 'nowrap',
         }}>{left}d left</span>
       </div>
@@ -232,8 +232,8 @@ export default function GlobalTrashPanel({ onClose, onBoardRestored, onFolderRes
               onClick={() => setTab(key)}
               style={{
                 flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 600,
-                color: tab === key ? '#0073ea' : '#676879',
-                borderBottom: tab === key ? '2px solid #0073ea' : '2px solid transparent',
+                color: tab === key ? '#9b72f5' : '#676879',
+                borderBottom: tab === key ? '2px solid #9b72f5' : '2px solid transparent',
                 transition: 'color 0.15s',
               }}
             >{label}</button>

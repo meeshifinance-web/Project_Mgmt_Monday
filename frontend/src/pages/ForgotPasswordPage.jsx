@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
               If <strong>{email}</strong> is registered, you'll receive a reset link shortly.<br />
               (If email is not configured, check the backend console for the link.)
             </p>
-            <Link to="/login" style={{ color: '#0073ea', fontWeight: 600, textDecoration: 'none' }}>← Back to Login</Link>
+            <Link to="/login" style={{ color: '#9b72f5', fontWeight: 600, textDecoration: 'none' }}>← Back to Login</Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
@@ -47,18 +47,18 @@ export default function ForgotPasswordPage() {
               <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 6 }}>Email</span>
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="you@ddecor.com" required autoFocus
+                placeholder="" required autoFocus
                 style={{ width: '100%', border: '1.5px solid #ddd', borderRadius: 8, padding: '10px 12px', fontSize: 14, outline: 'none' }}
               />
             </label>
             <button type="submit" disabled={loading} style={{
-              width: '100%', padding: '11px', background: '#0073ea', color: '#fff',
+              width: '100%', padding: '11px', background: 'linear-gradient(90deg, #c9b4ff 0%, #d99fe0 50%, #f5c89a 100%)', color: '#fff',
               borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}>
               {loading ? 'Sending…' : 'Send Reset Link'}
             </button>
             <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13 }}>
-              <Link to="/login" style={{ color: '#0073ea', textDecoration: 'none' }}>← Back to Login</Link>
+              <Link to="/login" style={{ color: '#9b72f5', textDecoration: 'none' }}>← Back to Login</Link>
             </p>
           </form>
         )}

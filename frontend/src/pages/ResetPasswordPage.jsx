@@ -19,7 +19,7 @@ export default function ResetPasswordPage() {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
           <p style={{ color: '#e2445c', fontWeight: 600 }}>Invalid reset link</p>
-          <Link to="/login" style={{ color: '#0073ea', marginTop: 16, display: 'block' }}>Back to Login</Link>
+          <Link to="/login" style={{ color: '#9b72f5', marginTop: 16, display: 'block' }}>Back to Login</Link>
         </div>
       </div>
     );
@@ -72,7 +72,7 @@ export default function ResetPasswordPage() {
               </label>
             ))}
             <button type="submit" disabled={loading} style={{
-              width: '100%', padding: '11px', background: '#0073ea', color: '#fff',
+              width: '100%', padding: '11px', background: '#9b72f5', color: '#fff',
               borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 4,
             }}>
               {loading ? 'Resetting…' : 'Set New Password'}

@@ -78,8 +78,8 @@ function DefaultInput({ col, value, onChange }) {
           style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '4px 0' }}
         >
           <div style={{
-            width: 22, height: 22, borderRadius: 5, border: `2px solid ${value === 'true' ? '#0073ea' : '#c4c4c4'}`,
-            background: value === 'true' ? '#0073ea' : '#fff',
+            width: 22, height: 22, borderRadius: 5, border: `2px solid ${value === 'true' ? '#9b72f5' : '#c4c4c4'}`,
+            background: value === 'true' ? '#9b72f5' : '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all 0.15s', flexShrink: 0,
           }}>
@@ -121,7 +121,7 @@ function DefaultInput({ col, value, onChange }) {
           type="number" value={value} onChange={e => onChange(e.target.value)}
           placeholder="e.g. 0"
           style={{ width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 6, padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-          onFocus={e => e.target.style.borderColor = '#0073ea'}
+          onFocus={e => e.target.style.borderColor = '#9b72f5'}
           onBlur={e => e.target.style.borderColor = '#e0e0e0'}
         />
       );
@@ -133,12 +133,12 @@ function DefaultInput({ col, value, onChange }) {
             type="number" min="0" max="100" value={value} onChange={e => onChange(e.target.value)}
             placeholder="0 – 100"
             style={{ width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 6, padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-            onFocus={e => e.target.style.borderColor = '#0073ea'}
+            onFocus={e => e.target.style.borderColor = '#9b72f5'}
             onBlur={e => e.target.style.borderColor = '#e0e0e0'}
           />
           {value !== '' && (
             <div style={{ marginTop: 6, background: '#e0e0e0', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-              <div style={{ width: `${Math.min(100, Math.max(0, parseInt(value) || 0))}%`, height: '100%', background: '#0073ea', borderRadius: 4, transition: 'width 0.2s' }} />
+              <div style={{ width: `${Math.min(100, Math.max(0, parseInt(value) || 0))}%`, height: '100%', background: '#9b72f5', borderRadius: 4, transition: 'width 0.2s' }} />
             </div>
           )}
         </div>
@@ -149,7 +149,7 @@ function DefaultInput({ col, value, onChange }) {
         <input
           type="date" value={value} onChange={e => onChange(e.target.value)}
           style={{ width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 6, padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-          onFocus={e => e.target.style.borderColor = '#0073ea'}
+          onFocus={e => e.target.style.borderColor = '#9b72f5'}
           onBlur={e => e.target.style.borderColor = '#e0e0e0'}
         />
       );
@@ -158,10 +158,10 @@ function DefaultInput({ col, value, onChange }) {
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <input
-            type="color" value={value || '#0073ea'} onChange={e => onChange(e.target.value)}
+            type="color" value={value || '#9b72f5'} onChange={e => onChange(e.target.value)}
             style={{ width: 40, height: 32, border: 'none', padding: 0, cursor: 'pointer', background: 'none' }}
           />
-          <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace' }}>{value || '#0073ea'}</span>
+          <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace' }}>{value || '#9b72f5'}</span>
         </div>
       );
 
@@ -172,7 +172,7 @@ function DefaultInput({ col, value, onChange }) {
           type="text" value={value} onChange={e => onChange(e.target.value)}
           placeholder="Enter default value…"
           style={{ width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 6, padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-          onFocus={e => e.target.style.borderColor = '#0073ea'}
+          onFocus={e => e.target.style.borderColor = '#9b72f5'}
           onBlur={e => e.target.style.borderColor = '#e0e0e0'}
         />
       );
@@ -239,7 +239,7 @@ export default function DefaultValueEditor({ col, anchorRect, onSave, onClose })
               )}
               <button
                 onClick={() => onSave(draft)}
-                style={{ flex: 2, padding: '6px 0', background: '#0073ea', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                style={{ flex: 2, padding: '6px 0', background: '#9b72f5', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
               >Save Default</button>
             </div>
           </>

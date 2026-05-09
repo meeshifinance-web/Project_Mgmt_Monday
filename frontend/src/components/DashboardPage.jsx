@@ -54,21 +54,21 @@ function FiltersBar({ filters, onChange, boards, onExport, isManager, onAdd, wid
       minHeight: 52,
     }}>
       <button onClick={() => setOpen(!open)}
-        style={{ padding: '6px 12px', border: `1.5px solid ${active ? '#0073ea' : '#e6e9ef'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, background: active ? '#e8f0fe' : 'transparent', color: active ? '#0073ea' : '#676879', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+        style={{ padding: '6px 12px', border: `1.5px solid ${active ? '#9b72f5' : 'var(--border-color,#e6e9ef)'}`, borderRadius: 7, fontSize: 12, fontWeight: 600, background: active ? 'rgba(155,114,245,0.18)' : 'transparent', color: active ? '#9b72f5' : 'var(--text-secondary,#676879)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
         🎚 Filters{active && ' •'}
       </button>
       {open && (
         <>
-          <input type="date" value={filters.dateFrom || ''} onChange={e => onChange({ ...filters, dateFrom: e.target.value })} style={{ padding: '5px 8px', border: '1px solid #e6e9ef', borderRadius: 6, fontSize: 12 }} />
-          <span style={{ fontSize: 12, color: '#9699a6' }}>→</span>
-          <input type="date" value={filters.dateTo || ''} onChange={e => onChange({ ...filters, dateTo: e.target.value })} style={{ padding: '5px 8px', border: '1px solid #e6e9ef', borderRadius: 6, fontSize: 12 }} />
+          <input type="date" value={filters.dateFrom || ''} onChange={e => onChange({ ...filters, dateFrom: e.target.value })} style={{ padding: '5px 8px', border: '1px solid var(--border-color,#e6e9ef)', borderRadius: 6, fontSize: 12, background: 'var(--input-bg,#fff)', color: 'var(--text-primary,#323338)' }} />
+          <span style={{ fontSize: 12, color: 'var(--text-muted,#9699a6)' }}>→</span>
+          <input type="date" value={filters.dateTo || ''} onChange={e => onChange({ ...filters, dateTo: e.target.value })} style={{ padding: '5px 8px', border: '1px solid var(--border-color,#e6e9ef)', borderRadius: 6, fontSize: 12, background: 'var(--input-bg,#fff)', color: 'var(--text-primary,#323338)' }} />
           {active && <button onClick={() => onChange({})} style={{ padding: '5px 10px', background: 'transparent', border: 'none', color: '#e2445c', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>Clear</button>}
         </>
       )}
       <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: '#9699a6' }}>{widgetsCount} widget{widgetsCount !== 1 ? 's' : ''}</span>
-        <button onClick={onExport} title="Print / Export" style={{ padding: '6px 12px', border: '1px solid #e6e9ef', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: '#676879' }}>🖨 Export</button>
-        {isManager && <button onClick={onAdd} style={{ padding: '7px 16px', background: '#0073ea', color: '#fff', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+ Add Widget</button>}
+        <span style={{ fontSize: 12, color: 'var(--text-muted,#9699a6)' }}>{widgetsCount} widget{widgetsCount !== 1 ? 's' : ''}</span>
+        <button onClick={onExport} title="Print / Export" style={{ padding: '6px 12px', border: '1px solid var(--border-color,#e6e9ef)', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: 'var(--text-secondary,#676879)' }}>🖨 Export</button>
+        {isManager && <button onClick={onAdd} style={{ padding: '7px 16px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+ Add Widget</button>}
       </div>
     </div>
   );
@@ -111,17 +111,17 @@ function WidgetModal({ initial, boards, boardDataCache, onFetchBoard, onSave, on
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: '100%', maxWidth: 720, background: 'var(--card-bg,#fff)', borderRadius: 14, boxShadow: '0 16px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '90vh' }}>
-        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #e6e9ef', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ width: '100%', maxWidth: 720, background: 'var(--card-bg,#fff)', color: 'var(--text-primary,#323338)', border: '1px solid var(--border-color,#e6e9ef)', borderRadius: 14, boxShadow: '0 16px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '90vh' }}>
+        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border-color,#e6e9ef)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#323338', margin: 0 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary,#323338)', margin: 0 }}>
               {isEdit ? 'Configure Widget' : step === 'type' ? `Add Widget — choose from ${Object.keys(WIDGETS).length} types` : `Configure: ${def?.label}`}
             </h3>
             {!isEdit && step === 'config' && (
-              <button onClick={() => setStep('type')} style={{ fontSize: 12, color: '#0073ea', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 2 }}>← Back</button>
+              <button onClick={() => setStep('type')} style={{ fontSize: 12, color: '#9b72f5', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 2 }}>← Back</button>
             )}
           </div>
-          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', background: '#f0f0f0', color: '#676879', fontSize: 16, cursor: 'pointer' }}>×</button>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', border: 'none', background: 'var(--sidebar-btn-bg, rgba(255,255,255,0.10))', color: 'var(--text-primary,#676879)', fontSize: 20, fontWeight: 800, cursor: 'pointer' }}>×</button>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px' }}>
@@ -131,18 +131,18 @@ function WidgetModal({ initial, boards, boardDataCache, onFetchBoard, onSave, on
                 style={{ ...selectStyle, marginBottom: 14, fontSize: 14, padding: '10px 12px' }} />
               {filteredCats.map(cat => (
                 <div key={cat.name} style={{ marginBottom: 18 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#9699a6', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>{cat.name}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted,#9699a6)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>{cat.name}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                     {cat.types.map(t => {
                       const w = WIDGETS[t];
                       return (
                         <div key={t} onClick={() => { setSelectedType(t); setWidth(w.defaultW || 6); setConfig({}); setTitle(''); setStep('config'); }}
-                          style={{ padding: '12px 14px', borderRadius: 10, border: '2px solid #e6e9ef', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4, transition: 'all 0.15s', minHeight: 90 }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#0073ea'; e.currentTarget.style.background = '#f0f6ff'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e6e9ef'; e.currentTarget.style.background = 'transparent'; }}>
+                          style={{ padding: '12px 14px', borderRadius: 8, border: '1.5px solid var(--border-color,#e6e9ef)', background: 'var(--bg-primary,transparent)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4, transition: 'all 0.15s', minHeight: 90 }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = '#9b72f5'; e.currentTarget.style.background = 'var(--hover-bg, rgba(155,114,245,0.10))'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-color,#e6e9ef)'; e.currentTarget.style.background = 'var(--bg-primary,transparent)'; }}>
                           <span style={{ fontSize: 22 }}>{w.icon}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#323338' }}>{w.label}</span>
-                          <span style={{ fontSize: 10, color: '#9699a6', lineHeight: 1.4 }}>{w.desc}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary,#323338)' }}>{w.label}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted,#9699a6)', lineHeight: 1.4 }}>{w.desc}</span>
                         </div>
                       );
                     })}
@@ -159,7 +159,7 @@ function WidgetModal({ initial, boards, boardDataCache, onFetchBoard, onSave, on
                 <div style={{ display: 'flex', gap: 6 }}>
                   {[[4,'Narrow (1/3)'],[6,'Half (1/2)'],[8,'Wide (2/3)'],[12,'Full']].map(([w, l]) => (
                     <button key={w} onClick={() => setWidth(w)}
-                      style={{ flex: 1, padding: '6px 4px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `2px solid ${width === w ? '#0073ea' : '#e6e9ef'}`, background: width === w ? '#e8f0fe' : 'transparent', color: width === w ? '#0073ea' : '#676879' }}>
+                      style={{ flex: 1, padding: '6px 4px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${width === w ? '#9b72f5' : 'var(--border-color,#e6e9ef)'}`, background: width === w ? 'rgba(155,114,245,0.18)' : 'transparent', color: width === w ? '#9b72f5' : 'var(--text-secondary,#676879)' }}>
                       {l}
                     </button>
                   ))}
@@ -171,9 +171,9 @@ function WidgetModal({ initial, boards, boardDataCache, onFetchBoard, onSave, on
         </div>
 
         {step === 'config' && (
-          <div style={{ padding: '14px 20px', borderTop: '1px solid #e6e9ef', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid #e6e9ef', background: 'transparent', color: '#676879', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: '#0073ea', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color,#e6e9ef)', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 7, border: '1px solid var(--border-color,#e6e9ef)', background: 'transparent', color: 'var(--text-secondary,#676879)', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={handleSave} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: '#9b72f5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
               {isEdit ? 'Update Widget' : 'Add Widget'}
             </button>
           </div>
@@ -325,7 +325,7 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
 
   const renderWidget = (widget) => {
     const def = WIDGETS[widget.type];
-    if (!def) return <div style={{ padding: 20, color: '#9699a6', fontSize: 12 }}>Unknown widget type: {widget.type}</div>;
+    if (!def) return <div style={{ padding: 20, color: 'var(--text-muted,#9699a6)', fontSize: 12 }}>Unknown widget type: {widget.type}</div>;
     const cfg = widget.config || {};
     const bd = boardDataCache[cfg.board_id];
     const View = def.View;
@@ -350,10 +350,10 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
         {editingName ? (
           <input autoFocus value={dashName} onChange={e => setDashName(e.target.value)} onBlur={handleSaveName}
             onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setDashName(dashboard?.name || ''); setEditingName(false); } }}
-            style={{ fontSize: 18, fontWeight: 700, border: '2px solid #0073ea', borderRadius: 6, padding: '2px 8px', outline: 'none', background: 'transparent', color: '#323338', minWidth: 200 }} />
+            style={{ fontSize: 18, fontWeight: 700, border: '2px solid #9b72f5', borderRadius: 6, padding: '2px 8px', outline: 'none', background: 'transparent', color: 'var(--text-primary,#323338)', minWidth: 200 }} />
         ) : (
           <h2 onClick={() => isManager && setEditingName(true)} title={isManager ? 'Click to rename' : undefined}
-            style={{ fontSize: 18, fontWeight: 700, color: '#323338', margin: 0, cursor: isManager ? 'pointer' : 'default' }}>
+            style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary,#323338)', margin: 0, cursor: isManager ? 'pointer' : 'default' }}>
             {dashName}
           </h2>
         )}
@@ -370,15 +370,15 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
         {loadingWidgets ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 16 }}>
             {[6,4,6,12,4,8].map((w, i) => (
-              <div key={i} style={{ gridColumn: `span ${w}`, height: 200, borderRadius: 12, background: 'linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)', backgroundSize: '400% 100%', animation: 'shimmer 1.4s ease-in-out infinite' }} />
+              <div key={i} style={{ gridColumn: `span ${w}`, height: 200, borderRadius: 12, background: 'linear-gradient(90deg,var(--bg-primary) 25%,var(--hover-bg) 50%,var(--bg-primary) 75%)', backgroundSize: '400% 100%', animation: 'shimmer 1.4s ease-in-out infinite' }} />
             ))}
           </div>
         ) : widgets.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', gap: 16, textAlign: 'center' }}>
             <span style={{ fontSize: 56 }}>📊</span>
-            <h3 style={{ fontSize: 20, fontWeight: 700, color: '#323338', margin: 0 }}>Your dashboard is empty</h3>
-            <p style={{ fontSize: 13, color: '#9699a6', margin: 0 }}>Choose from {Object.keys(WIDGETS).length}+ widget types to visualize your data</p>
-            {isManager && <button onClick={() => setShowAddModal(true)} style={{ padding: '10px 24px', background: '#0073ea', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>+ Add Your First Widget</button>}
+            <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary,#323338)', margin: 0 }}>Your dashboard is empty</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-muted,#9699a6)', margin: 0 }}>Choose from {Object.keys(WIDGETS).length}+ widget types to visualize your data</p>
+            {isManager && <button onClick={() => setShowAddModal(true)} style={{ padding: '10px 24px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>+ Add Your First Widget</button>}
           </div>
         ) : (
           <ResponsiveGridLayout
@@ -425,7 +425,7 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
 
       <style>{`
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .dashboard-rgl .react-grid-placeholder { background: #0073ea !important; opacity: 0.18 !important; border-radius: 12px !important; }
+        .dashboard-rgl .react-grid-placeholder { background: #9b72f5 !important; opacity: 0.18 !important; border-radius: 12px !important; }
         .dashboard-rgl .react-resizable-handle { background-image: none; }
         .dashboard-rgl .react-resizable-handle::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px; border-right: 2px solid #c5c7d0; border-bottom: 2px solid #c5c7d0; border-bottom-right-radius: 2px; }
         .dashboard-rgl .widget-drag-handle:active { cursor: grabbing; }

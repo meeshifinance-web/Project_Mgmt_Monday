@@ -23,7 +23,7 @@ function fmtNum(n) {
 }
 
 const SCOPE_STYLE = {
-  read:  { bg: '#e8f4ff', color: '#0073ea' },
+  read:  { bg: '#e8f4ff', color: '#9b72f5' },
   write: { bg: '#fff8e6', color: '#fdab3d' },
   full:  { bg: '#e8fff4', color: '#00c875' },
 };
@@ -90,8 +90,8 @@ function GenerateModal({ boards, onClose, onGenerated }) {
     >
       <div style={{
         width: 16, height: 16, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-        border: `2px solid ${form.scope === value ? '#0073ea' : '#c5c7d4'}`,
-        background: form.scope === value ? '#0073ea' : 'transparent',
+        border: `2px solid ${form.scope === value ? '#9b72f5' : '#c5c7d4'}`,
+        background: form.scope === value ? '#9b72f5' : 'transparent',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {form.scope === value && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
@@ -136,7 +136,7 @@ function GenerateModal({ boards, onClose, onGenerated }) {
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 style={inp}
-                onFocus={e => e.currentTarget.style.borderColor = '#0073ea'}
+                onFocus={e => e.currentTarget.style.borderColor = '#9b72f5'}
                 onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
               />
             </div>
@@ -157,8 +157,8 @@ function GenerateModal({ boards, onClose, onGenerated }) {
                 onClick={() => setForm(f => ({ ...f, allBoards: true, board_ids: [] }))}>
                 <div style={{
                   width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                  border: `2px solid ${form.allBoards ? '#0073ea' : '#c5c7d4'}`,
-                  background: form.allBoards ? '#0073ea' : 'transparent',
+                  border: `2px solid ${form.allBoards ? '#9b72f5' : '#c5c7d4'}`,
+                  background: form.allBoards ? '#9b72f5' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {form.allBoards && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
@@ -170,8 +170,8 @@ function GenerateModal({ boards, onClose, onGenerated }) {
                 onClick={() => setForm(f => ({ ...f, allBoards: false }))}>
                 <div style={{
                   width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                  border: `2px solid ${!form.allBoards ? '#0073ea' : '#c5c7d4'}`,
-                  background: !form.allBoards ? '#0073ea' : 'transparent',
+                  border: `2px solid ${!form.allBoards ? '#9b72f5' : '#c5c7d4'}`,
+                  background: !form.allBoards ? '#9b72f5' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {!form.allBoards && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
@@ -194,8 +194,8 @@ function GenerateModal({ boards, onClose, onGenerated }) {
                     >
                       <div style={{
                         width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                        border: `2px solid ${form.board_ids.includes(b.id) ? '#0073ea' : '#c5c7d4'}`,
-                        background: form.board_ids.includes(b.id) ? '#0073ea' : 'transparent',
+                        border: `2px solid ${form.board_ids.includes(b.id) ? '#9b72f5' : '#c5c7d4'}`,
+                        background: form.board_ids.includes(b.id) ? '#9b72f5' : 'transparent',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
                         {form.board_ids.includes(b.id) && <span style={{ color: '#fff', fontSize: 10, fontWeight: 700 }}>✓</span>}
@@ -220,7 +220,7 @@ function GenerateModal({ boards, onClose, onGenerated }) {
               Cancel
             </button>
             <button type="submit" disabled={loading || !form.name.trim()}
-              style={{ padding: '8px 18px', borderRadius: 6, fontWeight: 600, fontSize: 13, border: 'none', background: loading || !form.name.trim() ? '#a0c4f1' : '#0073ea', color: '#fff', cursor: loading || !form.name.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              style={{ padding: '8px 18px', borderRadius: 6, fontWeight: 600, fontSize: 13, border: 'none', background: loading || !form.name.trim() ? '#a0c4f1' : '#9b72f5', color: '#fff', cursor: loading || !form.name.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               {loading ? (
                 <><span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'akSpin 0.6s linear infinite' }} /> Generating…</>
               ) : 'Generate Key →'}
@@ -292,7 +292,7 @@ function KeyRevealModal({ keyData, boards, onClose }) {
                 onClick={copy}
                 style={{
                   flexShrink: 0, padding: '0 16px', borderRadius: 8, fontWeight: 600, fontSize: 12,
-                  border: 'none', background: copied ? '#00c875' : '#0073ea', color: '#fff',
+                  border: 'none', background: copied ? '#00c875' : '#9b72f5', color: '#fff',
                   cursor: 'pointer', transition: 'background 0.2s', whiteSpace: 'nowrap',
                 }}
               >
@@ -326,7 +326,7 @@ function KeyRevealModal({ keyData, boards, onClose }) {
             </button>
             {showExample && (
               <pre style={{ margin: 0, padding: '12px 14px', fontSize: 11, fontFamily: 'monospace', background: '#1e1e2e', color: '#cdd6f4', overflowX: 'auto', lineHeight: 1.6 }}>
-{`curl https://nocode.ddecor.com/api/boards \\
+{`curl https://api.simplix.app/api/boards \\
   -H "X-API-Key: ${keyData.raw_key}"`}
               </pre>
             )}
@@ -340,7 +340,7 @@ function KeyRevealModal({ keyData, boards, onClose }) {
             style={{
               padding: '9px 22px', borderRadius: 6, fontWeight: 600, fontSize: 13,
               border: 'none',
-              background: canClose ? '#0073ea' : '#a0c4f1',
+              background: canClose ? '#9b72f5' : '#a0c4f1',
               color: '#fff', cursor: canClose ? 'pointer' : 'not-allowed',
               transition: 'background 0.3s',
             }}
@@ -358,24 +358,24 @@ function KeyRevealModal({ keyData, boards, onClose }) {
 const EXAMPLES = [
   {
     title: 'Read all boards',
-    code: `curl https://nocode.ddecor.com/api/boards \\
+    code: `curl https://api.simplix.app/api/boards \\
   -H "X-API-Key: YOUR_KEY"`,
   },
   {
     title: 'Get board items',
-    code: `curl https://nocode.ddecor.com/api/boards/5 \\
+    code: `curl https://api.simplix.app/api/boards/5 \\
   -H "X-API-Key: YOUR_KEY"`,
   },
   {
     title: 'Create an item',
-    code: `curl -X POST https://nocode.ddecor.com/api/items \\
+    code: `curl -X POST https://api.simplix.app/api/items \\
   -H "X-API-Key: YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"group_id":12,"name":"New Task"}'`,
   },
   {
     title: 'Update a column value',
-    code: `curl -X POST https://nocode.ddecor.com/api/column-values/upsert \\
+    code: `curl -X POST https://api.simplix.app/api/column-values/upsert \\
   -H "X-API-Key: YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"item_id":123,"column_id":45,"value":"Done"}'`,
@@ -457,7 +457,7 @@ function RenameInput({ initialValue, onSave, onCancel }) {
       onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onCancel(); }}
       style={{
         fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-        border: '1.5px solid #0073ea', borderRadius: 5, padding: '2px 8px',
+        border: '1.5px solid #9b72f5', borderRadius: 5, padding: '2px 8px',
         outline: 'none', background: 'var(--input-bg)',
       }}
     />
@@ -551,7 +551,7 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 16 }}>
             <button
               onClick={() => setShowGenerate(true)}
-              style={{ padding: '8px 18px', borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none', background: '#0073ea', color: '#fff', cursor: 'pointer' }}
+              style={{ padding: '8px 18px', borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none', background: '#9b72f5', color: '#fff', cursor: 'pointer' }}
             >
               + Generate New Key
             </button>
@@ -570,7 +570,7 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
               <div style={{ fontSize: 13, marginBottom: 20 }}>Generate your first key to get started.</div>
               <button
                 onClick={() => setShowGenerate(true)}
-                style={{ padding: '9px 22px', borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none', background: '#0073ea', color: '#fff', cursor: 'pointer' }}
+                style={{ padding: '9px 22px', borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none', background: '#9b72f5', color: '#fff', cursor: 'pointer' }}
               >
                 Generate First Key
               </button>

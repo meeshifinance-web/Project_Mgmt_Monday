@@ -86,7 +86,7 @@ function ResultRow({ result, isActive, onActivate, onClick }) {
         // Use a translucent brand-blue overlay so the row reads as "active" in
         // both themes — solid colors only look right in one theme or the other.
         background: isActive ? 'rgba(0, 115, 234, 0.14)' : 'transparent',
-        borderLeft: `3px solid ${isActive ? '#0073ea' : 'transparent'}`,
+        borderLeft: `3px solid ${isActive ? '#9b72f5' : 'transparent'}`,
         color: 'var(--text-primary)',
       }}
     >

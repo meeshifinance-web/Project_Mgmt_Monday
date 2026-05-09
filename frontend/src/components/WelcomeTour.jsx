@@ -18,6 +18,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
+import { useThemeLogo } from '../hooks/useThemeLogo';
 
 const TOUR_KEY = 'wb_tour_seen';
 
@@ -56,6 +57,7 @@ const TIPS = [
 
 export default function WelcomeTour({ onDismiss, userName }) {
   const dismissBtnRef = useRef(null);
+  const { logoSrc, isDarkLogo } = useThemeLogo();
   useEffect(() => { dismissBtnRef.current?.focus(); }, []);
 
   // Esc closes the modal — separate from the global handlers so it works
@@ -101,12 +103,13 @@ export default function WelcomeTour({ onDismiss, userName }) {
       >
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 22 }}>
-          <div style={{
-            display: 'inline-block', background: '#0073ea',
-            color: '#fff', padding: '6px 14px', borderRadius: 6,
-            fontWeight: 800, fontSize: 12, letterSpacing: 1, marginBottom: 14,
-          }}>
-            TUESDAY.COM
+          <div style={{ marginBottom: 14 }}>
+            <img
+              className="theme-logo"
+              src={logoSrc}
+              alt="Simplix"
+              style={{ height: isDarkLogo ? 34 : 40, maxWidth: 160, objectFit: 'contain' }}
+            />
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', color: 'var(--text-primary)' }}>
             Welcome, {firstName} 👋
@@ -163,7 +166,7 @@ export default function WelcomeTour({ onDismiss, userName }) {
             ref={dismissBtnRef}
             onClick={handleDismiss}
             style={{
-              background: '#0073ea', color: '#fff',
+              background: '#9b72f5', color: '#fff',
               border: 'none', borderRadius: 8,
               padding: '10px 22px', fontSize: 13, fontWeight: 600,
               cursor: 'pointer',

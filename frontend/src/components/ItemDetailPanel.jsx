@@ -19,7 +19,7 @@ function nameInitials(name = '') {
 }
 
 function nameColor(name = '') {
-  const COLORS = ['#0073ea','#00c875','#fdab3d','#e2445c','#a25ddc','#037f4c','#ff5ac4','#784bd1'];
+  const COLORS = ['#9b72f5','#00c875','#fdab3d','#e2445c','#a25ddc','#037f4c','#ff5ac4','#784bd1'];
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
   return COLORS[Math.abs(h) % COLORS.length];
@@ -45,7 +45,7 @@ function CommentBody({ text }) {
     <span>
       {parts.map((part, i) =>
         /^@/.test(part)
-          ? <mark key={i} style={{ background: '#e8f4ff', color: '#0073ea', borderRadius: 3, padding: '1px 3px', fontWeight: 600, fontStyle: 'normal' }}>{part}</mark>
+          ? <mark key={i} style={{ background: '#e8f4ff', color: '#9b72f5', borderRadius: 3, padding: '1px 3px', fontWeight: 600, fontStyle: 'normal' }}>{part}</mark>
           : part
       )}
     </span>
@@ -73,7 +73,7 @@ function EditableName({ value, onSave }) {
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setDraft(value); } }}
-        style={{ fontSize: 20, fontWeight: 700, color: '#323338', border: 'none', borderBottom: '2px solid #0073ea', outline: 'none', background: 'transparent', width: '100%', padding: '2px 0' }}
+        style={{ fontSize: 20, fontWeight: 700, color: '#323338', border: 'none', borderBottom: '2px solid #9b72f5', outline: 'none', background: 'transparent', width: '100%', padding: '2px 0' }}
       />
     );
   }
@@ -174,7 +174,7 @@ function Composer({ members, onPost, placeholder = 'Write an update… (Ctrl+Ent
             fontFamily: 'inherit', color: '#323338', boxSizing: 'border-box',
             transition: 'border-color 0.15s',
           }}
-          onFocus={e => e.target.style.borderColor = '#0073ea'}
+          onFocus={e => e.target.style.borderColor = '#9b72f5'}
           onBlur={e => e.target.style.borderColor = '#e6e9ef'}
         />
 
@@ -215,7 +215,7 @@ function Composer({ members, onPost, placeholder = 'Write an update… (Ctrl+Ent
             onClick={handlePost}
             disabled={!body.trim() || posting}
             style={{
-              background: body.trim() ? '#0073ea' : '#c5c7d0',
+              background: body.trim() ? '#9b72f5' : '#c5c7d0',
               color: '#fff', borderRadius: 6, padding: '6px 16px',
               fontSize: 13, fontWeight: 600,
               cursor: body.trim() ? 'pointer' : 'default',
@@ -233,7 +233,7 @@ function Composer({ members, onPost, placeholder = 'Write an update… (Ctrl+Ent
 // ── Activity entry ────────────────────────────────────────────────────────────
 const ACTIVITY_ICONS = {
   item_created: { icon: '✚', color: '#00c875' },
-  item_renamed: { icon: '✎', color: '#0073ea' },
+  item_renamed: { icon: '✎', color: '#9b72f5' },
   value_changed: { icon: '↻', color: '#fdab3d' },
 };
 
@@ -323,7 +323,7 @@ function CommentEntry({ comment, replies = [], members, currentUserId, currentUs
 
       {/* Reply composer */}
       {showReply && (
-        <div style={{ marginLeft: 58, padding: '0 24px 12px 0', borderLeft: '2px solid #0073ea33' }}>
+        <div style={{ marginLeft: 58, padding: '0 24px 12px 0', borderLeft: '2px solid #9b72f533' }}>
           <div style={{ paddingLeft: 12 }}>
             <Composer
               members={members}
@@ -417,7 +417,7 @@ function EmailEntry({ email }) {
         <div style={{
           width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
           background: isIncoming ? '#e3f0ff' : '#e8f7ee',
-          color:      isIncoming ? '#0073ea' : '#037f4c',
+          color:      isIncoming ? '#9b72f5' : '#037f4c',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 16,
         }}>
@@ -431,7 +431,7 @@ function EmailEntry({ email }) {
               <span style={{
                 fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px',
                 background: isIncoming ? '#e3f0ff' : '#e8f7ee',
-                color:      isIncoming ? '#0073ea' : '#037f4c',
+                color:      isIncoming ? '#9b72f5' : '#037f4c',
                 letterSpacing: 0.5, textTransform: 'uppercase',
               }}>
                 {isIncoming ? 'Inbox' : 'Sent'}
@@ -483,7 +483,7 @@ function EmailEntry({ email }) {
                   onClick={() => setExpanded(s => !s)}
                   style={{
                     display: 'block', marginTop: 6,
-                    fontSize: 12, color: '#0073ea', fontWeight: 600, cursor: 'pointer',
+                    fontSize: 12, color: '#9b72f5', fontWeight: 600, cursor: 'pointer',
                   }}
                 >
                   {expanded ? '▲ Show less' : `▼ Show more (${bodyLines.length - 3} more line${bodyLines.length - 3 > 1 ? 's' : ''})`}
@@ -625,8 +625,8 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
             ].map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} style={{
                 padding: '7px 20px', fontSize: 13, fontWeight: 600,
-                color: tab === key ? '#0073ea' : '#676879',
-                borderBottom: tab === key ? '2px solid #0073ea' : '2px solid transparent',
+                color: tab === key ? '#9b72f5' : '#676879',
+                borderBottom: tab === key ? '2px solid #9b72f5' : '2px solid transparent',
                 transition: 'color 0.15s',
               }}>{label}</button>
             ))}

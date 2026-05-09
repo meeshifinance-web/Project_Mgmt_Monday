@@ -229,7 +229,7 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
             return (
               <div style={{ marginTop: 10, marginBottom: 4, padding: '7px 10px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: 11, color: '#676879', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>⚓ Anchor = your known date.</span>
-                <span style={{ color: '#0073ea' }}>← Backward fills {before} step{before !== 1 ? 's' : ''} before it</span>
+                <span style={{ color: '#9b72f5' }}>← Backward fills {before} step{before !== 1 ? 's' : ''} before it</span>
                 <span>·</span>
                 <span style={{ color: '#00c875' }}>→ Forward fills {after} step{after !== 1 ? 's' : ''} after it</span>
                 {before === 0 && <span style={{ color: '#fdab3d', fontWeight: 600 }}>⚠ Move ⚓ down for backward to work.</span>}
@@ -245,7 +245,7 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
               border: '1.5px dashed #c5c7d0', borderRadius: 6,
               color: '#676879', fontSize: 13, cursor: 'pointer', width: '100%',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#0073ea'; e.currentTarget.style.color = '#0073ea'; }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#9b72f5'; e.currentTarget.style.color = '#9b72f5'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = '#c5c7d0'; e.currentTarget.style.color = '#676879'; }}
           >
             + Add Step
@@ -265,7 +265,7 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
             <button
               onClick={handleSave}
               disabled={saving || loading}
-              style={{ padding: '7px 18px', background: '#0073ea', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (saving || loading) ? 0.7 : 1 }}
+              style={{ padding: '7px 18px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (saving || loading) ? 0.7 : 1 }}
             >
               {saving ? 'Saving…' : 'Save Template'}
             </button>

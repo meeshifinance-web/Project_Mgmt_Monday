@@ -9,13 +9,13 @@ import {
 
 const TABS = ['Profile', 'Security', 'Admin'];
 const ROLES = ['admin', 'manager', 'member', 'user'];
-const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', member: '#0073ea', user: '#888' };
+const ROLE_COLORS = { admin: '#e2445c', manager: '#fdab3d', member: '#9b72f5', user: 'var(--text-secondary,#888)' };
 const ROLE_LABELS = { admin: 'Admin', manager: 'Manager', member: 'Member', user: 'User (Read-only)' };
 
 function RoleBadge({ role }) {
   return (
     <span style={{
-      background: ROLE_COLORS[role] || '#ccc', color: '#fff',
+      background: ROLE_COLORS[role] || 'var(--text-muted,#ccc)', color: '#fff',
       borderRadius: 12, padding: '2px 10px', fontSize: 11, fontWeight: 700,
     }}>{ROLE_LABELS[role] || role}</span>
   );
@@ -26,7 +26,7 @@ function Avatar({ name, url, size = 48 }) {
   if (url) return <img src={url} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }} />;
   return (
     <div style={{
-      width: size, height: size, borderRadius: '50%', background: '#0073ea',
+      width: size, height: size, borderRadius: '50%', background: '#9b72f5',
       color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontWeight: 700, fontSize: size * 0.35,
     }}>{initials}</div>
@@ -226,25 +226,25 @@ export default function ProfilePage() {
   const visibleTabs = TABS.filter(t => t !== 'Admin' || isAdmin);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f0f2f5' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-secondary,#f0f2f5)', color: 'var(--text-primary,#323338)' }}>
       {/* Header */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e0e0e0', padding: '0 24px', height: 52, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button onClick={() => navigate('/')} style={{ color: '#0073ea', fontWeight: 600, fontSize: 13 }}>← Back to Board</button>
-        <span style={{ color: '#ccc' }}>|</span>
-        <span style={{ fontWeight: 700, fontSize: 16 }}>Profile & Settings</span>
+      <div style={{ background: 'var(--bg-primary,#fff)', borderBottom: '1px solid var(--border-color,#e0e0e0)', padding: '0 24px', height: 52, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={() => navigate('/')} style={{ color: '#9b72f5', fontWeight: 600, fontSize: 13 }}>← Back to Board</button>
+        <span style={{ color: 'var(--border-color,#ccc)' }}>|</span>
+        <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary,#111122)' }}>Profile & Settings</span>
       </div>
 
       <div style={{ maxWidth: 780, margin: '0 auto', padding: '32px 16px' }}>
         {/* User card */}
-        <div style={{ background: '#fff', borderRadius: 12, padding: 24, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <div style={{ background: 'var(--card-bg,#fff)', border: '1px solid var(--border-color,#e0e0e0)', borderRadius: 12, padding: 24, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, boxShadow: 'var(--shadow, 0 2px 8px rgba(0,0,0,0.06))' }}>
           <Avatar name={user?.name} url={user?.avatar_url} size={64} />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: '#1c1f3b' }}>{user?.name}</div>
-            <div style={{ color: '#888', fontSize: 13, marginBottom: 6 }}>{user?.email}</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--text-primary,#1c1f3b)' }}>{user?.name}</div>
+            <div style={{ color: 'var(--text-secondary,#888)', fontSize: 13, marginBottom: 6 }}>{user?.email}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <RoleBadge role={user?.role} />
-              {user?.is_sso && <span style={{ fontSize: 11, color: '#555', background: '#f0f0f0', borderRadius: 10, padding: '2px 8px' }}>Microsoft SSO</span>}
-              {user?.mfa_enabled && <span style={{ fontSize: 11, color: '#037f4c', background: '#e8f7ee', borderRadius: 10, padding: '2px 8px' }}>🔒 MFA On</span>}
+              {user?.is_sso && <span style={{ fontSize: 11, color: 'var(--text-secondary,#555)', background: 'var(--hover-bg,#f0f0f0)', borderRadius: 10, padding: '2px 8px' }}>Microsoft SSO</span>}
+              {user?.mfa_enabled && <span style={{ fontSize: 11, color: '#22c55e', background: 'rgba(34,197,94,0.16)', borderRadius: 10, padding: '2px 8px' }}>🔒 MFA On</span>}
             </div>
           </div>
           <button onClick={logout} style={{ marginLeft: 'auto', color: '#e2445c', fontWeight: 600, fontSize: 13, border: '1px solid #e2445c', borderRadius: 6, padding: '6px 14px' }}>
@@ -253,29 +253,29 @@ export default function ProfilePage() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, background: '#fff', borderRadius: 10, padding: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 0, background: 'var(--card-bg,#fff)', border: '1px solid var(--border-color,#e0e0e0)', borderRadius: 10, padding: 4, boxShadow: 'var(--shadow, 0 2px 8px rgba(0,0,0,0.06))', marginBottom: 24 }}>
           {visibleTabs.map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               flex: 1, padding: '8px 0', borderRadius: 8, fontWeight: 600, fontSize: 13,
-              background: tab === t ? '#0073ea' : 'transparent',
-              color: tab === t ? '#fff' : '#555',
+              background: tab === t ? '#9b72f5' : 'transparent',
+              color: tab === t ? '#fff' : 'var(--text-secondary,#555)',
             }}>{t}</button>
           ))}
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <div style={{ background: 'var(--card-bg,#fff)', border: '1px solid var(--border-color,#e0e0e0)', borderRadius: 12, padding: 28, boxShadow: 'var(--shadow, 0 2px 8px rgba(0,0,0,0.06))' }}>
           {/* ── Profile Tab ── */}
           {tab === 'Profile' && (
             <form onSubmit={saveProfile}>
-              <h3 style={{ marginBottom: 20, fontSize: 15, fontWeight: 700 }}>Personal Information</h3>
+              <h3 style={sectionTitleStyle}>Personal Information</h3>
               <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle}>Display Name</label>
                 <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} placeholder="Your name" />
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle}>Email</label>
-                <input value={user?.email} disabled style={{ ...inputStyle, background: '#f7f8fc', color: '#888', cursor: 'not-allowed' }} />
-                <p style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Email cannot be changed</p>
+                <input value={user?.email} disabled style={{ ...inputStyle, opacity: 0.72, cursor: 'not-allowed' }} />
+                <p style={{ fontSize: 11, color: 'var(--text-muted,#aaa)', marginTop: 4 }}>Email cannot be changed</p>
               </div>
               <div style={{ marginBottom: 24 }}>
                 <label style={labelStyle}>Avatar URL (optional)</label>
@@ -298,7 +298,7 @@ export default function ProfilePage() {
               {/* Change password */}
               {!user?.is_sso && (
                 <div style={{ marginBottom: 36 }}>
-                  <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 700 }}>Change Password</h3>
+                  <h3 style={{ ...sectionTitleStyle, marginBottom: 16 }}>Change Password</h3>
                   <form onSubmit={handleChangePassword}>
                     {[
                       { label: 'Current Password', val: curPwd, set: setCurPwd },
@@ -319,16 +319,16 @@ export default function ProfilePage() {
 
               {/* MFA section */}
               <div>
-                <h3 style={{ marginBottom: 4, fontSize: 15, fontWeight: 700 }}>Two-Factor Authentication (TOTP)</h3>
-                <p style={{ color: '#888', fontSize: 13, marginBottom: 16 }}>
+                <h3 style={{ ...sectionTitleStyle, marginBottom: 4 }}>Two-Factor Authentication (TOTP)</h3>
+                <p style={{ color: 'var(--text-secondary,#888)', fontSize: 13, marginBottom: 16 }}>
                   Use an authenticator app like Google Authenticator or Microsoft Authenticator.
                 </p>
 
                 {mfaEnabled ? (
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, background: '#e8f7ee', borderRadius: 8, padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, background: 'rgba(34,197,94,0.16)', borderRadius: 8, padding: '10px 14px' }}>
                       <span style={{ fontSize: 18 }}>🔒</span>
-                      <span style={{ fontWeight: 600, color: '#037f4c', fontSize: 13 }}>MFA is enabled on your account</span>
+                      <span style={{ fontWeight: 600, color: '#22c55e', fontSize: 13 }}>MFA is enabled on your account</span>
                     </div>
                     <form onSubmit={handleMfaDisable}>
                       {!user?.is_sso && (
@@ -344,12 +344,12 @@ export default function ProfilePage() {
                   </div>
                 ) : mfaQr ? (
                   <div>
-                    <p style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary,#555)', marginBottom: 12 }}>
                       Scan this QR code with your authenticator app, then enter the 6-digit code to confirm:
                     </p>
                     <img src={mfaQr.qrCode} alt="MFA QR" style={{ width: 180, marginBottom: 12, display: 'block' }} />
-                    <p style={{ fontSize: 11, color: '#888', marginBottom: 12 }}>
-                      Manual key: <code style={{ background: '#f0f0f0', padding: '2px 6px', borderRadius: 4 }}>{mfaQr.secret}</code>
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary,#888)', marginBottom: 12 }}>
+                      Manual key: <code style={{ background: 'var(--input-bg,#f0f0f0)', color: 'var(--text-primary,#323338)', padding: '2px 6px', borderRadius: 4 }}>{mfaQr.secret}</code>
                     </p>
                     <form onSubmit={handleMfaEnable} style={{ display: 'flex', gap: 8 }}>
                       <input
@@ -381,8 +381,8 @@ export default function ProfilePage() {
               else { setSortCol(col); setSortDir('asc'); }
             };
             const SortIcon = ({ col }) => {
-              if (sortCol !== col) return <span style={{ color: '#ccc', marginLeft: 4 }}>⇅</span>;
-              return <span style={{ color: '#0073ea', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+              if (sortCol !== col) return <span style={{ color: 'var(--text-muted,#ccc)', marginLeft: 4 }}>⇅</span>;
+              return <span style={{ color: '#9b72f5', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
             };
 
             // ── Filter + sort ─────────────────────────────────────────────────
@@ -418,18 +418,18 @@ export default function ProfilePage() {
             });
 
             const countCards = [
-              { label: 'Total', value: users.length, color: '#323338', bg: '#f5f6f8' },
-              { label: 'Admin', value: counts.admin, color: ROLE_COLORS.admin, bg: '#fff0f2' },
-              { label: 'Manager', value: counts.manager, color: ROLE_COLORS.manager, bg: '#fff8ed' },
-              { label: 'Member', value: counts.member, color: ROLE_COLORS.member, bg: '#e8f0fe' },
-              { label: 'Read-only', value: counts.user, color: '#888', bg: '#f5f6f8' },
-              { label: 'Active', value: counts.active, color: '#037f4c', bg: '#e8f7ee' },
-              { label: 'Inactive', value: counts.inactive, color: '#e2445c', bg: '#fff5f7' },
+              { label: 'Total', value: users.length, color: 'var(--text-primary,#323338)', bg: 'var(--bg-primary,#f5f6f8)' },
+              { label: 'Admin', value: counts.admin, color: ROLE_COLORS.admin, bg: 'rgba(226,68,92,0.14)' },
+              { label: 'Manager', value: counts.manager, color: ROLE_COLORS.manager, bg: 'rgba(253,171,61,0.14)' },
+              { label: 'Member', value: counts.member, color: ROLE_COLORS.member, bg: 'rgba(155,114,245,0.18)' },
+              { label: 'Read-only', value: counts.user, color: 'var(--text-secondary,#888)', bg: 'var(--bg-primary,#f5f6f8)' },
+              { label: 'Active', value: counts.active, color: '#22c55e', bg: 'rgba(34,197,94,0.16)' },
+              { label: 'Inactive', value: counts.inactive, color: '#e2445c', bg: 'rgba(226,68,92,0.14)' },
             ];
 
             const thStyle = {
               padding: '9px 10px', textAlign: 'left', fontWeight: 700,
-              color: '#555', fontSize: 11, cursor: 'pointer', userSelect: 'none',
+              color: 'var(--text-secondary,#555)', fontSize: 11, cursor: 'pointer', userSelect: 'none',
               whiteSpace: 'nowrap', letterSpacing: '0.3px',
             };
             const tdStyle = { padding: '9px 10px', verticalAlign: 'middle' };
@@ -438,10 +438,10 @@ export default function ProfilePage() {
               <div>
                 {/* Header row */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>User Management</h3>
+                  <h3 style={{ ...sectionTitleStyle, margin: 0 }}>User Management</h3>
                   <button
                     onClick={() => setShowCreateUser(v => !v)}
-                    style={{ padding: '7px 16px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 13 }}
+                    style={{ padding: '7px 16px', background: '#9b72f5', color: '#fff', borderRadius: 8, fontWeight: 600, fontSize: 13 }}
                   >
                     {showCreateUser ? '✕ Cancel' : '+ Create User'}
                   </button>
@@ -464,10 +464,10 @@ export default function ProfilePage() {
                 {/* ── Create user form ── */}
                 {showCreateUser && (
                   <form onSubmit={handleCreateUser} style={{
-                    background: '#f7f8fc', borderRadius: 10, padding: 20, marginBottom: 20,
-                    border: '1.5px solid #e0e0e0',
+                    background: 'var(--bg-primary,#f7f8fc)', borderRadius: 10, padding: 20, marginBottom: 20,
+                    border: '1.5px solid var(--border-color,#e0e0e0)',
                   }}>
-                    <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#323338' }}>New User Details</h4>
+                    <h4 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: 'var(--text-primary,#111122)' }}>New User Details</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                       <div>
                         <label style={labelStyle}>Full Name</label>
@@ -475,7 +475,7 @@ export default function ProfilePage() {
                       </div>
                       <div>
                         <label style={labelStyle}>Email</label>
-                        <input type="email" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} style={inputStyle} placeholder="priya@ddecor.com" required />
+                        <input type="email" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} style={inputStyle} placeholder="" required />
                       </div>
                       <div>
                         <label style={labelStyle}>Password (min 8 chars)</label>
@@ -500,9 +500,9 @@ export default function ProfilePage() {
                     value={userSearch}
                     onChange={e => setUserSearch(e.target.value)}
                     placeholder="🔍  Search name or email…"
-                    style={{ flex: 1, minWidth: 180, border: '1.5px solid #ddd', borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }}
-                    onFocus={e => e.target.style.borderColor = '#0073ea'}
-                    onBlur={e => e.target.style.borderColor = '#ddd'}
+                    style={{ flex: 1, minWidth: 180, border: '1.5px solid var(--border-color,#ddd)', borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none', background: 'var(--input-bg,#fff)', color: 'var(--text-primary,#323338)' }}
+                    onFocus={e => e.target.style.borderColor = '#9b72f5'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border-color,#ddd)'}
                   />
                   {[
                     { label: 'Role', value: filterRole, set: setFilterRole, options: [['all','All Roles'],['admin','Admin'],['manager','Manager'],['member','Member'],['user','Read-only']] },
@@ -513,7 +513,7 @@ export default function ProfilePage() {
                       key={f.label}
                       value={f.value}
                       onChange={e => f.set(e.target.value)}
-                      style={{ border: '1.5px solid #ddd', borderRadius: 7, padding: '6px 10px', fontSize: 13, cursor: 'pointer', background: f.value !== 'all' ? '#e8f0fe' : '#fff', color: f.value !== 'all' ? '#0073ea' : '#555', fontWeight: f.value !== 'all' ? 600 : 400 }}
+                      style={{ border: '1.5px solid var(--border-color,#ddd)', borderRadius: 7, padding: '6px 10px', fontSize: 13, cursor: 'pointer', background: f.value !== 'all' ? 'rgba(155,114,245,0.18)' : 'var(--input-bg,#fff)', color: f.value !== 'all' ? '#9b72f5' : 'var(--text-secondary,#555)', fontWeight: f.value !== 'all' ? 600 : 400 }}
                     >
                       {f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                     </select>
@@ -524,19 +524,19 @@ export default function ProfilePage() {
                       style={{ fontSize: 12, color: '#e2445c', fontWeight: 600, border: '1px solid #e2445c', borderRadius: 6, padding: '5px 10px' }}
                     >✕ Clear</button>
                   )}
-                  <span style={{ fontSize: 12, color: '#888', marginLeft: 'auto' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary,#888)', marginLeft: 'auto' }}>
                     {visible.length} of {users.length} user{users.length !== 1 ? 's' : ''}
                   </span>
                 </div>
 
                 {/* ── User table ── */}
                 {loadingUsers ? (
-                  <p style={{ color: '#888' }}>Loading…</p>
+                  <p style={{ color: 'var(--text-secondary,#888)' }}>Loading…</p>
                 ) : (
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                       <thead>
-                        <tr style={{ background: '#f7f8fc', borderBottom: '2px solid #e0e0e0' }}>
+                        <tr style={{ background: 'var(--bg-primary,#f7f8fc)', borderBottom: '2px solid var(--border-color,#e0e0e0)' }}>
                           <th style={thStyle} onClick={() => toggleSort('name')}>User <SortIcon col="name" /></th>
                           <th style={thStyle} onClick={() => toggleSort('role')}>Role <SortIcon col="role" /></th>
                           <th style={thStyle} onClick={() => toggleSort('type')}>Type <SortIcon col="type" /></th>
@@ -548,11 +548,11 @@ export default function ProfilePage() {
                       </thead>
                       <tbody>
                         {visible.length === 0 && (
-                          <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No users match the current filters</td></tr>
+                          <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted,#aaa)', fontSize: 13 }}>No users match the current filters</td></tr>
                         )}
                         {visible.map(u => (
-                          <tr key={u.id} style={{ borderBottom: '1px solid #f0f0f0' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#fafbff'}
+                          <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color,#f0f0f0)' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg, #fafbff)'}
                             onMouseLeave={e => e.currentTarget.style.background = ''}
                           >
                             {/* User */}
@@ -560,8 +560,8 @@ export default function ProfilePage() {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <Avatar name={u.name} url={u.avatar_url} size={32} />
                                 <div>
-                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name}{u.id === user?.id && <span style={{ fontSize: 10, color: '#888', marginLeft: 5 }}>(you)</span>}</div>
-                                  <div style={{ color: '#888', fontSize: 11 }}>{u.email}</div>
+                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name}{u.id === user?.id && <span style={{ fontSize: 10, color: 'var(--text-secondary,#888)', marginLeft: 5 }}>(you)</span>}</div>
+                                  <div style={{ color: 'var(--text-secondary,#888)', fontSize: 11 }}>{u.email}</div>
                                 </div>
                               </div>
                             </td>
@@ -574,7 +574,7 @@ export default function ProfilePage() {
                                 <select
                                   value={u.role}
                                   onChange={e => handleRoleChange(u.id, e.target.value)}
-                                  style={{ border: '1px solid #ddd', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer' }}
+                                  style={{ border: '1px solid var(--border-color,#ddd)', borderRadius: 6, padding: '4px 8px', fontSize: 12, cursor: 'pointer', background: 'var(--input-bg,#fff)', color: 'var(--text-primary,#323338)' }}
                                 >
                                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                                 </select>
@@ -583,13 +583,13 @@ export default function ProfilePage() {
 
                             {/* Type */}
                             <td style={tdStyle}>
-                              <span style={{ fontSize: 11, color: '#555', background: '#f0f0f0', borderRadius: 10, padding: '2px 8px' }}>
+                              <span style={{ fontSize: 11, color: 'var(--text-secondary,#555)', background: 'var(--hover-bg,#f0f0f0)', borderRadius: 10, padding: '2px 8px' }}>
                                 {u.is_sso ? '🟦 Microsoft' : '📧 Email'}
                               </span>
                             </td>
 
                             {/* Created */}
-                            <td style={{ ...tdStyle, color: '#666', fontSize: 12, whiteSpace: 'nowrap' }}>
+                            <td style={{ ...tdStyle, color: 'var(--text-secondary,#666)', fontSize: 12, whiteSpace: 'nowrap' }}>
                               {fmtDate(u.created_at)}
                             </td>
 
@@ -597,11 +597,11 @@ export default function ProfilePage() {
                             <td style={{ ...tdStyle, fontSize: 12, whiteSpace: 'nowrap' }}>
                               {u.last_login ? (
                                 <div>
-                                  <div style={{ color: '#323338', fontWeight: 500 }}>{fmtDate(u.last_login)}</div>
-                                  <div style={{ color: '#888', fontSize: 11 }}>{new Date(u.last_login).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
+                                  <div style={{ color: 'var(--text-primary,#323338)', fontWeight: 500 }}>{fmtDate(u.last_login)}</div>
+                                  <div style={{ color: 'var(--text-secondary,#888)', fontSize: 11 }}>{new Date(u.last_login).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
                                 </div>
                               ) : (
-                                <span style={{ color: '#ccc' }}>Never</span>
+                                <span style={{ color: 'var(--text-muted,#ccc)' }}>Never</span>
                               )}
                             </td>
 
@@ -612,15 +612,15 @@ export default function ProfilePage() {
                                   onClick={() => handleToggleActive(u)}
                                   style={{
                                     fontSize: 11, fontWeight: 600, borderRadius: 10, padding: '3px 10px', cursor: 'pointer',
-                                    background: u.is_active ? '#e8f7ee' : '#fde8e8',
-                                    color: u.is_active ? '#037f4c' : '#e2445c',
+                                    background: u.is_active ? 'rgba(34,197,94,0.16)' : 'rgba(226,68,92,0.14)',
+                                    color: u.is_active ? '#22c55e' : '#e2445c',
                                     border: 'none',
                                   }}
                                 >
                                   {u.is_active ? '● Active' : '○ Inactive'}
                                 </button>
                               ) : (
-                                <span style={{ fontSize: 11, color: '#888' }}>Active (you)</span>
+                                <span style={{ fontSize: 11, color: 'var(--text-secondary,#888)' }}>Active (you)</span>
                               )}
                             </td>
 
@@ -631,7 +631,7 @@ export default function ProfilePage() {
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <button
                                       onClick={() => { setResetPasswordFor(resetPasswordFor === u.id ? null : u.id); setResetPwd(''); }}
-                                      style={{ color: '#0073ea', fontSize: 12, fontWeight: 600 }}
+                                      style={{ color: '#9b72f5', fontSize: 12, fontWeight: 600 }}
                                     >
                                       {resetPasswordFor === u.id ? 'Cancel' : '🔑 Reset Pwd'}
                                     </button>
@@ -645,11 +645,11 @@ export default function ProfilePage() {
                                         type="password" value={resetPwd}
                                         onChange={e => setResetPwd(e.target.value)}
                                         placeholder="New password" minLength={8} required autoFocus
-                                        style={{ border: '1.5px solid #0073ea', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', width: 130 }}
+                                        style={{ border: '1.5px solid #9b72f5', borderRadius: 6, padding: '4px 8px', fontSize: 12, outline: 'none', width: 130 }}
                                       />
                                       <button
                                         type="submit" disabled={resettingPwd || resetPwd.length < 8}
-                                        style={{ background: '#0073ea', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, opacity: resettingPwd ? 0.7 : 1 }}
+                                        style={{ background: '#9b72f5', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, opacity: resettingPwd ? 0.7 : 1 }}
                                       >{resettingPwd ? '…' : 'Set'}</button>
                                     </form>
                                   )}
@@ -671,6 +671,16 @@ export default function ProfilePage() {
   );
 }
 
-const labelStyle = { display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 5 };
-const inputStyle = { width: '100%', border: '1.5px solid #ddd', borderRadius: 8, padding: '9px 12px', fontSize: 14, outline: 'none' };
-const btnPrimary = { padding: '10px 20px', background: '#0073ea', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' };
+const labelStyle = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary,#555)', marginBottom: 5 };
+const sectionTitleStyle = { margin: '0 0 20px', fontSize: 15, fontWeight: 700, color: 'var(--text-primary,#111122)' };
+const inputStyle = {
+  width: '100%',
+  border: '1.5px solid var(--border-color,#ddd)',
+  borderRadius: 8,
+  padding: '9px 12px',
+  fontSize: 14,
+  outline: 'none',
+  background: 'var(--input-bg,#fff)',
+  color: 'var(--text-primary,#323338)',
+};
+const btnPrimary = { padding: '10px 20px', background: '#9b72f5', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer' };

@@ -1,11 +1,11 @@
 // Shared compute helpers and constants for dashboard widgets
 export const CHART_COLORS = [
-  '#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc',
+  '#9b72f5', '#00c875', '#fdab3d', '#e2445c', '#a25ddc',
   '#037f4c', '#ff7575', '#7e3af2', '#0086c0', '#579bfc',
   '#ff158a', '#bb3354', '#9aadbd', '#66ccff', '#fdab3d',
 ];
 
-export const ACCENT_PALETTE = ['#0073ea', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#7e3af2', '#0086c0'];
+export const ACCENT_PALETTE = ['#9b72f5', '#00c875', '#fdab3d', '#e2445c', '#a25ddc', '#037f4c', '#7e3af2', '#0086c0'];
 
 export function getFilteredItems(boardData, group_ids, dashboardFilters = {}) {
   if (!boardData) return [];

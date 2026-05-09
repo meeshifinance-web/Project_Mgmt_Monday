@@ -112,7 +112,7 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
                   <input type="radio" name="trigger_type" value={opt.value}
                     checked={form.trigger_type === opt.value}
                     onChange={() => set('trigger_type', opt.value)}
-                    style={{ accentColor: '#0073ea' }}
+                    style={{ accentColor: '#9b72f5' }}
                   />
                   {opt.label}
                 </label>
@@ -196,7 +196,7 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
                   <input type="radio" name="direction" value={opt.value}
                     checked={form.direction === opt.value}
                     onChange={() => set('direction', opt.value)}
-                    style={{ accentColor: '#0073ea' }}
+                    style={{ accentColor: '#9b72f5' }}
                   />
                   <span>{opt.label} <span style={{ fontSize: 11, color: '#676879' }}>({opt.hint})</span></span>
                 </label>
@@ -213,7 +213,7 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
               type="checkbox" id="is_active"
               checked={!!form.is_active}
               onChange={e => set('is_active', e.target.checked)}
-              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#0073ea' }}
+              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#9b72f5' }}
             />
             <label htmlFor="is_active" style={{ fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)' }}>Rule is active</label>
           </div>
@@ -224,7 +224,7 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
           <button onClick={onClose} style={{ padding: '7px 16px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: '#676879', background: 'var(--bg-primary)' }}>
             Cancel
           </button>
-          <button onClick={handleSave} disabled={saving || loading} style={{ padding: '7px 18px', background: '#0073ea', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (saving || loading) ? 0.7 : 1 }}>
+          <button onClick={handleSave} disabled={saving || loading} style={{ padding: '7px 18px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (saving || loading) ? 0.7 : 1 }}>
             {saving ? 'Saving…' : rule ? 'Update Rule' : 'Create Rule'}
           </button>
         </div>

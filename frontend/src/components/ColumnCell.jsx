@@ -8,10 +8,78 @@ const STAR = '★';
 const STAR_E = '☆';
 
 const STATUS_PALETTE = [
-  '#c4c4c4', '#00c875', '#e2445c', '#fdab3d', '#0073ea',
-  '#a25ddc', '#037f4c', '#ff5ac4', '#784bd1', '#ffcb00',
-  '#ff642e', '#9aadbd', '#66ccff', '#bb3354', '#333333',
+  '#c4c4c4', '#808080', '#333333', '#00c875', '#037f4c',
+  '#9cd326', '#cab641', '#ffcb00', '#fdab3d', '#ff8a00',
+  '#ff642e', '#e2445c', '#bb3354', '#ff5ac4', '#ff158a',
+  '#a25ddc', '#9b72f5', '#784bd1', '#5559df', '#401694',
+  '#0073ea', '#0086c0', '#66ccff', '#4eccc6', '#9aadbd',
+  '#225091', '#579bfc', '#66d9e8', '#7fdbff', '#00a9ff',
+  '#2d7ff9', '#1f76c2', '#0f9d58', '#00854d', '#6cc644',
+  '#f2c94c', '#f2994a', '#eb5757', '#d83a52', '#6b7280',
 ];
+
+// Monday-style label colors: use the stored color as the button fill.
+const SOFT_COLOR_MAP = {
+  '#c4c4c4': { bg: '#F0F0F0', text: '#6B6B6B' },
+  '#fdab3d': { bg: '#FBE7D6', text: '#F08A36' },
+  '#00c875': { bg: '#DDF5EA', text: '#38A169' },
+  '#e2445c': { bg: '#F9DDE3', text: '#E35D74' },
+  '#a25ddc': { bg: '#E8DDFD', text: '#7A4DDB' },
+  '#9b72f5': { bg: '#EDE4FD', text: '#7A4DDB' },
+  '#a358df': { bg: '#EDE4FD', text: '#7A4DDB' },
+  '#037f4c': { bg: '#D6F5E9', text: '#037f4c' },
+  '#ff5ac4': { bg: '#FDE8F7', text: '#C94BA0' },
+  '#784bd1': { bg: '#EDE4FD', text: '#6B3EC7' },
+  '#ffcb00': { bg: '#FFF8D6', text: '#A68A00' },
+  '#ff642e': { bg: '#FFE6DC', text: '#D14A15' },
+  '#9aadbd': { bg: '#EEF2F5', text: '#5C7089' },
+  '#66ccff': { bg: '#DAEEFF', text: '#1A82C3' },
+  '#bb3354': { bg: '#F9D8E0', text: '#9C2240' },
+  '#333333': { bg: '#E8E8E8', text: '#333333' },
+};
+
+const DARK_SOFT_COLOR_MAP = {
+  '#c4c4c4': { bg: '#ECEFF8', text: '#5F6680', glow: 'rgba(236, 239, 248, 0.18)' },
+  '#fdab3d': { bg: '#FFE6CF', text: '#B65A12', glow: 'rgba(255, 230, 207, 0.22)' },
+  '#00c875': { bg: '#D8F7EA', text: '#087A4A', glow: 'rgba(216, 247, 234, 0.20)' },
+  '#e2445c': { bg: '#FFD8E0', text: '#B72942', glow: 'rgba(255, 216, 224, 0.22)' },
+  '#a25ddc': { bg: '#E8D9FF', text: '#6B36B8', glow: 'rgba(232, 217, 255, 0.22)' },
+  '#9b72f5': { bg: '#E8D9FF', text: '#6C3DFF', glow: 'rgba(232, 217, 255, 0.22)' },
+  '#a358df': { bg: '#E8D9FF', text: '#6B36B8', glow: 'rgba(232, 217, 255, 0.22)' },
+  '#037f4c': { bg: '#D8F7EA', text: '#03633C', glow: 'rgba(216, 247, 234, 0.20)' },
+  '#ff5ac4': { bg: '#FFE0F3', text: '#B92D83', glow: 'rgba(255, 224, 243, 0.22)' },
+  '#784bd1': { bg: '#E5DAFF', text: '#5930A8', glow: 'rgba(229, 218, 255, 0.22)' },
+  '#ffcb00': { bg: '#FFF3B8', text: '#9A7600', glow: 'rgba(255, 243, 184, 0.20)' },
+  '#ff642e': { bg: '#FFE0D2', text: '#B83D12', glow: 'rgba(255, 224, 210, 0.22)' },
+  '#9aadbd': { bg: '#E8EEF4', text: '#5C7089', glow: 'rgba(232, 238, 244, 0.18)' },
+  '#66ccff': { bg: '#DDF4FF', text: '#1476B8', glow: 'rgba(221, 244, 255, 0.22)' },
+  '#bb3354': { bg: '#FFD8E2', text: '#92213C', glow: 'rgba(255, 216, 226, 0.22)' },
+  '#333333': { bg: '#E6E8F0', text: '#383D4D', glow: 'rgba(230, 232, 240, 0.16)' },
+};
+
+const DARK_STATUS_LABEL_MAP = {
+  'in progress': { bg: '#E8D9FF', text: '#6C3DFF', glow: 'rgba(108, 61, 255, 0.22)' },
+  done: { bg: '#FFE9D6', text: '#FF8A1F', glow: 'rgba(255, 138, 31, 0.22)' },
+  stuck: { bg: '#FFD9DF', text: '#FF4D4F', glow: 'rgba(255, 77, 79, 0.22)' },
+  review: { bg: '#DDF4FF', text: '#1D8FFF', glow: 'rgba(29, 143, 255, 0.22)' },
+  completed: { bg: '#DDF8E8', text: '#16A34A', glow: 'rgba(22, 163, 74, 0.22)' },
+  success: { bg: '#DDF8E8', text: '#16A34A', glow: 'rgba(22, 163, 74, 0.22)' },
+  critical: { bg: '#FFD8E0', text: '#B72942', glow: 'rgba(255, 216, 224, 0.22)' },
+  high: { bg: '#FFE0D2', text: '#B83D12', glow: 'rgba(255, 224, 210, 0.22)' },
+  medium: { bg: '#FFE6CF', text: '#B65A12', glow: 'rgba(255, 230, 207, 0.22)' },
+  low: { bg: '#D8F7EA', text: '#087A4A', glow: 'rgba(216, 247, 234, 0.20)' },
+};
+
+export function getSoftStyle(color, isDark = false, label = '') {
+  const key = color?.toLowerCase();
+  const labelKey = String(label || '').trim().toLowerCase();
+  const solidColor = color || DARK_STATUS_LABEL_MAP[labelKey]?.text || SOFT_COLOR_MAP[key]?.text || '#c4c4c4';
+  return {
+    bg: solidColor,
+    text: '#fff',
+    glow: `${solidColor}44`,
+  };
+}
 
 const DEFAULT_STATUS_OPTIONS = [
   { label: 'Not Started', color: '#c4c4c4' },
@@ -27,28 +95,25 @@ const DEFAULT_PRIORITY_OPTIONS = [
   { label: 'Low', color: '#00c875' },
 ];
 
-const PRIORITY_ICONS = {
-  Critical: '🔴',
-  High: '🟠',
-  Medium: '🟡',
-  Low: '🟢',
-};
+const PRIORITY_ICONS = {};
 
 function SwatchPicker({ current, onChange }) {
   return (
     <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: 4, padding: 8,
-      background: '#fff', border: '1px solid #e0e0e0', borderRadius: 8,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.15)', width: 140,
+      display: 'grid', gridTemplateColumns: 'repeat(8, 22px)', gap: 6, padding: 10,
+      background: '#fff', border: '1px solid #e0e0e0', borderRadius: 10,
+      boxShadow: '0 12px 32px rgba(0,0,0,0.18)', width: 246,
     }}>
       {STATUS_PALETTE.map(c => (
         <div
           key={c}
           onClick={e => { e.stopPropagation(); onChange(c); }}
           style={{
-            width: 20, height: 20, borderRadius: 3, background: c, cursor: 'pointer',
-            border: c === current ? '2px solid #323338' : '2px solid transparent',
+            width: 22, height: 22, borderRadius: 5, background: c, cursor: 'pointer',
+            border: c === current ? '2px solid #fff' : '2px solid rgba(255,255,255,0.72)',
+            outline: c === current ? '2px solid #9b72f5' : '1px solid rgba(0,0,0,0.08)',
             boxSizing: 'border-box',
+            boxShadow: c === current ? '0 0 0 3px rgba(155,114,245,0.18)' : 'none',
           }}
         />
       ))}
@@ -59,15 +124,27 @@ function SwatchPicker({ current, onChange }) {
 // Status cell with colored pills
 function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defaultOptions, iconMap }) {
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [draftOptions, setDraftOptions] = useState([]);
   const [openPickerIdx, setOpenPickerIdx] = useState(null);
   const [saving, setSaving] = useState(false);
   const popupRef = useRef(null);
+  const { resolvedTheme } = useThemeContext();
+  const isDark = resolvedTheme === 'dark';
 
   const options = settings?.options || defaultOptions || DEFAULT_STATUS_OPTIONS;
   const current = options.find(o => o.label === value);
-  const bg = current?.color || '#c4c4c4';
+  const rawColor = current?.color || '#c4c4c4';
+  const softStyle = getSoftStyle(rawColor, isDark, current?.label || value);
+  const bg = softStyle.bg;
+  const textColor = softStyle.text;
+  const popupBg = isDark ? '#2c315f' : '#fff';
+  const popupBorder = isDark ? 'rgba(255,255,255,0.12)' : '#e6e9ef';
+  const textPrimary = isDark ? '#f6f7ff' : '#1a1a2e';
+  const textSecondary = isDark ? '#cfd4ff' : '#676879';
+  const inputBg = isDark ? 'rgba(255,255,255,0.06)' : '#fff';
+  const footerHoverBg = isDark ? 'rgba(255,255,255,0.08)' : '#f5f6f8';
 
   // Close on outside click or Escape
   useEffect(() => {
@@ -104,7 +181,7 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
   };
 
   const addDraftOption = () =>
-    setDraftOptions(d => [...d, { label: '', color: '#0073ea' }]);
+    setDraftOptions(d => [...d, { label: '', color: '#a25ddc' }]);
 
   const updateDraftLabel = (i, label) =>
     setDraftOptions(d => d.map((o, idx) => idx === i ? { ...o, label } : o));
@@ -139,17 +216,32 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
         onClick={() => { setOpen(o => !o); setEditMode(false); setOpenPickerIdx(null); }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         title={value || ''}
         style={{
-          background: bg, color: '#fff', fontWeight: 600,
-          padding: '0 8px', borderRadius: 0, cursor: 'pointer',
-          textAlign: 'center', fontSize: 13, userSelect: 'none',
-          height: '100%', minHeight: 34,
+          padding: 0, cursor: 'pointer',
+          height: '100%', minHeight: 34, width: '100%',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden', width: '100%',
+          overflow: 'hidden', userSelect: 'none',
         }}
       >
-        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span className="status-pill-label" style={{
+          width: '100%', height: '100%', minHeight: 28,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: bg, color: textColor, fontWeight: 700,
+          '--status-pill-text': textColor,
+          padding: '6px 12px', borderRadius: 0,
+          fontSize: 14, textAlign: 'center',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          letterSpacing: 0,
+          border: 'none',
+          boxShadow: hovered
+            ? `0 4px 14px ${softStyle.glow || 'rgba(80,60,160,0.12)'}`
+            : 'none',
+          filter: hovered ? 'brightness(0.96)' : 'none',
+          transition: 'box-shadow 0.12s ease, filter 0.12s ease',
+        }}>
           {iconMap && value && iconMap[value] ? `${iconMap[value]} ${value}` : (value || '')}
         </span>
       </div>
@@ -157,58 +249,58 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
       {open && (
         <div ref={popupRef} className="cell-dropdown-popup" style={{
           position: 'absolute', top: '100%', left: 0, zIndex: 100,
-          background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-          padding: 8, minWidth: 200,
+          background: popupBg, border: `1px solid ${popupBorder}`, borderRadius: 10,
+          boxShadow: isDark ? '0 16px 36px rgba(0,0,0,0.44)' : '0 4px 20px rgba(0,0,0,0.15)',
+          padding: 10, minWidth: editMode ? 330 : 200,
         }}>
 
           {editMode ? (
             /* ── Inline label editor ── */
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#676879', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Edit Labels
               </div>
 
-              <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 4 }}>
+              <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'hidden', marginBottom: 8, paddingRight: 2 }}>
                 {draftOptions.map((opt, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    {/* Color swatch */}
-                    <div style={{ position: 'relative', flexShrink: 0 }}>
-                      <div
+                  <div key={i} style={{ marginBottom: openPickerIdx === i ? 10 : 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        type="button"
                         onClick={e => { e.stopPropagation(); setOpenPickerIdx(openPickerIdx === i ? null : i); }}
                         style={{
-                          width: 20, height: 20, borderRadius: 3, background: opt.color,
-                          cursor: 'pointer', border: '2px solid rgba(0,0,0,0.1)', boxSizing: 'border-box',
+                          width: 32, height: 28, borderRadius: 5, background: opt.color,
+                          cursor: 'pointer', border: `1px solid ${popupBorder}`, boxSizing: 'border-box',
+                          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.22)',
                         }}
                         title="Change color"
                       />
-                      {openPickerIdx === i && (
-                        <div style={{ position: 'absolute', top: 24, left: 0, zIndex: 200 }}
-                          onClick={e => e.stopPropagation()}>
-                          <SwatchPicker current={opt.color} onChange={c => updateDraftColor(i, c)} />
-                        </div>
-                      )}
+
+                      <input
+                        value={opt.label}
+                        onChange={e => updateDraftLabel(i, e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          flex: 1, border: `1px solid ${popupBorder}`, borderRadius: 5,
+                          padding: '7px 9px', fontSize: 12, outline: 'none', minWidth: 0,
+                          background: inputBg, color: textPrimary, fontWeight: 600,
+                        }}
+                        onFocus={e => e.target.style.borderColor = '#9b72f5'}
+                        onBlur={e => e.target.style.borderColor = popupBorder}
+                      />
+
+                      <button
+                        onClick={e => { e.stopPropagation(); removeDraftOption(i); }}
+                        style={{ color: textSecondary, fontSize: 20, flexShrink: 0, lineHeight: 1, padding: '1px 4px' }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#e2445c'}
+                        onMouseLeave={e => e.currentTarget.style.color = textSecondary}
+                      >×</button>
                     </div>
-
-                    {/* Label input */}
-                    <input
-                      value={opt.label}
-                      onChange={e => updateDraftLabel(i, e.target.value)}
-                      onClick={e => e.stopPropagation()}
-                      style={{
-                        flex: 1, border: '1px solid #e0e0e0', borderRadius: 4,
-                        padding: '3px 6px', fontSize: 12, outline: 'none', minWidth: 0,
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#0073ea'}
-                      onBlur={e => e.target.style.borderColor = '#e0e0e0'}
-                    />
-
-                    {/* Delete */}
-                    <button
-                      onClick={e => { e.stopPropagation(); removeDraftOption(i); }}
-                      style={{ color: '#ccc', fontSize: 16, flexShrink: 0, lineHeight: 1, padding: '1px 2px' }}
-                      onMouseEnter={e => e.currentTarget.style.color = '#e2445c'}
-                      onMouseLeave={e => e.currentTarget.style.color = '#ccc'}
-                    >×</button>
+                    {openPickerIdx === i && (
+                      <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                        <SwatchPicker current={opt.color} onChange={c => updateDraftColor(i, c)} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -218,8 +310,9 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
                 onClick={e => { e.stopPropagation(); addDraftOption(); }}
                 style={{
                   width: '100%', padding: '5px 8px', marginBottom: 8,
-                  border: '1.5px dashed #d0d0d0', borderRadius: 4,
-                  color: '#676879', fontSize: 12, cursor: 'pointer', background: '#f7f8fc',
+                  border: `1.5px dashed ${isDark ? 'rgba(255,255,255,0.42)' : '#d0d0d0'}`, borderRadius: 5,
+                  color: textSecondary, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  background: isDark ? 'rgba(255,255,255,0.06)' : '#f7f8fc',
                 }}
               >+ Add Label</button>
 
@@ -227,15 +320,15 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
               <div style={{ display: 'flex', gap: 6 }}>
                 <button
                   onClick={e => { e.stopPropagation(); setEditMode(false); setOpenPickerIdx(null); }}
-                  style={{ flex: 1, padding: '5px 8px', border: '1px solid #ddd', borderRadius: 4, fontSize: 12, color: '#555', cursor: 'pointer' }}
+                  style={{ flex: 1, padding: '7px 8px', border: `1px solid ${popupBorder}`, borderRadius: 5, fontSize: 12, color: textSecondary, cursor: 'pointer', background: 'transparent' }}
                 >← Back</button>
                 <button
                   onClick={e => { e.stopPropagation(); handleSave(); }}
                   disabled={saving}
                   style={{
                     flex: 1, padding: '5px 8px',
-                    background: saving ? '#c5c7d0' : '#0073ea',
-                    color: '#fff', borderRadius: 4, fontSize: 12, fontWeight: 700,
+                    background: saving ? '#c5c7d0' : '#9b72f5',
+                    color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700,
                     cursor: saving ? 'not-allowed' : 'pointer',
                   }}
                 >{saving ? 'Saving…' : 'Save'}</button>
@@ -251,15 +344,21 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
               <div style={{ maxHeight: 280, overflowY: 'auto', paddingRight: 2 }}>
                 {options.map(opt => (
                   <div
+                    className="status-option-label"
                     key={opt.label}
                     onClick={() => { onChange(opt.label); setOpen(false); }}
                     title={opt.label}
-                    style={{
-                      background: opt.color, color: '#fff', fontWeight: 600,
-                      padding: '6px 12px', borderRadius: 4, cursor: 'pointer',
-                      marginBottom: 4, fontSize: 12, textAlign: 'center',
+                    style={(() => { const s = getSoftStyle(opt.color, isDark, opt.label); return {
+                      '--status-option-text': s.text,
+                      '--status-option-bg': s.bg,
+                      background: s.bg, color: s.text, fontWeight: 700,
+                      padding: '12px 14px', borderRadius: 0, cursor: 'pointer',
+                      marginBottom: 8, fontSize: 14, textAlign: 'center',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}
+                      letterSpacing: 0, transition: 'filter 0.12s ease',
+                    }; })()}
+                    onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(0.95)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
                   >
                     {opt.label}
                   </div>
@@ -267,28 +366,28 @@ function StatusCell({ value, settings, onChange, column, onSettingsUpdate, defau
               </div>
               <div
                 onClick={() => { onChange(''); setOpen(false); }}
-                style={{ padding: '4px 8px', color: '#1a1a2e', cursor: 'pointer', fontSize: 12, textAlign: 'center' }}
+                style={{ padding: '7px 8px', color: textPrimary, cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'center' }}
               >
                 Clear
               </div>
 
               {/* Footer */}
-              <div style={{ borderTop: '1px solid #e6e9ef', marginTop: 4, paddingTop: 4 }}>
+              <div style={{ borderTop: `1px solid ${popupBorder}`, marginTop: 6, paddingTop: 6 }}>
                 {column && onSettingsUpdate && (
                   <div
                     onClick={e => { e.stopPropagation(); openEditor(); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 4, cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f5f6f8'}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 5, cursor: 'pointer', color: textPrimary }}
+                    onMouseEnter={e => e.currentTarget.style.background = footerHoverBg}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <span style={{ fontSize: 13 }}>✏️</span>
-                    <span style={{ fontSize: 12, color: '#1a1a2e' }}>Edit Labels</span>
+                    <span style={{ fontSize: 13, color: textPrimary, fontWeight: 700 }}>Edit Labels</span>
                   </div>
                 )}
                 <div
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 4, cursor: 'default' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', borderRadius: 4, cursor: 'default' }}
                 >
-                  <span style={{ fontSize: 12, color: '#333' }}>Auto-assign labels</span>
+                  <span style={{ fontSize: 13, color: textPrimary, fontWeight: 700 }}>Auto-assign labels</span>
                 </div>
               </div>
             </div>
@@ -468,7 +567,7 @@ function DropdownCell({ value, settings, onChange, column, onSettingsUpdate }) {
                     onChange={e => setDraftOptions(d => d.map((x, idx) => idx === i ? { ...x, label: e.target.value } : x))}
                     placeholder="Label…"
                     style={{ flex: 1, border: `1.5px solid ${popupBorder}`, borderRadius: 5, padding: '4px 8px', fontSize: 12, background: inputBg, color: textPrimary, outline: 'none' }}
-                    onFocus={e => e.target.style.borderColor = '#0073ea'}
+                    onFocus={e => e.target.style.borderColor = '#9b72f5'}
                     onBlur={e => e.target.style.borderColor = popupBorder}
                   />
                   {/* Delete */}
@@ -488,7 +587,7 @@ function DropdownCell({ value, settings, onChange, column, onSettingsUpdate }) {
                 <button onClick={() => { setEditMode(false); setOpenPickerIdx(null); }}
                   style={{ flex: 1, padding: '5px 8px', border: `1px solid ${dividerColor}`, borderRadius: 4, fontSize: 12, color: textSecondary, cursor: 'pointer', background: 'none' }}>← Back</button>
                 <button onClick={saveDraft} disabled={saving}
-                  style={{ flex: 1, padding: '5px 8px', background: saving ? '#c5c7d0' : '#0073ea', color: '#fff', borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', border: 'none' }}>
+                  style={{ flex: 1, padding: '5px 8px', background: saving ? '#c5c7d0' : '#9b72f5', color: '#fff', borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', border: 'none' }}>
                   {saving ? 'Saving…' : 'Save'}
                 </button>
               </div>
@@ -524,13 +623,13 @@ function DropdownCell({ value, settings, onChange, column, onSettingsUpdate }) {
                     <div
                       key={opt.label}
                       onClick={() => toggle(opt.label)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', cursor: 'pointer', background: isSel ? rowSelectedBg : 'transparent' }}
-                      onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = rowHoverBg; }}
-                      onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', cursor: 'pointer', background: isSel ? rowSelectedBg : 'transparent', transition: 'background 0.12s ease' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = isSel ? rowSelectedBg : rowHoverBg; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = isSel ? rowSelectedBg : 'transparent'; }}
                     >
                       <div style={{ width: 10, height: 10, borderRadius: 2, background: opt.color, flexShrink: 0 }} />
                       <span style={{ flex: 1, fontSize: 13, color: textPrimary, fontWeight: isSel ? 600 : 400 }}>{opt.label}</span>
-                      {isSel && <span style={{ color: '#0073ea', fontSize: 13, fontWeight: 700 }}>✓</span>}
+                      {isSel && <span style={{ color: '#9b72f5', fontSize: 13, fontWeight: 700 }}>✓</span>}
                     </div>
                   );
                 })}
@@ -590,19 +689,32 @@ function RatingCell({ value, onChange }) {
 // Progress cell (0-100 slider)
 function ProgressCell({ value, onChange }) {
   const num = parseInt(value) || 0;
-  const color = num >= 100 ? '#00c875' : num >= 50 ? '#fdab3d' : '#0073ea';
+  const color = num >= 100 ? '#00c875' : num >= 50 ? '#fdab3d' : '#9b72f5';
+  const { resolvedTheme } = useThemeContext();
+  const isDark = resolvedTheme === 'dark';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <div style={{ flex: 1, background: '#e0e0e0', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+      <div style={{
+        flex: 1,
+        background: isDark ? 'rgba(255,255,255,0.10)' : '#e0e0e0',
+        borderRadius: 4, height: 8, overflow: 'hidden',
+        border: isDark ? '1px solid rgba(255,255,255,0.08)' : 'none',
+      }}>
         <div style={{ width: `${num}%`, background: color, height: '100%', borderRadius: 4, transition: 'width 0.3s' }} />
       </div>
       <input
         type="number" min="0" max="100" value={value || ''}
         onChange={e => onChange(e.target.value)}
         onBlur={e => onChange(e.target.value)}
-        style={{ width: 44, border: '1px solid #ddd', borderRadius: 4, padding: '2px 4px', textAlign: 'center' }}
+        style={{
+          width: 44,
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.22)' : '#ddd'}`,
+          borderRadius: 4, padding: '2px 4px', textAlign: 'center',
+          background: isDark ? 'rgba(255,255,255,0.08)' : '#fff',
+          color: isDark ? '#fff' : '#323338',
+        }}
       />
-      <span style={{ fontSize: 11, color: '#888' }}>%</span>
+      <span style={{ fontSize: 11, color: isDark ? 'var(--text-secondary)' : '#888' }}>%</span>
     </div>
   );
 }
@@ -616,7 +728,7 @@ function CheckboxCell({ value, onChange }) {
         type="checkbox"
         checked={checked}
         onChange={e => onChange(e.target.checked ? 'true' : 'false')}
-        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#0073ea' }}
+        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#9b72f5' }}
       />
     </div>
   );
@@ -636,7 +748,7 @@ function TagsCell({ value, onChange }) {
         onChange={e => setDraft(e.target.value)}
         onBlur={() => { onChange(draft); setEditing(false); }}
         placeholder="tag1, tag2, tag3"
-        style={{ width: '100%', border: '1px solid #0073ea', borderRadius: 4, padding: '3px 6px', outline: 'none' }}
+        style={{ width: '100%', border: '1px solid #9b72f5', borderRadius: 4, padding: '3px 6px', outline: 'none' }}
       />
     );
   }
@@ -645,7 +757,7 @@ function TagsCell({ value, onChange }) {
     <div onClick={() => { setDraft(value || ''); setEditing(true); }} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, cursor: 'text', minHeight: 26 }}>
       {tags.map(tag => (
         <span key={tag} style={{
-          background: '#e2f0ff', color: '#0073ea', borderRadius: 12,
+          background: '#e2f0ff', color: '#9b72f5', borderRadius: 12,
           padding: '2px 8px', fontSize: 11, fontWeight: 600,
         }}>{tag}</span>
       ))}
@@ -683,7 +795,7 @@ function ColorPickerCell({ value, onChange }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <input
         type="color"
-        value={value || '#0073ea'}
+        value={value || '#9b72f5'}
         onChange={e => onChange(e.target.value)}
         style={{ width: 32, height: 28, border: 'none', padding: 0, cursor: 'pointer', background: 'none' }}
       />
@@ -702,13 +814,13 @@ function LinkCell({ value, onChange }) {
         onChange={e => onChange(e.target.value)}
         onBlur={() => setEditing(false)}
         placeholder="https://..."
-        style={{ width: '100%', border: '1px solid #0073ea', borderRadius: 4, padding: '3px 6px', outline: 'none' }}
+        style={{ width: '100%', border: '1px solid #9b72f5', borderRadius: 4, padding: '3px 6px', outline: 'none' }}
       />
     );
   }
   if (value) {
     return (
-      <a href={value} target="_blank" rel="noreferrer" style={{ color: '#0073ea', textDecoration: 'none', fontSize: 12 }}
+      <a href={value} target="_blank" rel="noreferrer" style={{ color: '#9b72f5', textDecoration: 'none', fontSize: 12 }}
         onDoubleClick={e => { e.preventDefault(); setEditing(true); }}>
         {value.length > 30 ? value.slice(0, 30) + '…' : value}
       </a>
@@ -757,7 +869,7 @@ function TextCell({ value, onChange, multiline, type }) {
       return (
         <textarea
           autoFocus value={draft} onChange={handleChange} onBlur={commit}
-          style={{ width: '100%', minHeight: 60, border: '1px solid #0073ea', borderRadius: 4, padding: '4px 6px', resize: 'vertical', outline: 'none' }}
+          style={{ width: '100%', minHeight: 60, border: '1px solid #9b72f5', borderRadius: 4, padding: '4px 6px', resize: 'vertical', outline: 'none' }}
         />
       );
     }
@@ -767,7 +879,7 @@ function TextCell({ value, onChange, multiline, type }) {
         onChange={handleChange}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value || ''); setEditing(false); } }}
-        style={{ width: '100%', border: '1px solid #0073ea', borderRadius: 4, padding: '3px 6px', outline: 'none' }}
+        style={{ width: '100%', border: '1px solid #9b72f5', borderRadius: 4, padding: '3px 6px', outline: 'none' }}
       />
     );
   }
@@ -915,7 +1027,7 @@ function LongTextCell({ value, onChange }) {
           {value || '—'}
         </span>
         {value && (
-          <span style={{ fontSize: 11, color: '#0073ea', flexShrink: 0, opacity: 0.7 }} title="Click to expand">⤢</span>
+          <span style={{ fontSize: 11, color: '#9b72f5', flexShrink: 0, opacity: 0.7 }} title="Click to expand">⤢</span>
         )}
       </div>
 
@@ -1049,7 +1161,7 @@ function LongTextCell({ value, onChange }) {
 
 // ── Deterministic avatar colour from a display name ───────────────────────────
 const AVATAR_COLORS = [
-  '#0073ea', '#00c875', '#fdab3d', '#e2445c',
+  '#9b72f5', '#00c875', '#fdab3d', '#e2445c',
   '#a25ddc', '#037f4c', '#ff642e', '#784bd1',
   '#ff5ac4', '#0099cc', '#bb3354', '#666666',
 ];
@@ -1267,9 +1379,10 @@ function PersonCell({ value, settings, onChange }) {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', cursor: 'pointer',
                   background: isSelected ? rowBgSelected : rowBgNormal,
+                  transition: 'background 0.12s ease',
                 }}
-                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = rowBgHover; }}
-                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = rowBgNormal; }}
+                onMouseEnter={e => { e.currentTarget.style.background = isSelected ? rowBgSelected : rowBgHover; }}
+                onMouseLeave={e => { e.currentTarget.style.background = isSelected ? rowBgSelected : rowBgNormal; }}
               >
                 <div style={{
                   width: 28, height: 28, borderRadius: '50%',
@@ -1280,7 +1393,7 @@ function PersonCell({ value, settings, onChange }) {
                   {nameToInitials(name)}
                 </div>
                 <span style={{ flex: 1, fontSize: 13, color: isDark ? 'var(--text-primary)' : '#1a1a2e', fontWeight: isSelected ? 700 : 500 }}>{name}</span>
-                {isSelected && <span style={{ color: '#0073ea', fontSize: 14, fontWeight: 700 }}>✓</span>}
+                {isSelected && <span style={{ color: '#9b72f5', fontSize: 14, fontWeight: 700 }}>✓</span>}
               </div>
             );
           })}
@@ -1411,7 +1524,7 @@ function FileCell({ value, onChange }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
-            style={{ fontSize: 12, color: '#0073ea', textDecoration: 'none', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            style={{ fontSize: 12, color: '#9b72f5', textDecoration: 'none', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
             title={f.originalName}
           >
             {f.originalName}
@@ -1429,16 +1542,16 @@ function FileCell({ value, onChange }) {
         <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 120 }}>
           <span style={{ fontSize: 12, color: '#676879', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{p.name}</span>
           <div style={{ flex: 1, minWidth: 50, height: 4, background: '#e6e9ef', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ width: `${p.progress}%`, height: '100%', background: '#0073ea', borderRadius: 2, transition: 'width 0.15s ease' }} />
+            <div style={{ width: `${p.progress}%`, height: '100%', background: '#9b72f5', borderRadius: 2, transition: 'width 0.15s ease' }} />
           </div>
-          <span style={{ fontSize: 10, color: '#0073ea', flexShrink: 0 }}>{p.progress}%</span>
+          <span style={{ fontSize: 10, color: '#9b72f5', flexShrink: 0 }}>{p.progress}%</span>
         </div>
       ))}
       <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
       <button
         onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
         disabled={pending.length > 0}
-        style={{ fontSize: 11, color: '#0073ea', background: 'none', border: 'none', cursor: pending.length > 0 ? 'default' : 'pointer', padding: '2px 0', opacity: pending.length > 0 ? 0.5 : 1, flexShrink: 0 }}
+        style={{ fontSize: 11, color: '#9b72f5', background: 'none', border: 'none', cursor: pending.length > 0 ? 'default' : 'pointer', padding: '2px 0', opacity: pending.length > 0 ? 0.5 : 1, flexShrink: 0 }}
       >
         📎 Attach file
       </button>

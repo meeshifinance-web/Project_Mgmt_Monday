@@ -61,7 +61,7 @@ export default function AddColumnModal({ onAdd, onClose }) {
                   key={ct.value}
                   onClick={() => selectType(ct)}
                   style={{
-                    border: `2px solid ${type === ct.value ? '#0073ea' : '#e0e0e0'}`,
+                    border: `2px solid ${type === ct.value ? '#9b72f5' : '#e0e0e0'}`,
                     borderRadius: 8, padding: '8px 4px', textAlign: 'center',
                     cursor: 'pointer',
                     background: type === ct.value ? '#e3f0ff' : '#fff',
@@ -69,7 +69,7 @@ export default function AddColumnModal({ onAdd, onClose }) {
                   }}
                 >
                   <div style={{ fontSize: 16 }}>{ct.icon}</div>
-                  <div style={{ fontSize: 10, marginTop: 2, color: type === ct.value ? '#0073ea' : '#666', fontWeight: type === ct.value ? 700 : 400 }}>{ct.label}</div>
+                  <div style={{ fontSize: 10, marginTop: 2, color: type === ct.value ? '#9b72f5' : '#666', fontWeight: type === ct.value ? 700 : 400 }}>{ct.label}</div>
                 </div>
               ))}
             </div>
@@ -83,7 +83,7 @@ export default function AddColumnModal({ onAdd, onClose }) {
               onChange={e => setTitle(e.target.value)}
               placeholder="Column name"
               style={{
-                width: '100%', border: '1.5px solid #0073ea', borderRadius: 8,
+                width: '100%', border: '1.5px solid #9b72f5', borderRadius: 8,
                 padding: '8px 12px', fontSize: 14, outline: 'none', boxSizing: 'border-box',
               }}
             />
@@ -95,7 +95,7 @@ export default function AddColumnModal({ onAdd, onClose }) {
               color: '#555', cursor: 'pointer', fontSize: 13,
             }}>Cancel</button>
             <button type="submit" style={{
-              padding: '8px 20px', background: '#0073ea', color: '#fff',
+              padding: '8px 20px', background: '#9b72f5', color: '#fff',
               borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
             }}>Add Column</button>
           </div>

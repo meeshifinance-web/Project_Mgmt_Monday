@@ -1,4 +1,3 @@
-import { useThemeContext } from './context/ThemeContext';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -23,6 +22,7 @@ import ApiKeysPanel from './components/ApiKeysPanel';
 import MyWorkPanel from './components/MyWorkPanel';
 import DashboardPage from './components/DashboardPage';
 import { getDashboards, createDashboard, deleteDashboard } from './api';
+import { useThemeLogo } from './hooks/useThemeLogo';
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 
@@ -90,9 +90,10 @@ function BoardNameEditor({ name, onSave }) {
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(name); setEditing(false); } }}
         style={{
-          flex: 1, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)',
-          border: '1.5px solid #0073ea', borderRadius: 6, padding: '2px 8px',
-          outline: 'none', background: 'var(--input-bg)', maxWidth: 400,
+          flex: '1 1 auto', minWidth: 0, width: '100%', boxSizing: 'border-box',
+          fontSize: 18, fontWeight: 700, color: 'var(--text-primary)',
+          border: '1.5px solid #9b72f5', borderRadius: 6, padding: '2px 8px',
+          outline: 'none', background: 'var(--input-bg)',
         }}
       />
     );
@@ -103,9 +104,11 @@ function BoardNameEditor({ name, onSave }) {
       onClick={() => { setDraft(name); setEditing(true); }}
       title="Click to rename board"
       style={{
-        fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1,
+        fontSize: 18, fontWeight: 700, color: 'var(--text-primary)',
+        flex: '1 1 auto', minWidth: 0,
         cursor: 'text', borderRadius: 6, padding: '2px 8px',
         border: '1.5px solid transparent',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         transition: 'border-color 0.15s, background 0.15s',
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.background = 'var(--hover-bg)'; }}
@@ -165,8 +168,8 @@ function CloneModal({ board, onClose, onCloned }) {
   };
   const cbRow = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer' };
   const cbBox = (checked, disabled) => ({
-    width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? '#0073ea' : '#c5c7d4'}`,
-    background: checked ? '#0073ea' : 'transparent', display: 'flex', alignItems: 'center',
+    width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? '#9b72f5' : '#c5c7d4'}`,
+    background: checked ? '#9b72f5' : 'transparent', display: 'flex', alignItems: 'center',
     justifyContent: 'center', flexShrink: 0, opacity: disabled ? 0.5 : 1,
     transition: 'all 0.12s',
   });
@@ -199,7 +202,7 @@ function CloneModal({ board, onClose, onCloned }) {
                   border: '1.5px solid var(--border-color)', background: 'var(--input-bg)',
                   color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
                 }}
-                onFocus={e => e.currentTarget.style.borderColor = '#0073ea'}
+                onFocus={e => e.currentTarget.style.borderColor = '#9b72f5'}
                 onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
               />
             </div>
@@ -266,7 +269,7 @@ function CloneModal({ board, onClose, onCloned }) {
               disabled={loading || !name.trim()}
               style={{
                 padding: '8px 18px', borderRadius: 6, fontWeight: 600, fontSize: 14,
-                border: 'none', background: loading ? '#a0c4f1' : '#0073ea',
+                border: 'none', background: loading ? '#a0c4f1' : '#9b72f5',
                 color: '#fff', cursor: loading ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', gap: 6,
               }}
@@ -314,8 +317,7 @@ function MainApp() {
   const [cloneTargetBoard, setCloneTargetBoard] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => shouldShowWelcomeTour());
-  const { resolvedTheme } = useThemeContext();
-  const isDark = resolvedTheme === 'dark';
+  const { logoSrc, isDarkLogo } = useThemeLogo();
 
   // Cmd-K / Ctrl-K — global keyboard shortcut to open the command palette.
   // Captured at the document level so it works no matter what's focused
@@ -586,9 +588,9 @@ function MainApp() {
           title={b.name}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', height: 36,
+            cursor: 'pointer', height: 40,
             background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
-            borderLeft: isActive ? '3px solid #0073ea' : '3px solid transparent',
+            borderLeft: isActive ? '3px solid #9b72f5' : '3px solid transparent',
           }}
           onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = isActive ? 'var(--sidebar-active-bg)' : 'transparent'; }}
@@ -606,19 +608,18 @@ function MainApp() {
           onClick={() => { loadBoard(b.id); navigate(`/board/${b.id}`, { replace: true }); setMobileNavOpen(false); }}
           style={{
             display: 'flex', alignItems: 'center', cursor: 'pointer',
-            padding: indent ? '6px 16px 6px 28px' : '6px 16px',
+            padding: indent ? '8px 16px 8px 30px' : '8px 18px',
             background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
-            borderLeft: isActive ? '3px solid #0073ea' : '3px solid transparent',
+            borderLeft: isActive ? '3px solid #9b72f5' : '3px solid transparent',
           }}
           onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
           onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
         >
-          <span style={{ fontSize: 10, marginRight: 5, color: 'var(--sidebar-text-muted)' }} title={b.visibility === 'private' ? 'Private' : 'Org-wide'}>
+          <span style={{ fontSize: 12, marginRight: 8, color: 'var(--sidebar-text-muted)' }} title={b.visibility === 'private' ? 'Private' : 'Org-wide'}>
             {b.visibility === 'private' ? '🔒' : '🌐'}
           </span>
           <span style={{
-            fontSize: 12, flex: 1, color: isActive ? 'var(--primary-blue)' : 'var(--sidebar-text)',
-            fontWeight: isActive ? 600 : 400,
+            fontSize: 15, flex: 1, color: isActive ? '#9b72f5' : 'var(--sidebar-text)', fontWeight: 800, letterSpacing: 0,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {b.name}
@@ -717,7 +718,11 @@ function MainApp() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div className="app-shell" style={{
+      display: 'flex', height: '100vh', overflow: 'hidden',
+      background: 'var(--app-shell-bg)',
+      backgroundColor: 'var(--app-shell-bg-color)',
+    }}>
       {/* Mobile drawer overlay */}
       {mobileNavOpen && (
         <div className="sidebar-overlay" onClick={() => setMobileNavOpen(false)} />
@@ -727,15 +732,18 @@ function MainApp() {
       <div
         className={`app-sidebar${mobileNavOpen ? ' sidebar-open' : ''}`}
         style={{
-          width: isNavCollapsed ? 48 : 230,
-          background: 'var(--bg-sidebar)',
+          width: isNavCollapsed ? 52 : 236,
+          background: 'var(--sidebar-bg-surface)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           color: 'var(--sidebar-text)',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
-          transition: 'width 0.2s ease',
+          transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
           overflow: 'hidden',
-          borderRight: '1px solid var(--sidebar-border)',
+          borderRight: '1px solid var(--sidebar-border-surface)',
+          boxShadow: 'var(--sidebar-shadow-surface)',
         }}
       >
         <div style={{
@@ -750,18 +758,33 @@ function MainApp() {
           {!isNavCollapsed && (
             <div>
               <img
-                src="/ddecor-logo.png"
-                alt="D'Decor"
-                style={{ height: 64, width: 'auto', objectFit: 'contain', display: 'block', filter: isDark ? 'brightness(0) invert(1)' : 'none', }}
+                className="theme-logo app-brand-logo"
+                src={logoSrc}
+                alt="Simplix"
+                style={{
+                  height: isDarkLogo ? 72 : 72,
+                  width: 'auto',
+                  maxWidth: 156,
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
               />
-              <div style={{ fontSize: 14, color: 'var(--sidebar-text)', marginTop: 4, letterSpacing: 0.3, fontWeight: 1600, textAlign: 'center' }}>
-                TUESDAY.COM
-              </div>
             </div>
-
           )}
           {isNavCollapsed && (
-            <img src="/ddecor-logo.png" alt="D'Decor" style={{ height: 24, width: 'auto', objectFit: 'contain', display: 'block', filter: isDark ? 'brightness(0) invert(1)' : 'none', }} title="TUESDAY.COM" />
+            <img
+              className="theme-logo app-brand-logo"
+              src={logoSrc}
+              alt="Simplix"
+              style={{
+                height: isDarkLogo ? 22 : 28,
+                width: 'auto',
+                maxWidth: 36,
+                objectFit: 'contain',
+                display: 'block',
+              }}
+              title="Simplix"
+            />
           )}
           {!isNavCollapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -818,7 +841,7 @@ function MainApp() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 height: 36, cursor: 'pointer',
                 background: showMyWork ? 'var(--sidebar-active-bg)' : 'transparent',
-                borderLeft: showMyWork ? '3px solid #0073ea' : '3px solid transparent',
+                borderLeft: showMyWork ? '3px solid #9b72f5' : '3px solid transparent',
               }}
               onMouseEnter={e => { if (!showMyWork) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = showMyWork ? 'var(--sidebar-active-bg)' : 'transparent'; }}
@@ -830,18 +853,107 @@ function MainApp() {
               onClick={() => setShowMyWork(true)}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-                padding: '7px 16px', cursor: 'pointer', textAlign: 'left',
+                padding: '10px 18px', cursor: 'pointer', textAlign: 'left',
                 background: showMyWork ? 'var(--sidebar-active-bg)' : 'transparent',
-                borderLeft: showMyWork ? '3px solid #0073ea' : '3px solid transparent',
-                color: showMyWork ? 'var(--primary-blue)' : 'var(--sidebar-text)',
-                fontWeight: showMyWork ? 600 : 400, fontSize: 13,
+                borderLeft: showMyWork ? '3px solid #9b72f5' : '3px solid transparent',
+                color: showMyWork ? '#9b72f5' : 'var(--sidebar-text)',
+                fontWeight: 800, fontSize: 16, letterSpacing: 0,
               }}
               onMouseEnter={e => { if (!showMyWork) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = showMyWork ? 'var(--sidebar-active-bg)' : 'transparent'; }}
             >
-              <span style={{ fontSize: 15, flexShrink: 0 }}>👤</span>
+              <span style={{ fontSize: 17, flexShrink: 0 }}>👤</span>
               My Work
             </button>
+          )}
+
+          {/* Create actions — intentionally placed below My Work */}
+          {isNavCollapsed ? (
+            isManager && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0', gap: 6 }}>
+                <button
+                  onClick={() => { setIsNavCollapsed(false); localStorage.setItem('workboard_nav_collapsed', 'false'); setTimeout(() => setShowNewBoard(true), 220); }}
+                  title="New Board"
+                  style={{
+                    width: 32, height: 32, borderRadius: 8, fontSize: 16, fontWeight: 800,
+                    background: 'rgba(155,114,245,0.12)', color: 'var(--sidebar-text)',
+                    border: '1px solid rgba(155,114,245,0.52)',
+                    boxShadow: '0 0 12px rgba(155,114,245,0.16)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(155,114,245,0.20)'; e.currentTarget.style.borderColor = '#9b72f5'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(155,114,245,0.12)'; e.currentTarget.style.borderColor = 'rgba(155,114,245,0.52)'; }}
+                >▣</button>
+              </div>
+            )
+          ) : isManager && (
+            <div style={{ padding: '4px 14px 10px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {showNewBoard ? (
+                <form ref={newBoardFormRef} onSubmit={handleCreateBoard} style={{ padding: 10, border: '1px solid rgba(155,114,245,0.42)', borderRadius: 8, background: 'rgba(155,114,245,0.08)', boxShadow: '0 0 14px rgba(155,114,245,0.12)' }}>
+                  <input
+                    autoFocus value={newBoardName} onChange={e => setNewBoardName(e.target.value)}
+                    placeholder="Board name..."
+                    style={{
+                      width: '100%', border: '1px solid var(--sidebar-input-border)', background: 'var(--sidebar-input-bg)',
+                      color: 'var(--sidebar-text)', borderRadius: 6, padding: '7px 9px', outline: 'none', fontSize: 14,
+                      marginBottom: 7, boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['org_wide', 'private'].map(v => (
+                      <button
+                        key={v} type="button"
+                        onClick={() => setNewBoardVisibility(v)}
+                        style={{
+                          flex: 1, padding: '5px 0', borderRadius: 5, fontSize: 12, fontWeight: 800,
+                          border: `1.5px solid ${newBoardVisibility === v ? '#9b72f5' : 'var(--sidebar-input-border)'}`,
+                          background: newBoardVisibility === v ? '#9b72f5' : 'transparent',
+                          color: newBoardVisibility === v ? '#fff' : 'var(--sidebar-text-muted)',
+                        }}
+                      >
+                        {v === 'org_wide' ? '🌐 Org' : '🔒 Private'}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="submit" style={{
+                    width: '100%', marginTop: 7, padding: '7px 0',
+                    background: 'linear-gradient(90deg, #9b72f5 0%, #b86cff 100%)', color: '#fff', borderRadius: 6, fontSize: 14, fontWeight: 800,
+                  }}>Create Board</button>
+                </form>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setShowNewBoard(true)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                      padding: '9px 12px', textAlign: 'left', color: 'var(--sidebar-text)', fontSize: 15, fontWeight: 800,
+                      border: '1px solid rgba(155,114,245,0.46)', borderRadius: 8,
+                      background: 'rgba(155,114,245,0.08)', boxShadow: '0 0 14px rgba(155,114,245,0.12)',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(155,114,245,0.16)'; e.currentTarget.style.borderColor = '#9b72f5'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(155,114,245,0.08)'; e.currentTarget.style.borderColor = 'rgba(155,114,245,0.46)'; }}
+                  >
+                    <span style={{ fontSize: 15 }}>▣</span>
+                    New Board
+                  </button>
+                  <button
+                    onClick={() => handleCreateFolder()}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                      padding: '9px 12px', textAlign: 'left', color: 'var(--sidebar-text)', fontSize: 15, fontWeight: 800,
+                      border: '1px solid rgba(82,234,255,0.38)', borderRadius: 8,
+                      background: 'rgba(82,234,255,0.06)', boxShadow: '0 0 12px rgba(82,234,255,0.10)',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(82,234,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(82,234,255,0.72)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(82,234,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(82,234,255,0.38)'; }}
+                  >
+                    <span style={{ fontSize: 15 }}>📁</span>
+                    New Folder
+                  </button>
+                </>
+              )}
+            </div>
           )}
 
           {/* ── Dashboards ── */}
@@ -853,7 +965,7 @@ function MainApp() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 height: 36, cursor: 'pointer',
                 background: activeDashboardId ? 'var(--sidebar-active-bg)' : 'transparent',
-                borderLeft: activeDashboardId ? '3px solid #0073ea' : '3px solid transparent',
+                borderLeft: activeDashboardId ? '3px solid #9b72f5' : '3px solid transparent',
               }}
               onMouseEnter={e => { if (!activeDashboardId) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = activeDashboardId ? 'var(--sidebar-active-bg)' : 'transparent'; }}
@@ -862,9 +974,9 @@ function MainApp() {
             </div>
           ) : (
             <>
-              <div style={{ padding: '6px 16px 2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              <div style={{ padding: '10px 18px 5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
                 onClick={() => setDashboardsExpanded(v => !v)}>
-                <span style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                   {dashboardsExpanded ? '▼' : '▶'}&nbsp; Dashboards
                 </span>
                 {isManager && (
@@ -879,8 +991,8 @@ function MainApp() {
                       } catch { toast('Failed to create dashboard', 'error'); }
                     }}
                     title="New Dashboard"
-                    style={{ fontSize: 16, color: 'var(--sidebar-text-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#0073ea'}
+                    style={{ fontSize: 18, color: 'var(--sidebar-text-muted)', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '0 2px' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#9b72f5'}
                     onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text-muted)'}
                   >+</button>
                 )}
@@ -888,7 +1000,7 @@ function MainApp() {
               {dashboardsExpanded && (
                 <div>
                   {dashboards.length === 0 && (
-                    <div style={{ padding: '4px 16px 4px 28px', fontSize: 12, color: 'var(--sidebar-text-muted)', fontStyle: 'italic' }}>
+                    <div style={{ padding: '6px 18px 6px 30px', fontSize: 14, color: 'var(--sidebar-text-muted)', fontStyle: 'italic' }}>
                       {isManager ? 'Click + to create a dashboard' : 'No dashboards yet'}
                     </div>
                   )}
@@ -900,17 +1012,17 @@ function MainApp() {
                           onClick={() => { setActiveDashboardId(d.id); setActiveBoard(null); }}
                           style={{
                             flex: 1, display: 'flex', alignItems: 'center', gap: 6,
-                            padding: '6px 8px', textAlign: 'left', fontSize: 13,
+                            padding: '8px 8px', textAlign: 'left', fontSize: 15,
                             background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
-                            borderLeft: isActive ? '3px solid #0073ea' : '3px solid transparent',
-                            color: isActive ? 'var(--primary-blue)' : 'var(--sidebar-text)',
-                            fontWeight: isActive ? 600 : 400,
+                            borderLeft: isActive ? '3px solid #9b72f5' : '3px solid transparent',
+                            color: isActive ? '#9b72f5' : 'var(--sidebar-text)',
+                            fontWeight: 800,
                             overflow: 'hidden',
                           }}
                           onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = isActive ? 'var(--sidebar-active-bg)' : 'transparent'; }}
                         >
-                          <span style={{ fontSize: 13, flexShrink: 0 }}>📊</span>
+                          <span style={{ fontSize: 15, flexShrink: 0 }}>📊</span>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
                         </button>
                         {isManager && isActive && (
@@ -939,8 +1051,8 @@ function MainApp() {
 
           {/* Header row */}
           {!isNavCollapsed && (
-            <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-              <span style={{ fontSize: 11, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
+            <div style={{ padding: '10px 18px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 {isAdmin ? 'All Boards' : 'Boards'}
               </span>
               {isAdmin && (
@@ -982,7 +1094,7 @@ function MainApp() {
                     <div
                       onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
                       title={folder.name + (isSub ? ' (subfolder)' : '')}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 32, cursor: 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 38, cursor: 'pointer' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
@@ -993,19 +1105,19 @@ function MainApp() {
                       style={{
                         position: 'relative',
                         display: 'flex', alignItems: 'center',
-                        padding: isSub ? '4px 16px 4px 32px' : '5px 16px',
-                        cursor: 'pointer', gap: 4,
+                        padding: isSub ? '7px 18px 7px 34px' : '8px 18px',
+                        cursor: 'pointer', gap: 6,
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       <span
                         onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
-                        style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginRight: 2, userSelect: 'none', flexShrink: 0 }}
+                        style={{ fontSize: 12, color: 'var(--sidebar-text-muted)', marginRight: 2, userSelect: 'none', flexShrink: 0 }}
                       >
                         {collapsed ? '▶' : '▼'}
                       </span>
-                      <span style={{ fontSize: 12, color: 'var(--sidebar-text-muted)', flexShrink: 0 }}>{isSub ? '📂' : '📁'}</span>
+                      <span style={{ fontSize: 15, color: 'var(--sidebar-text-muted)', flexShrink: 0 }}>{isSub ? '📂' : '📁'}</span>
                       {isRenaming ? (
                         <input
                           autoFocus
@@ -1016,19 +1128,19 @@ function MainApp() {
                           onClick={e => e.stopPropagation()}
                           style={{
                             flex: 1, background: 'var(--sidebar-input-bg)', border: '1px solid var(--sidebar-input-border)',
-                            color: 'var(--sidebar-text)', borderRadius: 4, padding: '1px 6px', fontSize: 12, outline: 'none',
+                            color: 'var(--sidebar-text)', borderRadius: 4, padding: '2px 7px', fontSize: 14, outline: 'none',
                           }}
                         />
                       ) : (
                         <span
                           onDoubleClick={isManager ? () => { setRenamingFolderId(folder.id); setRenameFolderDraft(folder.name); } : undefined}
                           onClick={() => setCollapsedFolders(s => { const n = new Set(s); n.has(folder.id) ? n.delete(folder.id) : n.add(folder.id); return n; })}
-                          style={{ flex: 1, fontSize: 12, color: 'var(--sidebar-text)', fontWeight: isSub ? 500 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          style={{ flex: 1, fontSize: 15, color: 'var(--sidebar-text)', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           title={isManager ? 'Double-click to rename' : undefined}
                         >
                           {folder.name}
                           {totalCount > 0 && (
-                            <span style={{ fontSize: 10, color: 'var(--sidebar-text-muted)', marginLeft: 4, fontWeight: 400 }}>
+                            <span style={{ fontSize: 12, color: 'var(--sidebar-text-muted)', marginLeft: 4, fontWeight: 800 }}>
                               ({totalCount})
                             </span>
                           )}
@@ -1114,7 +1226,7 @@ function MainApp() {
           {unfiledBoards.length > 0 && (
             <>
               {folders.length > 0 && !isNavCollapsed && (
-                <div style={{ padding: '8px 16px 2px', fontSize: 10, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <div style={{ padding: '10px 18px 4px', fontSize: 12, fontWeight: 800, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                   No Folder
                 </div>
               )}
@@ -1122,76 +1234,6 @@ function MainApp() {
             </>
           )}
 
-          {/* New board form / button */}
-          {isNavCollapsed ? (
-            isManager && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 0', gap: 4 }}>
-                <button
-                  onClick={() => { setIsNavCollapsed(false); localStorage.setItem('workboard_nav_collapsed', 'false'); setTimeout(() => setShowNewBoard(true), 220); }}
-                  title="New Board"
-                  style={{
-                    width: 30, height: 30, borderRadius: '50%', fontSize: 18, fontWeight: 300,
-                    background: 'var(--sidebar-btn-bg)', color: 'var(--sidebar-text)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-btn-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'var(--sidebar-btn-bg)'}
-                >+</button>
-              </div>
-            )
-          ) : showNewBoard ? (
-            <form ref={newBoardFormRef} onSubmit={handleCreateBoard} style={{ padding: '8px 12px', marginTop: 4 }}>
-              <input
-                autoFocus value={newBoardName} onChange={e => setNewBoardName(e.target.value)}
-                placeholder="Board name…"
-                style={{
-                  width: '100%', border: '1px solid var(--sidebar-input-border)', background: 'var(--sidebar-input-bg)',
-                  color: 'var(--sidebar-text)', borderRadius: 6, padding: '6px 8px', outline: 'none', fontSize: 13,
-                  marginBottom: 6, boxSizing: 'border-box',
-                }}
-              />
-              <div style={{ display: 'flex', gap: 6 }}>
-                {['org_wide', 'private'].map(v => (
-                  <button
-                    key={v} type="button"
-                    onClick={() => setNewBoardVisibility(v)}
-                    style={{
-                      flex: 1, padding: '4px 0', borderRadius: 5, fontSize: 11, fontWeight: 600,
-                      border: `1.5px solid ${newBoardVisibility === v ? '#0073ea' : 'var(--sidebar-input-border)'}`,
-                      background: newBoardVisibility === v ? '#0073ea' : 'transparent',
-                      color: newBoardVisibility === v ? '#fff' : 'var(--sidebar-text-muted)',
-                    }}
-                  >
-                    {v === 'org_wide' ? '🌐 Org' : '🔒 Private'}
-                  </button>
-                ))}
-              </div>
-              <button type="submit" style={{
-                width: '100%', marginTop: 6, padding: '5px 0',
-                background: '#0073ea', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 600,
-              }}>Create Board</button>
-            </form>
-          ) : isManager ? (
-            <div style={{ padding: '4px 0' }}>
-              <button
-                onClick={() => setShowNewBoard(true)}
-                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'var(--sidebar-text-muted)', fontSize: 12 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                + New Board
-              </button>
-              <button
-                onClick={() => handleCreateFolder()}
-                style={{ width: '100%', padding: '7px 16px', textAlign: 'left', color: 'var(--sidebar-text-muted)', fontSize: 12 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                + New Folder
-              </button>
-            </div>
-          ) : null}
         </div>
 
         {isAdmin && (
@@ -1229,20 +1271,23 @@ function MainApp() {
           </div>
         )}
         {!isNavCollapsed && (
-          <div style={{ padding: '8px 16px', borderTop: '1px solid var(--sidebar-border)', fontSize: 11, color: 'var(--sidebar-text-muted)', whiteSpace: 'nowrap' }}>
-            D'Decor Home Fabrics
+          <div style={{ padding: '10px 16px', borderTop: '1px solid var(--sidebar-border)', fontSize: 11, fontWeight: 500, color: 'var(--sidebar-text-muted)', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif", letterSpacing: '0.02em' }}>
+            © Simplix 2024
           </div>
         )}
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-secondary)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'transparent' }}>
         {/* Top bar */}
         <div
           className="app-topbar wb-safe-top wb-safe-left wb-safe-right"
           style={{
-            background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-color)',
-            padding: '0 20px', height: 52, display: 'flex', alignItems: 'center', gap: 10,
+            background: 'var(--topbar-bg)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            borderBottom: '1px solid var(--topbar-border)',
+            padding: '0 24px', height: 56, display: 'flex', alignItems: 'center', gap: 10,
           }}
         >
           {/* Hamburger — mobile only */}
@@ -1253,14 +1298,14 @@ function MainApp() {
           >☰</button>
 
           {activeDashboardId ? (
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', flex: 1, display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Cormorant Garamond', 'Playfair Display', Georgia, serif", letterSpacing: '-0.01em' }}>
               <span style={{ fontSize: 16 }}>📊</span>
               {dashboards.find(d => d.id === activeDashboardId)?.name || 'Dashboard'}
             </h1>
           ) : activeBoard && isManager ? (
             <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
           ) : (
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', flex: 1 }}>{activeBoard?.name || 'Select a Board'}</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', flex: 1, fontFamily: "'Cormorant Garamond', 'Playfair Display', Georgia, serif", letterSpacing: '-0.01em', lineHeight: 1.2 }}>{activeBoard?.name || 'Select a Board'}</h1>
           )}
           {!activeDashboardId && isAdmin && activeBoard && !activeBoard.members?.some(m => m.id === currentUser?.id) && (
             <span style={{

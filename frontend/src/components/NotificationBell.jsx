@@ -14,7 +14,7 @@ function timeAgo(dateStr) {
 
 // What icon/accent to show per notification type (inferred from message)
 function notifMeta(msg = '') {
-  if (msg.includes('mentioned')) return { icon: '@', color: '#0073ea' };
+  if (msg.includes('mentioned')) return { icon: '@', color: '#9b72f5' };
   if (msg.includes('replied'))   return { icon: '↩', color: '#a25ddc' };
   return { icon: '🔔', color: '#fdab3d' };
 }
@@ -127,7 +127,7 @@ export default function NotificationBell({ onOpenItem }) {
               )}
             </div>
             {unreadCount > 0 && (
-              <button onClick={handleMarkAllRead} style={{ fontSize: 12, color: '#0073ea', fontWeight: 600 }}>
+              <button onClick={handleMarkAllRead} style={{ fontSize: 12, color: '#9b72f5', fontWeight: 600 }}>
                 Mark all read
               </button>
             )}
@@ -194,7 +194,7 @@ export default function NotificationBell({ onOpenItem }) {
                           )}
                           {n.item_name && (
                             <span style={{
-                              fontSize: 11, color: '#0073ea', background: '#e8f4ff',
+                              fontSize: 11, color: '#9b72f5', background: '#e8f4ff',
                               borderRadius: 4, padding: '1px 6px', fontWeight: 600,
                             }}>
                               {n.item_name}
@@ -209,7 +209,7 @@ export default function NotificationBell({ onOpenItem }) {
                       {/* Timestamp + unread dot */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                         {!n.is_read && (
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0073ea', flexShrink: 0, display: 'inline-block' }} />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9b72f5', flexShrink: 0, display: 'inline-block' }} />
                         )}
                         <span style={{ fontSize: 11, color: '#aaa' }}>{timeAgo(n.created_at)}</span>
                       </div>

@@ -3,7 +3,7 @@ import { getActivityLogs } from '../api';
 
 const ACTION_ICONS = {
   item_created: { icon: '✚', color: '#00c875' },
-  item_renamed: { icon: '✎', color: '#0073ea' },
+  item_renamed: { icon: '✎', color: '#9b72f5' },
   item_deleted: { icon: '✕', color: '#e2445c' },
   value_changed: { icon: '↻', color: '#fdab3d' },
   group_created: { icon: '▤', color: '#a25ddc' },
