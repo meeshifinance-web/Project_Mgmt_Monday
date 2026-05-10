@@ -349,6 +349,12 @@ export default function LoginPage() {
           outline: none;
           transition: border-color 0.2s, box-shadow 0.2s;
           box-shadow: 0 1px 2px rgba(100, 70, 180, 0.04);
+          /* Kill iOS / Android native input chrome so our border actually
+             shows. Without this, iOS Safari draws its own inset gradient
+             that visually erases the 1.5px purple-gray border. */
+          -webkit-appearance: none;
+          appearance: none;
+          color-scheme: light;
         }
         .spx-field input:focus {
           border-color: #b48aff;
@@ -547,13 +553,15 @@ export default function LoginPage() {
             align-items: stretch;
           }
 
-          /* Logo: in flow, top-left, properly sized */
+          /* Logo: in flow, centered, properly sized */
           .spx-logo-fixed {
             position: relative;
             top: auto; left: auto;
             padding: 20px 20px 0;
             display: flex;
             align-items: center;
+            justify-content: center;
+            align-self: center;
             flex-shrink: 0;
           }
           .spx-logo-fixed img { height: 72px; }
@@ -664,8 +672,13 @@ export default function LoginPage() {
             font-size: 15px;
             border-radius: 9px;
             padding: 0 14px;
-            border: 1.5px solid #a89cc7;
-            box-shadow: 0 1px 2px rgba(100, 70, 180, 0.06);
+            /* Bump to 2px so the border survives sub-pixel rounding on
+               high-DPI phone screens. Darker tone for clearer contrast. */
+            border: 2px solid #8a7eb8 !important;
+            box-shadow: 0 1px 3px rgba(100, 70, 180, 0.08);
+            -webkit-appearance: none !important;
+            appearance: none !important;
+            background-clip: padding-box;
           }
           .spx-field input[style] { padding-right: 42px !important; }
 
