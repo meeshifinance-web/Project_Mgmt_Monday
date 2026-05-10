@@ -533,10 +533,14 @@ export default function LoginPage() {
         /* ══ MOBILE — ≤ 640px ════════════════════════════════════════════════ */
         @media (max-width: 640px) {
 
-          /* Single screen, no scroll, use dynamic viewport height */
+          /* Allow scrolling so the submit button and footer stay reachable
+             on small phones and when the on-screen keyboard is open.
+             min-height lets the page grow as the keyboard shrinks the viewport. */
           .spx {
-            height: 100dvh;
-            overflow: hidden;
+            height: auto;
+            min-height: 100dvh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             display: flex;
             flex-direction: column;
             align-items: stretch;
@@ -556,15 +560,17 @@ export default function LoginPage() {
           /* Desktop absolute character: hidden */
           .spx-char-fixed { display: none; }
 
-          /* Grid → flex column */
+          /* Grid → flex column. Let it grow naturally; respect the iOS
+             home-indicator with safe-area padding at the bottom. */
           .spx-wrap {
             display: flex;
             flex-direction: column;
-            flex: 1;
-            height: 0;           /* lets flex-grow fill without overflow */
-            padding: 12px 16px 14px;
+            flex: 1 0 auto;
+            height: auto;
+            min-height: 0;
+            padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
             gap: 0;
-            overflow: hidden;
+            overflow: visible;
           }
 
           /* Left: compact, centered, no scroll */
@@ -616,26 +622,27 @@ export default function LoginPage() {
             filter: drop-shadow(0 6px 14px rgba(130,90,190,0.18));
           }
 
-          /* Right: fills remaining height, NO inner scroll */
+          /* Right: grows with content, no inner scroll, no fixed height */
           .spx-right {
-            flex: 1;
+            flex: 0 0 auto;
             margin-top: 10px;
-            overflow: hidden;
+            overflow: visible;
             justify-content: center;
             max-height: none;
+            padding-top: 0;
           }
 
-          /* Card: tight premium, no scroll */
+          /* Card: grows to fit content; no clipped overflow */
           .spx-card {
             max-width: 100%;
-            height: 100%;
+            height: auto;
             border-radius: 20px;
-            padding: 18px 18px 12px;
+            padding: 18px 18px 18px;
             box-shadow:
               0 2px 0 rgba(255,255,255,0.9) inset,
               0 8px 28px rgba(100,70,180,0.11),
               0 2px 6px rgba(100,70,180,0.06);
-            overflow: hidden;
+            overflow: visible;
           }
 
           .spx-card-title { font-size: 30px; margin-bottom: 2px; }
@@ -667,11 +674,20 @@ export default function LoginPage() {
         @media (max-width: 375px) {
           .spx-logo-fixed img  { height: 64px; }
           .spx-title           { font-size: 30px; }
-          .spx-char-mobile     { width: 88px; }
-          .spx-card            { padding: 14px 14px 10px; border-radius: 16px; }
+          .spx-char-mobile     { width: 88px; margin-top: 4px; }
+          .spx-card            { padding: 14px 14px 14px; border-radius: 16px; }
           .spx-card-title      { font-size: 26px; }
           .spx-field input     { height: 38px; }
           .spx-submit          { height: 42px; font-size: 15px; }
+        }
+
+        /* Short phones in landscape — keep the form reachable */
+        @media (max-width: 900px) and (max-height: 520px) {
+          .spx-char-mobile { display: none; }
+          .spx-logo-fixed  { padding: 10px 16px 0; }
+          .spx-logo-fixed img { height: 52px; }
+          .spx-wrap        { padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); }
+          .spx-card        { padding: 14px 16px 14px; }
         }
       `}</style>
 

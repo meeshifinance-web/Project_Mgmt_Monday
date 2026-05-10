@@ -545,6 +545,44 @@ select {
   opacity: 1;
 }
 
+/* ── Native <option> popups — dark mode ──────────────────────────────────────
+   Browsers render the open dropdown popup with a white background by default,
+   inheriting the select's CSS color. With dark-mode overrides forcing the
+   select text white, the open popup becomes white-on-white (invisible).
+   Explicitly set option bg + text so dropdowns are readable when opened. */
+[data-theme="dark"] select option,
+[data-theme="dark"] select optgroup {
+  background-color: #1b2045 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+[data-theme="dark"] select option:checked,
+[data-theme="dark"] select option:hover {
+  background-color: #2a3062 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .wb-side-panel select option,
+[data-theme="dark"] .wb-side-panel select optgroup {
+  background-color: #111832 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .wb-side-panel select option:checked,
+[data-theme="dark"] .wb-side-panel select option:hover {
+  background-color: #2a3062 !important;
+  color: #ffffff !important;
+}
+
+/* Light-mode safety net — make options explicitly readable on macOS/Windows
+   where a hostile OS dark-mode setting could otherwise color them. */
+:not([data-theme="dark"]) select option,
+:not([data-theme="dark"]) select optgroup {
+  background-color: #ffffff;
+  color: #111122;
+}
+
 /* ── Dropdown menus & popups ─────────────────────────────────────────────── */
 [data-theme="dark"] [style*="background:'#fff'"],
 [data-theme="dark"] [style*='background:"#fff"'] {
@@ -727,6 +765,8 @@ select {
 [data-theme="dark"] .wb-side-panel [style*="color:#64748b"],
 [data-theme="dark"] .wb-side-panel [style*="color: #555"],
 [data-theme="dark"] .wb-side-panel [style*="color:#555"],
+[data-theme="dark"] .wb-side-panel [style*="color: #676879"],
+[data-theme="dark"] .wb-side-panel [style*="color:#676879"],
 [data-theme="dark"] .wb-side-panel [style*="color: #334155"],
 [data-theme="dark"] .wb-side-panel [style*="color:#334155"],
 [data-theme="dark"] .wb-side-panel [style*="color: #323338"],

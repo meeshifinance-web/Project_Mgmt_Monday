@@ -155,7 +155,7 @@ function Summary({ auto, columns, groups }) {
   }
 
   return (
-    <div style={{ fontSize: 12, color: '#555', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       <span style={{ background: 'rgba(155,114,245,0.15)', color: '#9b72f5', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
         WHEN {trigText}
       </span>
@@ -292,7 +292,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                 For "on" mode: 0 = today, 1+ = N days before the date.
                 For "after" mode: 0 = any time past, 1+ = at least N days past. */}
             <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: '#676879' }}>Fire when item is</span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fire when item is</span>
               <input
                 type="number"
                 min="0"
@@ -308,10 +308,10 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                 }}
                 style={{ ...inp, width: 80 }}
               />
-              <span style={{ fontSize: 12, color: '#676879' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 {triggerConfig.mode === 'after'
-                  ? <>day(s) past the date <span style={{ color: 'var(--text-secondary)' }}>(0 = any past date)</span></>
-                  : <>day(s) before the date <span style={{ color: 'var(--text-secondary)' }}>(0 = on the date)</span></>
+                  ? <>day(s) past the date <span style={{ color: 'var(--text-muted)' }}>(0 = any past date)</span></>
+                  : <>day(s) before the date <span style={{ color: 'var(--text-muted)' }}>(0 = on the date)</span></>
                 }
               </span>
             </div>
@@ -551,7 +551,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                 style={{ ...inp, resize: 'vertical' }} />
             </div>
             {(actionConfig.subject || actionConfig.body) && (
-              <div style={{ background: '#f7f7f7', border: '1px solid #e0e0e0', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#555' }}>
+              <div style={{ background: '#f7f7f7', border: '1px solid #e0e0e0', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: 'var(--text-secondary)' }}>
                 <strong style={{ display: 'block', marginBottom: 4, color: 'var(--text-primary)' }}>Preview (tokens shown as-is — resolved at send time)</strong>
                 {actionConfig.subject && <div><strong>Subject:</strong> {actionConfig.subject}</div>}
                 {actionConfig.body    && <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}><strong>Body:</strong> {actionConfig.body}</div>}
@@ -591,7 +591,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
         <input value={name} onChange={e => setName(e.target.value)} placeholder={buildAutoName()} style={inp} />
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onCancel} style={{ padding: '7px 16px', border: '1px solid #ddd', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+        <button type="button" onClick={onCancel} style={{ padding: '7px 16px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)', background: 'var(--bg-primary)' }}>Cancel</button>
         <button type="button" onClick={handleSubmit} style={{ padding: '7px 16px', background: '#9b72f5', color: '#fff', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Save</button>
       </div>
     </div>
@@ -656,7 +656,7 @@ function BoardEmailSettings({ emailFrom, onChange }) {
       </div>
 
       {draft.trim() && (
-        <div style={{ marginTop: 8, fontSize: 11, color: '#555' }}>
+        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
           This board will send from: <strong>{draft.trim()}</strong>
         </div>
       )}
@@ -969,12 +969,12 @@ export default function AutomationsPanel({
   // Tab bar styles
   const tabStyle = (active) => ({
     flex: 1, padding: '9px 4px', fontSize: 13, fontWeight: active ? 700 : 500,
-    color: active ? '#9b72f5' : '#676879',
-    borderBottom: active ? '2.5px solid #9b72f5' : '2.5px solid transparent',
+    color: active ? 'var(--primary-blue)' : 'var(--text-secondary)',
+    borderBottom: active ? '2.5px solid var(--primary-blue)' : '2.5px solid transparent',
     background: 'none', border: 'none',
     borderBottomWidth: 2.5,
     borderBottomStyle: 'solid',
-    borderBottomColor: active ? '#9b72f5' : 'transparent',
+    borderBottomColor: active ? 'var(--primary-blue)' : 'transparent',
     cursor: 'pointer', transition: 'color 0.15s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
   });
