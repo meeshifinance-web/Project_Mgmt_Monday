@@ -34,3 +34,4 @@ migration-tool/.workboard-token
 # OS junk
 .DS_Store
 Thumbs.db
+Docs/
