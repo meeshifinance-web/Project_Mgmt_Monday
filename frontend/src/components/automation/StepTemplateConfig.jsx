@@ -127,17 +127,17 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
             <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
               📅 Step Date Template
             </div>
-            <div style={{ fontSize: 12, color: '#676879', marginTop: 2 }}>{boardName}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{boardName}</div>
           </div>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#676879' }}>×</button>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
         </div>
 
         {/* Steps list */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-          {error && <div style={{ background: '#fff0f0', color: '#e2445c', borderRadius: 6, padding: '8px 12px', fontSize: 12, marginBottom: 12 }}>{error}</div>}
+          {error && <div style={{ background: 'rgba(226,68,92,0.12)', color: '#e2445c', borderRadius: 6, padding: '8px 12px', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
           {steps.length === 0 && (
-            <div style={{ color: '#676879', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
               No steps yet. Click "Add Step" to configure.
             </div>
           )}
@@ -146,10 +146,10 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
           {steps.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 160px 80px 70px 28px', gap: 8, alignItems: 'center', padding: '0 0 6px', borderBottom: '1px solid var(--border-color)', marginBottom: 8 }}>
               <span />
-              <span style={{ fontSize: 11, color: '#676879', fontWeight: 600 }}>STEP NAME</span>
-              <span style={{ fontSize: 11, color: '#676879', fontWeight: 600 }}>DATE COLUMN</span>
-              <span style={{ fontSize: 11, color: '#676879', fontWeight: 600 }} title="Days until the NEXT step starts">DAYS→NEXT</span>
-              <span style={{ fontSize: 11, color: '#676879', fontWeight: 600 }}>ANCHOR</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>STEP NAME</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>DATE COLUMN</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }} title="Days until the NEXT step starts">DAYS→NEXT</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>ANCHOR</span>
               <span />
             </div>
           )}
@@ -170,7 +170,7 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
               }}
             >
               {/* Drag handle */}
-              <span style={{ color: '#c5c7d0', cursor: 'grab', userSelect: 'none', textAlign: 'center', fontSize: 14 }}>⠿</span>
+              <span style={{ color: 'var(--text-muted)', cursor: 'grab', userSelect: 'none', textAlign: 'center', fontSize: 14 }}>⠿</span>
 
               {/* Step name */}
               <input
@@ -215,9 +215,9 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
               {/* Delete */}
               <button
                 onClick={() => removeStep(idx)}
-                style={{ border: 'none', background: 'none', color: '#c5c7d0', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}
+                style={{ border: 'none', background: 'none', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}
                 onMouseEnter={e => e.currentTarget.style.color = '#e2445c'}
-                onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
               >×</button>
             </div>
           ))}
@@ -227,7 +227,7 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
             const before = anchorIdx;
             const after  = steps.length - 1 - anchorIdx;
             return (
-              <div style={{ marginTop: 10, marginBottom: 4, padding: '7px 10px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: 11, color: '#676879', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ marginTop: 10, marginBottom: 4, padding: '7px 10px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>⚓ Anchor = your known date.</span>
                 <span style={{ color: '#9b72f5' }}>← Backward fills {before} step{before !== 1 ? 's' : ''} before it</span>
                 <span>·</span>
@@ -242,11 +242,11 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
             onClick={addStep}
             style={{
               marginTop: 8, padding: '6px 14px', background: 'none',
-              border: '1.5px dashed #c5c7d0', borderRadius: 6,
-              color: '#676879', fontSize: 13, cursor: 'pointer', width: '100%',
+              border: '1.5px dashed var(--border-color)', borderRadius: 6,
+              color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', width: '100%',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = '#9b72f5'; e.currentTarget.style.color = '#9b72f5'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#c5c7d0'; e.currentTarget.style.color = '#676879'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--text-muted)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
           >
             + Add Step
           </button>
@@ -254,12 +254,12 @@ export default function StepTemplateConfig({ boardId, boardName, boardColumns, o
 
         {/* Footer */}
         <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 12, color: '#676879' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             Total project duration:&nbsp;
             <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{totalDays} days</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onClose} style={{ padding: '7px 16px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: '#676879', background: 'var(--bg-primary)' }}>
+            <button onClick={onClose} style={{ padding: '7px 16px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)', background: 'var(--bg-primary)' }}>
               Cancel
             </button>
             <button

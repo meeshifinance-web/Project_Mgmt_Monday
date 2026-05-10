@@ -309,6 +309,17 @@ async function start() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_board_views_board ON board_views(board_id)`);
+    await pool.query(`ALTER TABLE board_views ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0`);
+    await pool.query(`UPDATE board_views SET position = id WHERE position = 0`);
+    // Persistent flag for the locked Main Table view. Inferring it from
+    // the first row breaks as soon as the user drag-reorders views.
+    await pool.query(`ALTER TABLE board_views ADD COLUMN IF NOT EXISTS is_main BOOLEAN NOT NULL DEFAULT false`);
+    await pool.query(`
+      UPDATE board_views SET is_main = true
+       WHERE id IN (SELECT MIN(id) FROM board_views GROUP BY board_id)
+         AND is_main = false
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_board_main_view ON board_views (board_id) WHERE is_main = true`);
     console.log('✅ board_views table ready');
 
     // Dashboards

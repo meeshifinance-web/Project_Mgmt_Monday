@@ -292,11 +292,11 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
               />
               <span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#323338', display: 'block' }}>
-                  🔒 Private mode — only owners see their items
+                  🔒 Strict access mode
                 </span>
                 <span style={{ fontSize: 11, color: '#676879', display: 'block', marginTop: 3, lineHeight: 1.5 }}>
                   Each member sees only the items where their name is listed in an Owner column.
-                  Board Owners (★) and admins keep full visibility across the board.
+                  Board Owners (★) keep full visibility across the board.
                 </span>
               </span>
             </label>

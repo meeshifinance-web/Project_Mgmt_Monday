@@ -76,9 +76,9 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
           <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>📅 Date Cascade</div>
-              <div style={{ fontSize: 12, color: '#676879', marginTop: 2 }}>{boardName}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{boardName}</div>
             </div>
-            <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer', color: '#676879' }}>×</button>
+            <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
           </div>
 
           {/* Scrollable body */}
@@ -90,7 +90,7 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
                 <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>Step Template</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {totalDays > 0 && (
-                    <span style={{ background: '#e8f0fe', color: '#9b72f5', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                    <span style={{ background: 'rgba(155,114,245,0.15)', color: '#9b72f5', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
                       {totalDays}d total
                     </span>
                   )}
@@ -104,28 +104,28 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
               </div>
 
               {steps.length === 0 ? (
-                <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '16px', textAlign: 'center', color: '#676879', fontSize: 12 }}>
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>
                   No template configured. Click Configure to set up step dates.
                 </div>
               ) : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)' }}>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', color: '#676879', fontWeight: 600 }}>#</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', color: '#676879', fontWeight: 600 }}>Step</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'left', color: '#676879', fontWeight: 600 }}>Column</th>
-                      <th style={{ padding: '5px 8px', textAlign: 'right', color: '#676879', fontWeight: 600 }}>Days</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>#</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Step</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Column</th>
+                      <th style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600 }}>Days</th>
                     </tr>
                   </thead>
                   <tbody>
                     {steps.map(s => (
                       <tr key={s.id} style={{ borderBottom: '1px solid var(--border-color)', background: s.is_anchor ? 'rgba(0,200,117,0.05)' : 'transparent' }}>
-                        <td style={{ padding: '5px 8px', color: '#676879' }}>{s.step_order}</td>
+                        <td style={{ padding: '5px 8px', color: 'var(--text-secondary)' }}>{s.step_order}</td>
                         <td style={{ padding: '5px 8px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                           {s.is_anchor && <span title="Anchor step" style={{ color: '#00c875', fontSize: 10 }}>⚓</span>}
                           {s.step_name}
                         </td>
-                        <td style={{ padding: '5px 8px', color: '#676879' }}>{s.column_title || `col #${s.column_id}`}</td>
+                        <td style={{ padding: '5px 8px', color: 'var(--text-secondary)' }}>{s.column_title || `col #${s.column_id}`}</td>
                         <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--text-primary)' }}>{s.duration_days}</td>
                       </tr>
                     ))}
@@ -149,7 +149,7 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
               </div>
 
               {rules.length === 0 ? (
-                <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '16px', textAlign: 'center', color: '#676879', fontSize: 12 }}>
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>
                   {steps.length === 0
                     ? 'Set up a step template first, then add cascade rules.'
                     : 'No rules yet. Add a rule to auto-fill dates.'}
@@ -159,28 +159,28 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
                   {rules.map(rule => (
                     <div key={rule.id} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: '10px 12px', background: rule.is_active ? 'var(--bg-primary)' : 'var(--bg-secondary)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: rule.is_active ? 'var(--text-primary)' : '#a1a1b5' }}>{rule.rule_name}</span>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: rule.is_active ? 'var(--text-primary)' : 'var(--text-muted)' }}>{rule.rule_name}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {/* Active toggle */}
                           <input type="checkbox" checked={!!rule.is_active} onChange={() => handleToggleRule(rule)}
                             style={{ cursor: 'pointer', accentColor: '#00c875', width: 15, height: 15 }} title={rule.is_active ? 'Deactivate' : 'Activate'} />
                           {/* Edit */}
-                          <button onClick={() => setEditRule(rule)} style={{ border: 'none', background: 'none', fontSize: 13, cursor: 'pointer', color: '#676879', padding: '2px 4px' }} title="Edit">✏️</button>
+                          <button onClick={() => setEditRule(rule)} style={{ border: 'none', background: 'none', fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)', padding: '2px 4px' }} title="Edit">✏️</button>
                           {/* Delete */}
                           {confirmDel === rule.id ? (
                             <>
                               <button onClick={() => handleDeleteRule(rule.id)} style={{ border: 'none', background: '#e2445c', color: '#fff', borderRadius: 4, fontSize: 11, cursor: 'pointer', padding: '2px 7px' }}>Delete</button>
-                              <button onClick={() => setConfirmDel(null)} style={{ border: '1px solid #ccc', background: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', padding: '2px 7px' }}>Cancel</button>
+                              <button onClick={() => setConfirmDel(null)} style={{ border: '1px solid var(--border-color)', background: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', padding: '2px 7px' }}>Cancel</button>
                             </>
                           ) : (
-                            <button onClick={() => setConfirmDel(rule.id)} style={{ border: 'none', background: 'none', fontSize: 13, cursor: 'pointer', color: '#c5c7d0', padding: '2px 4px' }} title="Delete"
+                            <button onClick={() => setConfirmDel(rule.id)} style={{ border: 'none', background: 'none', fontSize: 13, cursor: 'pointer', color: 'var(--text-muted)', padding: '2px 4px' }} title="Delete"
                               onMouseEnter={e => e.currentTarget.style.color = '#e2445c'}
-                              onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
+                              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
                             >🗑</button>
                           )}
                         </div>
                       </div>
-                      <div style={{ fontSize: 11, color: '#676879', marginTop: 4 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                         {rule.trigger_type === 'date_entry'
                           ? `When "${rule.trigger_column_title || `col #${rule.trigger_column_id}`}" is entered`
                           : `When status changes to "${rule.trigger_status_to}"`
@@ -205,9 +205,9 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
 
               {logsOpen && (
                 <div>
-                  {loading && <div style={{ color: '#676879', fontSize: 12 }}>Loading…</div>}
+                  {loading && <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>Loading…</div>}
                   {!loading && logs.length === 0 && (
-                    <div style={{ color: '#676879', fontSize: 12, padding: '8px 0' }}>No cascade events yet.</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 12, padding: '8px 0' }}>No cascade events yet.</div>
                   )}
                   {logs.map(log => (
                     <div key={log.id} style={{ borderBottom: '1px solid var(--border-color)', padding: '8px 0', fontSize: 12 }}>
@@ -215,7 +215,7 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
                         <DateCascadeIndicator isAutoCascaded />
                         <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{log.item_name || `Item #${log.item_id}`}</span>
                       </div>
-                      <div style={{ color: '#676879', marginTop: 2 }}>
+                      <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
                         Anchor: {log.anchor_column_title || `col #${log.anchor_column_id}`} = {log.anchor_date}
                         &nbsp;·&nbsp;{Object.keys(log.dates_calculated || {}).length} dates set
                         &nbsp;·&nbsp;{new Date(log.created_at).toLocaleString()}

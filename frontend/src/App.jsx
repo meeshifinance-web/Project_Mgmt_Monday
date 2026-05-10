@@ -296,6 +296,9 @@ function MainApp() {
   const [activeBoard, setActiveBoard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [openItemId, setOpenItemId] = useState(null);
+  // Counter that bumps each time the user picks "Trash" from a board's
+  // sidebar kebab. Board listens for changes and opens the panel.
+  const [trashOpenSignal, setTrashOpenSignal] = useState(0);
   const [newBoardName, setNewBoardName] = useState('');
   const [newBoardVisibility, setNewBoardVisibility] = useState('private');
   const [showNewBoard, setShowNewBoard] = useState(false);
@@ -303,6 +306,10 @@ function MainApp() {
   const [collapsedFolders, setCollapsedFolders] = useState(new Set());
   const [renamingFolderId, setRenamingFolderId] = useState(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
+  // Inline folder-create state. null = idle, '__top__' = creating a new
+  // top-level folder, <number> = creating a subfolder of that parent.
+  const [creatingInParent, setCreatingInParent] = useState(null);
+  const [newFolderDraft, setNewFolderDraft] = useState('');
   const [showGlobalTrash, setShowGlobalTrash] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [showMyWork, setShowMyWork] = useState(false);
@@ -512,6 +519,9 @@ function MainApp() {
   }, []);
 
   // ── Folder handlers ──────────────────────────────────────────────────────────
+  // Legacy prompt-based create — kept only for the EmptyState "Create one"
+  // button inside the move-folder picker, where the inline create row would
+  // disappear together with the popover.
   const handleCreateFolder = async (parentFolderId = null) => {
     const name = prompt(parentFolderId ? 'Subfolder name:' : 'Folder name:');
     if (!name?.trim()) return;
@@ -519,6 +529,42 @@ function MainApp() {
       const r = await createFolder(name.trim(), parentFolderId);
       setFolders(f => [...f, r.data]);
       toast(parentFolderId ? 'Subfolder created' : 'Folder created', 'success');
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to create folder', 'error');
+    }
+  };
+
+  // Inline create flow used by the sidebar "New Folder" button and the
+  // per-folder "New subfolder" menu item — drops an input row in place
+  // instead of opening a browser prompt.
+  const startCreatingFolder = (parentTag) => {
+    setFolderMenuId(null);
+    setNewFolderDraft('');
+    setCreatingInParent(parentTag);
+    // If we're creating a subfolder, make sure the parent is expanded so
+    // the new input row is actually visible.
+    if (parentTag !== '__top__' && parentTag != null) {
+      setCollapsedFolders(s => { const n = new Set(s); n.delete(parentTag); return n; });
+    }
+  };
+
+  const cancelCreateFolder = () => {
+    setCreatingInParent(null);
+    setNewFolderDraft('');
+  };
+
+  const commitCreateFolder = async () => {
+    const parentTag = creatingInParent;
+    const name      = newFolderDraft.trim();
+    // Clear state first so onBlur firing during unmount can't double-submit.
+    setCreatingInParent(null);
+    setNewFolderDraft('');
+    if (parentTag == null || !name) return;
+    const parentId = parentTag === '__top__' ? null : parentTag;
+    try {
+      const r = await createFolder(name, parentId);
+      setFolders(f => [...f, r.data]);
+      toast(parentId ? 'Subfolder created' : 'Folder created', 'success');
     } catch (err) {
       toast(err.response?.data?.error || 'Failed to create folder', 'error');
     }
@@ -574,6 +620,45 @@ function MainApp() {
     } catch { toast('Failed to move board', 'error'); }
   };
 
+  // Copy a shareable board link to the clipboard from the sidebar kebab.
+  const handleShareBoard = async (b) => {
+    setBoardMenuId(null);
+    const url = `${window.location.origin}/board/${b.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Board link copied to clipboard', 'success');
+    } catch {
+      // Clipboard API unavailable (insecure origin / older browser) — fall
+      // back to a plain prompt so the user can copy manually.
+      prompt('Copy this board link:', url);
+    }
+  };
+
+  // Open the per-board Trash panel from the sidebar kebab. If we're already
+  // on this board we just bump the signal; otherwise loadBoard fetches the
+  // full board (groups + columns + etc.) and *then* the signal bump opens
+  // the panel against that fully-hydrated data.
+  // (setActiveBoard(b) would clobber the full activeBoard with the thin
+  // sidebar metadata and blank the page until refresh.)
+  const handleOpenBoardTrash = (b) => {
+    setBoardMenuId(null);
+    if (activeBoard?.id !== b.id) loadBoard(b.id);
+    setTrashOpenSignal(c => c + 1);
+  };
+
+  // Toggle a board between Private and Public from the sidebar kebab.
+  // Note: the DB value stays as 'org_wide' for "Public" to avoid a migration;
+  // only the user-facing label has been renamed to "Public".
+  const handleBoardVisibility = async (b) => {
+    setBoardMenuId(null);
+    const next = b.visibility === 'private' ? 'org_wide' : 'private';
+    try {
+      const r = await updateBoard(b.id, { name: b.name, description: b.description, visibility: next });
+      setBoards(bs => bs.map(x => x.id === b.id ? { ...x, visibility: r.data.visibility } : x));
+      toast(`Board is now ${next === 'private' ? '🔒 Private' : '🌐 Public'}`, 'success');
+    } catch { toast('Failed to update visibility', 'error'); }
+  };
+
   // ── Sidebar board row renderer ────────────────────────────────────────────────
   const renderBoardRow = (b, indent = false) => {
     const isActive = activeBoard?.id === b.id;
@@ -615,7 +700,7 @@ function MainApp() {
           onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--sidebar-hover)'; }}
           onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
         >
-          <span style={{ fontSize: 12, marginRight: 8, color: 'var(--sidebar-text-muted)' }} title={b.visibility === 'private' ? 'Private' : 'Org-wide'}>
+          <span style={{ fontSize: 12, marginRight: 8, color: 'var(--sidebar-text-muted)' }} title={b.visibility === 'private' ? 'Private' : 'Public'}>
             {b.visibility === 'private' ? '🔒' : '🌐'}
           </span>
           <span style={{
@@ -639,16 +724,17 @@ function MainApp() {
             onMouseDown={e => e.stopPropagation()}
             style={{
               position: 'absolute', left: 16, top: '100%', zIndex: 200,
-              background: '#fff', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
-              padding: '6px 0', minWidth: 160, color: '#323338',
+              background: 'var(--menu-bg)', borderRadius: 8, boxShadow: 'var(--menu-shadow)',
+              border: '1px solid var(--menu-border)',
+              padding: '6px 0', minWidth: 160, color: 'var(--text-primary)',
             }}
           >
-            <div style={{ fontSize: 10, color: '#888', padding: '4px 12px 2px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Move to</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 12px 2px', textTransform: 'uppercase', letterSpacing: 0.5 }}>Move to</div>
             {b.folder_id && (
               <div
                 onClick={() => handleMoveBoard(b.id, null)}
                 style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f5f6f8'}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <span style={{ opacity: 0.5 }}>📂</span> No Folder
@@ -659,7 +745,7 @@ function MainApp() {
                 key={f.id}
                 onClick={() => handleMoveBoard(b.id, f.id)}
                 style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f5f6f8'}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <span>📁</span> {f.name}
@@ -673,13 +759,41 @@ function MainApp() {
                 primaryAction={isManager ? { label: 'Create one', onClick: () => handleCreateFolder() } : null}
               />
             )}
+            {/* Share + visibility — moved here from the board header. */}
+            <div style={{ borderTop: '1px solid var(--menu-divider)', margin: '4px 0' }} />
+            <div
+              onClick={() => handleShareBoard(b)}
+              style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              🔗 Share
+            </div>
+            {isManager && (
+              <div
+                onClick={() => handleBoardVisibility(b)}
+                style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                {b.visibility === 'private' ? '🌐 Make Public' : '🔒 Make Private'}
+              </div>
+            )}
+            <div
+              onClick={() => handleOpenBoardTrash(b)}
+              style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              🗑️ Trash
+            </div>
             {isManager && (
               <>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }} />
+                <div style={{ borderTop: '1px solid var(--menu-divider)', margin: '4px 0' }} />
                 <div
                   onClick={() => { setBoardMenuId(null); setCloneTargetBoard(b); }}
                   style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f5f6f8'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   📋 Duplicate Board
@@ -688,11 +802,11 @@ function MainApp() {
             )}
             {(isAdmin || (isManager && b.created_by === currentUser?.id)) && (
               <>
-                <div style={{ borderTop: '1px solid #eee', margin: '4px 0' }} />
+                <div style={{ borderTop: '1px solid var(--menu-divider)', margin: '4px 0' }} />
                 <div
                   onClick={() => { setBoardMenuId(null); handleDeleteBoard(b.id); }}
-                  style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: '#e44' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#fff5f5'}
+                  style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', color: 'var(--error-red)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-danger-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   Delete board
@@ -938,7 +1052,7 @@ function MainApp() {
                     New Board
                   </button>
                   <button
-                    onClick={() => handleCreateFolder()}
+                    onClick={() => startCreatingFolder('__top__')}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 9,
                       padding: '9px 12px', textAlign: 'left', color: 'var(--sidebar-text)', fontSize: 15, fontWeight: 800,
@@ -1076,6 +1190,36 @@ function MainApp() {
               return acc;
             }, {});
 
+            // Inline input row used for in-place folder/subfolder creation.
+            // Mirrors the existing rename-input pattern so visuals stay
+            // consistent with how a folder name is edited.
+            const renderInlineCreateRow = (indented) => (
+              <div style={{
+                position: 'relative',
+                display: 'flex', alignItems: 'center',
+                padding: indented ? '7px 18px 7px 34px' : '8px 18px',
+                gap: 6,
+              }}>
+                <span style={{ fontSize: 12, color: 'var(--sidebar-text-muted)', marginRight: 2, userSelect: 'none', flexShrink: 0, width: 9 }} />
+                <span style={{ fontSize: 15, color: 'var(--sidebar-text-muted)', flexShrink: 0 }}>{indented ? '📂' : '📁'}</span>
+                <input
+                  autoFocus
+                  value={newFolderDraft}
+                  onChange={e => setNewFolderDraft(e.target.value)}
+                  onBlur={commitCreateFolder}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter')  { e.preventDefault(); commitCreateFolder(); }
+                    if (e.key === 'Escape') { e.preventDefault(); cancelCreateFolder(); }
+                  }}
+                  placeholder={indented ? 'Subfolder name…' : 'Folder name…'}
+                  style={{
+                    flex: 1, background: 'var(--sidebar-input-bg)', border: '1px solid var(--sidebar-input-border)',
+                    color: 'var(--sidebar-text)', borderRadius: 4, padding: '2px 7px', fontSize: 14, outline: 'none',
+                  }}
+                />
+              </div>
+            );
+
             // Render a single folder row + its boards. The `isSub` flag adds
             // indentation, hides "New subfolder" in the menu, and offers
             // "Move to top level" instead of nesting options.
@@ -1159,9 +1303,9 @@ function MainApp() {
                           onClick={e => e.stopPropagation()}
                           style={{
                             position: 'absolute', top: '100%', right: 8, zIndex: 50,
-                            background: 'var(--bg-card, #fff)', color: 'var(--text)',
-                            border: '1px solid var(--border, #e6e9ef)', borderRadius: 8,
-                            boxShadow: '0 8px 24px rgba(9,30,66,0.18)',
+                            background: 'var(--menu-bg)', color: 'var(--text-primary)',
+                            border: '1px solid var(--menu-border)', borderRadius: 8,
+                            boxShadow: 'var(--menu-shadow)',
                             minWidth: 200, padding: '4px 0', fontSize: 12,
                           }}
                         >
@@ -1171,7 +1315,7 @@ function MainApp() {
                           >✏️ &nbsp; Rename</button>
                           {!isSub && (
                             <button
-                              onClick={() => { setFolderMenuId(null); handleCreateFolder(folder.id); }}
+                              onClick={() => startCreatingFolder(folder.id)}
                               style={menuItemStyle}
                             >📂 &nbsp; New subfolder</button>
                           )}
@@ -1180,7 +1324,7 @@ function MainApp() {
                             style={menuItemStyle}
                           >➡️ &nbsp; Move to folder…</button>
                           {moveOpen && (
-                            <div style={{ borderTop: '1px solid var(--border, #eee)', borderBottom: '1px solid var(--border, #eee)', maxHeight: 200, overflowY: 'auto', background: 'var(--bg-soft, #f7f8fa)' }}>
+                            <div style={{ borderTop: '1px solid var(--menu-divider)', borderBottom: '1px solid var(--menu-divider)', maxHeight: 200, overflowY: 'auto', background: 'var(--menu-hover)' }}>
                               {/* Always offer "Top level" if the folder is currently nested */}
                               {folder.parent_folder_id && (
                                 <button onClick={() => handleMoveFolder(folder.id, null)} style={{ ...menuItemStyle, fontStyle: 'italic' }}>
@@ -1215,11 +1359,24 @@ function MainApp() {
 
                   {/* Subfolders (only on top-level folders) */}
                   {!collapsed && !isSub && childFolders.map(child => renderFolder(child, true))}
+
+                  {/* Inline subfolder-create input — appears when the user
+                      picks "New subfolder" from this folder's kebab menu. */}
+                  {!collapsed && !isSub && !isNavCollapsed && creatingInParent === folder.id && (
+                    renderInlineCreateRow(true)
+                  )}
                 </div>
               );
             };
 
-            return topLevelFolders.map(f => renderFolder(f, false));
+            return (
+              <>
+                {/* Inline top-level folder-create input — appears above
+                    existing folders when the user clicks "New Folder". */}
+                {!isNavCollapsed && creatingInParent === '__top__' && renderInlineCreateRow(false)}
+                {topLevelFolders.map(f => renderFolder(f, false))}
+              </>
+            );
           })()}
 
           {/* Unfiled boards */}
@@ -1336,7 +1493,7 @@ function MainApp() {
             </div>
           </div>
         ) : activeBoard ? (
-          <Board board={activeBoard} onBoardChange={handleBoardChange} openItemId={openItemId} onOpenItemDone={() => setOpenItemId(null)} />
+          <Board board={activeBoard} onBoardChange={handleBoardChange} openItemId={openItemId} onOpenItemDone={() => setOpenItemId(null)} openTrashSignal={trashOpenSignal} />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <EmptyState

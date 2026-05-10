@@ -27,7 +27,7 @@ async function seed() {
 
     // Create board
     const boardRes = await client.query(
-      "INSERT INTO boards (name, description) VALUES ('D''Decor Project Board', 'Main project tracking board') RETURNING id"
+      "INSERT INTO boards (name, description) VALUES ('Simplix Project Board', 'Main project tracking board') RETURNING id"
     );
     const boardId = boardRes.rows[0].id;
 

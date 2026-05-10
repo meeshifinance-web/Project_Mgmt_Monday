@@ -56,7 +56,7 @@ function TokenChip({ token, onInsert }) {
       title={`Insert ${token}`}
       style={{
         padding: '3px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
-        background: '#e3f0ff', color: '#9b72f5', border: '1px solid #b3d4ff',
+        background: 'rgba(155,114,245,0.15)', color: '#9b72f5', border: '1px solid #b3d4ff',
         fontWeight: 600, whiteSpace: 'nowrap',
       }}
     >
@@ -156,10 +156,10 @@ function Summary({ auto, columns, groups }) {
 
   return (
     <div style={{ fontSize: 12, color: '#555', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-      <span style={{ background: '#e3f0ff', color: '#9b72f5', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
+      <span style={{ background: 'rgba(155,114,245,0.15)', color: '#9b72f5', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
         WHEN {trigText}
       </span>
-      <span style={{ background: '#e8f7ee', color: '#037f4c', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
+      <span style={{ background: 'rgba(0,200,117,0.15)', color: '#037f4c', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
         THEN {actText}
       </span>
     </div>
@@ -310,8 +310,8 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
               />
               <span style={{ fontSize: 12, color: '#676879' }}>
                 {triggerConfig.mode === 'after'
-                  ? <>day(s) past the date <span style={{ color: '#aaa' }}>(0 = any past date)</span></>
-                  : <>day(s) before the date <span style={{ color: '#aaa' }}>(0 = on the date)</span></>
+                  ? <>day(s) past the date <span style={{ color: 'var(--text-secondary)' }}>(0 = any past date)</span></>
+                  : <>day(s) before the date <span style={{ color: 'var(--text-secondary)' }}>(0 = on the date)</span></>
                 }
               </span>
             </div>
@@ -411,7 +411,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
             <div style={{ flex: 1 }}>
               <p style={label}>Assign to</p>
               {members.length === 0 ? (
-                <div style={{ fontSize: 11, color: '#888', padding: '6px 10px', background: '#f5f5f5', borderRadius: 6 }}>No board members found.</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '6px 10px', background: '#f5f5f5', borderRadius: 6 }}>No board members found.</div>
               ) : (
                 <select value={actionConfig.user_name || ''} onChange={e => setAC({ user_name: e.target.value })} style={sel}>
                   <option value="">Select member…</option>
@@ -463,7 +463,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                 </div>
               </div>
             )}
-            <p style={{ fontSize: 11, color: '#888', margin: '6px 2px 0', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 2px 0', lineHeight: 1.5 }}>
               When a new item is created, the selected date column auto-fills with the upcoming
               chosen weekday. "Next" means the soonest future occurrence (never today). Useful for
               recurring weekly / bi-weekly review tasks.
@@ -514,7 +514,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                     {columns.filter(c => c.type === 'person').map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                   </select>
                 )}
-                <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>Email will be sent to the user(s) assigned in this column.</p>
+                <p style={{ fontSize: 10, color: 'var(--text-secondary)', margin: '4px 0 0' }}>Email will be sent to the user(s) assigned in this column.</p>
               </div>
             )}
             {actionConfig.to_type === 'email_column' && (
@@ -524,17 +524,17 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                   <option value="">Select column…</option>
                   {columns.filter(c => c.type === 'email' || c.type === 'text').map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                 </select>
-                <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>The value of this column (email address) will be used as the recipient.</p>
+                <p style={{ fontSize: 10, color: 'var(--text-secondary)', margin: '4px 0 0' }}>The value of this column (email address) will be used as the recipient.</p>
               </div>
             )}
             {actionConfig.to_type === 'board_members' && (
-              <div style={{ background: '#e8f7ee', border: '1px solid #b7e4cd', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#037f4c' }}>
+              <div style={{ background: 'rgba(0,200,117,0.15)', border: '1px solid #b7e4cd', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#037f4c' }}>
                 ✓ Email will be sent to all members of this board.
               </div>
             )}
             <div style={{ background: '#f0f4ff', borderRadius: 6, padding: '8px 10px' }}>
               <VariableTokenBar columns={columns} onInsert={handleInsertToken} />
-              <p style={{ fontSize: 10, color: '#888', margin: '4px 0 0' }}>Click Subject or Body first, then click a token to insert it at the cursor.</p>
+              <p style={{ fontSize: 10, color: 'var(--text-secondary)', margin: '4px 0 0' }}>Click Subject or Body first, then click a token to insert it at the cursor.</p>
             </div>
             <div>
               <p style={label}>Subject</p>
@@ -552,7 +552,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
             </div>
             {(actionConfig.subject || actionConfig.body) && (
               <div style={{ background: '#f7f7f7', border: '1px solid #e0e0e0', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: '#555' }}>
-                <strong style={{ display: 'block', marginBottom: 4, color: '#323338' }}>Preview (tokens shown as-is — resolved at send time)</strong>
+                <strong style={{ display: 'block', marginBottom: 4, color: 'var(--text-primary)' }}>Preview (tokens shown as-is — resolved at send time)</strong>
                 {actionConfig.subject && <div><strong>Subject:</strong> {actionConfig.subject}</div>}
                 {actionConfig.body    && <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}><strong>Body:</strong> {actionConfig.body}</div>}
               </div>
@@ -577,7 +577,7 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
               </select>
-              <div style={{ fontSize: 11, color: '#888', marginTop: 4, lineHeight: 1.4 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.4 }}>
                 Each person in the email's <strong>To</strong> field will be matched by email to a user and set as an owner on the new item.
               </div>
             </div>
@@ -709,24 +709,24 @@ function DateCascadeTab({ boardId, boardName, columns }) {
   const anchorColId = anchorStep?.column_id || null;
   const totalDays   = steps.reduce((sum, s) => sum + (s.duration_days || 0), 0);
 
-  const sectionHead = { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
+  const sectionHead = { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 
   return (
     <div style={{ paddingBottom: 24 }}>
 
       {/* ── Step Template ─────────────────────────────────────────────── */}
-      <div style={{ background: '#f7f8fc', border: '1.5px solid #e0e0e0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div style={{ background: 'var(--bg-secondary)', border: '1.5px solid var(--border-color)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
         <div style={sectionHead}>
           <span>📅 Step Template</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {totalDays > 0 && (
-              <span style={{ background: '#e3f0ff', color: '#9b72f5', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
+              <span style={{ background: 'rgba(155,114,245,0.15)', color: '#9b72f5', borderRadius: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}>
                 {totalDays}d total
               </span>
             )}
             <button
               onClick={() => setShowTemplate(true)}
-              style={{ padding: '4px 12px', border: '1px solid #9b72f5', color: '#9b72f5', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: '#fff', fontWeight: 600 }}
+              style={{ padding: '4px 12px', border: '1px solid #9b72f5', color: '#9b72f5', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'var(--bg-primary)', fontWeight: 600 }}
             >
               {steps.length ? 'Edit' : 'Configure'}
             </button>
@@ -734,29 +734,29 @@ function DateCascadeTab({ boardId, boardName, columns }) {
         </div>
 
         {steps.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '12px 0' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: '12px 0' }}>
             No steps configured. Click <strong>Configure</strong> to define the project step sequence.
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #e8e8e8' }}>
-                <th style={{ padding: '4px 6px', textAlign: 'left', color: '#888', fontWeight: 600, width: 28 }}>#</th>
-                <th style={{ padding: '4px 6px', textAlign: 'left', color: '#888', fontWeight: 600 }}>Step</th>
-                <th style={{ padding: '4px 6px', textAlign: 'left', color: '#888', fontWeight: 600 }}>Column</th>
-                <th style={{ padding: '4px 6px', textAlign: 'right', color: '#888', fontWeight: 600, width: 40 }}>Days</th>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <th style={{ padding: '4px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, width: 28 }}>#</th>
+                <th style={{ padding: '4px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Step</th>
+                <th style={{ padding: '4px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Column</th>
+                <th style={{ padding: '4px 6px', textAlign: 'right', color: 'var(--text-secondary)', fontWeight: 600, width: 40 }}>Days</th>
               </tr>
             </thead>
             <tbody>
               {steps.map(s => (
-                <tr key={s.id} style={{ borderBottom: '1px solid #f0f0f0', background: s.is_anchor ? 'rgba(0,200,117,0.06)' : 'transparent' }}>
-                  <td style={{ padding: '5px 6px', color: '#bbb', fontWeight: 600 }}>{s.step_order}</td>
-                  <td style={{ padding: '5px 6px', color: '#323338', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <tr key={s.id} style={{ borderBottom: '1px solid var(--border-color)', background: s.is_anchor ? 'rgba(0,200,117,0.06)' : 'transparent' }}>
+                  <td style={{ padding: '5px 6px', color: 'var(--text-muted)', fontWeight: 600 }}>{s.step_order}</td>
+                  <td style={{ padding: '5px 6px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
                     {s.is_anchor && <span title="Anchor step" style={{ color: '#00c875', fontSize: 11 }}>⚓</span>}
                     {s.step_name}
                   </td>
-                  <td style={{ padding: '5px 6px', color: '#888' }}>{s.column_title || `col #${s.column_id}`}</td>
-                  <td style={{ padding: '5px 6px', textAlign: 'right', color: '#323338', fontWeight: 600 }}>{s.duration_days}</td>
+                  <td style={{ padding: '5px 6px', color: 'var(--text-secondary)' }}>{s.column_title || `col #${s.column_id}`}</td>
+                  <td style={{ padding: '5px 6px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 600 }}>{s.duration_days}</td>
                 </tr>
               ))}
             </tbody>
@@ -765,7 +765,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
       </div>
 
       {/* ── Cascade Rules ─────────────────────────────────────────────── */}
-      <div style={{ background: '#f7f8fc', border: '1.5px solid #e0e0e0', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+      <div style={{ background: 'var(--bg-secondary)', border: '1.5px solid var(--border-color)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
         <div style={sectionHead}>
           <span>⚡ Cascade Rules</span>
           <button
@@ -775,7 +775,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
             style={{
               padding: '4px 12px', border: '1px solid #00c875', color: '#00c875',
               borderRadius: 6, fontSize: 12, cursor: steps.length ? 'pointer' : 'not-allowed',
-              background: '#fff', fontWeight: 600, opacity: steps.length ? 1 : 0.45,
+              background: 'var(--bg-primary)', fontWeight: 600, opacity: steps.length ? 1 : 0.45,
               textTransform: 'none', letterSpacing: 0,
             }}
           >
@@ -784,7 +784,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
         </div>
 
         {rules.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '12px 0' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: '12px 0' }}>
             {steps.length === 0
               ? 'Set up a step template first, then add cascade rules.'
               : 'No rules yet. Click "+ Add Rule" to auto-fill dates on a trigger.'}
@@ -793,20 +793,20 @@ function DateCascadeTab({ boardId, boardName, columns }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {rules.map(rule => (
               <div key={rule.id} style={{
-                border: `1.5px solid ${rule.is_active ? '#d0e8ff' : '#e8e8e8'}`,
+                border: '1.5px solid var(--border-color)',
                 borderRadius: 8, padding: '10px 12px',
-                background: rule.is_active ? '#fff' : '#fafafa',
+                background: rule.is_active ? 'var(--bg-primary)' : 'var(--bg-secondary)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: rule.is_active ? '#323338' : '#aaa' }}>{rule.rule_name}</div>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ background: '#e3f0ff', color: '#9b72f5', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: rule.is_active ? 'var(--text-primary)' : 'var(--text-muted)' }}>{rule.rule_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ background: 'rgba(155,114,245,0.15)', color: '#9b72f5', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>
                         WHEN {rule.trigger_type === 'date_entry'
                           ? `"${rule.trigger_column_title || `col #${rule.trigger_column_id}`}" entered`
                           : `Status → "${rule.trigger_status_to}"`}
                       </span>
-                      <span style={{ background: '#e8f7ee', color: '#037f4c', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>
+                      <span style={{ background: 'rgba(0,200,117,0.15)', color: '#037f4c', borderRadius: 4, padding: '2px 7px', fontWeight: 600 }}>
                         CASCADE {rule.direction} from "{rule.anchor_column_title || `col #${rule.anchor_column_id}`}"
                       </span>
                     </div>
@@ -815,7 +815,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
                     <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12 }}>
                       <input type="checkbox" checked={!!rule.is_active} onChange={() => handleToggleRule(rule)}
                         style={{ accentColor: '#00c875', cursor: 'pointer' }} />
-                      <span style={{ color: rule.is_active ? '#037f4c' : '#aaa', fontWeight: 600 }}>
+                      <span style={{ color: rule.is_active ? '#037f4c' : 'var(--text-muted)', fontWeight: 600 }}>
                         {rule.is_active ? 'On' : 'Off'}
                       </span>
                     </label>
@@ -823,7 +823,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
                     {confirmDel === rule.id ? (
                       <>
                         <button onClick={() => handleDeleteRule(rule.id)} style={{ background: '#e2445c', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', padding: '3px 8px', fontWeight: 600 }}>Delete</button>
-                        <button onClick={() => setConfirmDel(null)} style={{ border: '1px solid #ccc', background: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', padding: '3px 8px' }}>Cancel</button>
+                        <button onClick={() => setConfirmDel(null)} style={{ border: '1px solid var(--border-color)', background: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', padding: '3px 8px' }}>Cancel</button>
                       </>
                     ) : (
                       <button onClick={() => setConfirmDel(rule.id)} style={{ color: '#e2445c', fontSize: 12, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer' }}>Delete</button>
@@ -837,13 +837,13 @@ function DateCascadeTab({ boardId, boardName, columns }) {
       </div>
 
       {/* ── Recent Activity (collapsible) ─────────────────────────────── */}
-      <div style={{ background: '#f7f8fc', border: '1.5px solid #e0e0e0', borderRadius: 10, padding: 16 }}>
+      <div style={{ background: 'var(--bg-secondary)', border: '1.5px solid var(--border-color)', borderRadius: 10, padding: 16 }}>
         <button
           onClick={handleLoadLogs}
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-            color: '#888', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, width: '100%', textAlign: 'left',
+            color: 'var(--text-secondary)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, width: '100%', textAlign: 'left',
           }}
         >
           <span style={{ transition: 'transform 0.15s', display: 'inline-block', transform: logsOpen ? 'rotate(90deg)' : 'rotate(0deg)', fontSize: 9 }}>▶</span>
@@ -853,15 +853,15 @@ function DateCascadeTab({ boardId, boardName, columns }) {
         {logsOpen && (
           <div style={{ marginTop: 10 }}>
             {logs.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '8px 0' }}>No cascade events recorded yet.</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: '8px 0' }}>No cascade events recorded yet.</div>
             ) : (
               logs.map(log => (
-                <div key={log.id} style={{ borderBottom: '1px solid #f0f0f0', padding: '8px 0', fontSize: 12 }}>
+                <div key={log.id} style={{ borderBottom: '1px solid var(--border-color)', padding: '8px 0', fontSize: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <DateCascadeIndicator isAutoCascaded />
-                    <span style={{ color: '#323338', fontWeight: 600 }}>{log.item_name || `Item #${log.item_id}`}</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{log.item_name || `Item #${log.item_id}`}</span>
                   </div>
-                  <div style={{ color: '#888', marginTop: 2 }}>
+                  <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
                     Anchor: {log.anchor_column_title || `col #${log.anchor_column_id}`} = {log.anchor_date}
                     &nbsp;·&nbsp;{Object.keys(log.dates_calculated || {}).length} dates set
                     &nbsp;·&nbsp;{new Date(log.created_at).toLocaleString()}
@@ -993,9 +993,9 @@ export default function AutomationsPanel({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
               <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>⚡ Automations</h2>
-              <p style={{ fontSize: 12, color: '#888', margin: '2px 0 0' }}>Rules and date cascade for this board</p>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0' }}>Rules and date cascade for this board</p>
             </div>
-            <button onClick={onClose} style={{ fontSize: 20, color: '#888', border: 'none', background: 'none', cursor: 'pointer' }}>×</button>
+            <button onClick={onClose} style={{ fontSize: 20, color: 'var(--text-secondary)', border: 'none', background: 'none', cursor: 'pointer' }}>×</button>
           </div>
 
           {/* Tab bar */}
@@ -1039,7 +1039,7 @@ export default function AutomationsPanel({
               )}
 
               {sendEmailRules.length > 0 && (
-                <div style={{ background: '#e8f7ee', border: '1px solid #b7e4cd', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 11, color: '#037f4c', lineHeight: 1.5 }}>
+                <div style={{ background: 'rgba(0,200,117,0.15)', border: '1px solid #b7e4cd', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 11, color: '#037f4c', lineHeight: 1.5 }}>
                   ✉️ <strong>{sendEmailRules.length} send-email automation{sendEmailRules.length > 1 ? 's' : ''}</strong> active.
                   Emails are sent via the WorkBoard SMTP server — item variables are resolved at send time.
                 </div>

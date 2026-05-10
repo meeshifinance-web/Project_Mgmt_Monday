@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import * as XLSX from 'xlsx';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import ManualCascadePopover from './automation/ManualCascadePopover';
 import ColumnCell, { parseOwners, getSoftStyle } from './ColumnCell';
@@ -18,7 +19,7 @@ import {
   upsertColumnValue, bulkUpsertColumnValue, updateBoard, updateBoardEmailSettings,
   getTrashItems, getAutomations,
   exportBoard, importBoardRows,
-  getBoardViews, createView, updateView, deleteView,
+  getBoardViews, createView, updateView, deleteView, reorderViews,
 } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -653,7 +654,6 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
   const [renaming, setRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
-  const [renamePos, setRenamePos] = useState({ top: 0, left: 0, width: 280 });
   const menuRef = useRef(null);
   const btnRef = useRef(null);
 
@@ -687,15 +687,6 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
     e?.stopPropagation();
     setMenuOpen(false);
     setDraftTitle(col.title);
-    // Compute floating input position from the <th> bounding rect
-    const th = btnRef.current?.closest('th') || btnRef.current;
-    if (th) {
-      const rect = th.getBoundingClientRect();
-      const inputW = Math.max(280, rect.width + 60);
-      let left = rect.left;
-      if (left + inputW > window.innerWidth - 12) left = window.innerWidth - inputW - 12;
-      setRenamePos({ top: rect.bottom + 6, left: Math.max(8, left), width: inputW });
-    }
     setRenaming(true);
   };
 
@@ -745,71 +736,53 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative', minWidth: 0 }}>
 
-      {/* Title — always visible; double-click or use menu to rename */}
-      <span
-        title={col.title}
-        onDoubleClick={isManager ? startRename : undefined}
-        style={{
-          flex: 1, minWidth: 0,
-          fontSize: 12, fontWeight: 700,
-          color: renaming ? '#9b72f5' : '#676879',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          cursor: 'default', userSelect: 'none',
-          fontStyle: renaming ? 'italic' : 'normal',
-        }}
-      >{col.title}{sortConfig?.colId === col.id && (
-        <span style={{ marginLeft: 3, fontSize: 10, color: '#9b72f5', fontWeight: 900 }}>
-          {sortConfig.dir === 'asc' ? '↑' : '↓'}
-        </span>
-      )}</span>
-
-      {/* Floating rename panel — fixed position, readable size, never clipped */}
-      {renaming && (
-        <div
-          style={{
-            position: 'fixed',
-            top: renamePos.top,
-            left: renamePos.left,
-            width: renamePos.width,
-            zIndex: 10000,
-            background: '#fff',
-            borderRadius: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.20)',
-            border: '2px solid #9b72f5',
-            padding: '12px 14px 10px',
+      {/* Title — always visible; double-click or use menu to rename. Becomes inline input when renaming. */}
+      {renaming ? (
+        <input
+          autoFocus
+          value={draftTitle}
+          onChange={e => setDraftTitle(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
+            if (e.key === 'Escape') { e.preventDefault(); setRenaming(false); }
           }}
+          onClick={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
-        >
-          <div style={{ fontSize: 11, color: '#9699a6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
-            Rename column
-          </div>
-          <input
-            autoFocus
-            value={draftTitle}
-            onChange={e => setDraftTitle(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={e => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }}
-            onClick={e => e.stopPropagation()}
-            onFocus={e => e.currentTarget.select()}
-            style={{
-              width: '100%', boxSizing: 'border-box',
-              fontSize: 15, fontWeight: 600, color: '#323338',
-              border: '1.5px solid #c4c7d0', borderRadius: 6,
-              padding: '8px 12px', outline: 'none', background: '#fafbfc',
-              transition: 'border-color 0.15s',
-            }}
-            onFocusCapture={e => { e.currentTarget.style.borderColor = '#9b72f5'; e.currentTarget.style.background = '#fff'; }}
-            onBlurCapture={e => { e.currentTarget.style.borderColor = '#c4c7d0'; }}
-          />
-          <div style={{ fontSize: 11, color: '#9699a6', marginTop: 7, textAlign: 'right' }}>
-            ↵ Enter to save &nbsp;·&nbsp; Esc to cancel
-          </div>
-        </div>
+          onFocus={e => e.currentTarget.select()}
+          style={{
+            flex: 1, minWidth: 0,
+            fontSize: 12, fontWeight: 700,
+            color: 'var(--text-primary)',
+            background: 'var(--card-bg)',
+            border: '1.5px solid #9b72f5',
+            borderRadius: 4,
+            padding: '2px 6px',
+            outline: 'none',
+            margin: '-2px 0',
+          }}
+        />
+      ) : (
+        <span
+          title={col.title}
+          onDoubleClick={isManager ? startRename : undefined}
+          style={{
+            flex: 1, minWidth: 0,
+            fontSize: 12, fontWeight: 700,
+            color: '#676879',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            cursor: 'default', userSelect: 'none',
+          }}
+        >{col.title}{sortConfig?.colId === col.id && (
+          <span style={{ marginLeft: 3, fontSize: 10, color: '#9b72f5', fontWeight: 900 }}>
+            {sortConfig.dir === 'asc' ? '↑' : '↓'}
+          </span>
+        )}</span>
       )}
 
       {/* Lock badge */}
       {col.type === 'person' && col.settings?.isOwnerColumn && (
-        <span title="Visibility Control active" style={{ fontSize: 10, color: '#9b72f5', flexShrink: 0 }}>🔒</span>
+        <span title="Owner column — drives Strict access mode" style={{ fontSize: 10, color: '#9b72f5', flexShrink: 0 }}>👤</span>
       )}
 
       {/* Options button — always visible so it's easy to click on narrow columns */}
@@ -918,7 +891,9 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
           {col.type === 'formula' && isManager && menuItem(() => { setMenuOpen(false); onEditFormula?.(col); }, '🧮 Edit Formula')}
           {col.type === 'person' && isManager && menuItem(
             handleToggleVisibility,
-            col.settings?.isOwnerColumn ? '🔒 Visibility: ON' : '🔓 Visibility: OFF'
+            <span title="When Strict access mode is on, items are visible only to people listed in this column.">
+              {col.settings?.isOwnerColumn ? '👤 Unmark as Owner column' : '👤 Mark as Owner column'}
+            </span>
           )}
           {!NO_DEFAULT_TYPES.includes(col.type) && isManager && menuItem(
             handleSetDefault,
@@ -1046,31 +1021,6 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
               border: 'none', background: 'transparent', cursor: 'pointer',
             }}
           >▶</button>
-          <button
-            onClick={e => { e.stopPropagation(); onOpenDetail(item.id); }}
-            title={item.comment_count > 0 ? `${item.comment_count} comment${item.comment_count !== 1 ? 's' : ''}` : 'Open updates'}
-            style={{
-              flexShrink: 0, position: 'relative',
-              width: 22, height: 22, borderRadius: 4,
-              background: hovered ? 'var(--hover-bg)' : 'transparent',
-              color: item.comment_count > 0 ? '#9b72f5' : (hovered ? '#676879' : 'transparent'),
-              fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: 'none', cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
-            }}
-          >
-            💬
-            {item.comment_count > 0 && (
-              <span style={{
-                position: 'absolute', top: -4, right: -4,
-                background: '#9b72f5', color: '#fff',
-                fontSize: 9, fontWeight: 700,
-                borderRadius: 8, padding: '1px 4px',
-                lineHeight: 1.4, minWidth: 14, textAlign: 'center',
-              }}>
-                {item.comment_count > 99 ? '99+' : item.comment_count}
-              </span>
-            )}
-          </button>
           {canEdit
             ? <InlineEdit value={item.name} onSave={name => onItemUpdate(item.id, name)} singleClick
               style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }} />
@@ -1089,6 +1039,37 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
             >{subitems.length} {subitems.length === 1 ? 'subitem' : 'subitems'}</span>
           )}
         </div>
+      </td>
+      {/* Updates / comments — dedicated column right after Item Name so the
+          💬 button is always discoverable instead of hidden inside the name cell. */}
+      <td style={{ padding: 0, textAlign: 'center', borderRight: '1px solid var(--border-color)', background: rowBg }}>
+        <button
+          onClick={e => { e.stopPropagation(); onOpenDetail(item.id); }}
+          title={item.comment_count > 0 ? `${item.comment_count} comment${item.comment_count !== 1 ? 's' : ''}` : 'Write a new update'}
+          style={{
+            position: 'relative',
+            width: 26, height: 26, borderRadius: 4,
+            background: hovered ? 'var(--hover-bg)' : 'transparent',
+            color: item.comment_count > 0 ? '#9b72f5' : 'var(--text-secondary)',
+            fontSize: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            border: 'none', cursor: 'pointer', transition: 'color 0.15s, background 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#9b72f5'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = item.comment_count > 0 ? '#9b72f5' : 'var(--text-secondary)'; }}
+        >
+          💬
+          {item.comment_count > 0 && (
+            <span style={{
+              position: 'absolute', top: -2, right: -2,
+              background: '#9b72f5', color: '#fff',
+              fontSize: 9, fontWeight: 700,
+              borderRadius: 8, padding: '1px 4px',
+              lineHeight: 1.4, minWidth: 14, textAlign: 'center',
+            }}>
+              {item.comment_count > 99 ? '99+' : item.comment_count}
+            </span>
+          )}
+        </button>
       </td>
       {/* Data columns */}
       {
@@ -1111,34 +1092,9 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
           </td>
         ))
       }
-      {/* Copy + Cascade + Delete */}
-      <td style={{ width: 80, textAlign: 'center', borderRight: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>
-        {canEdit && hovered && (
-          <>
-            <button
-              onClick={e => { e.stopPropagation(); onItemCopy?.(item.id); }}
-              style={{ color: '#c5c7d0', fontSize: 13, lineHeight: 1, marginRight: 4, transition: 'color 0.15s' }}
-              title="Duplicate item"
-              onMouseEnter={e => e.currentTarget.style.color = '#9b72f5'}
-              onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
-            >⧉</button>
-            {onRunCascade && (
-              <button
-                onClick={e => { e.stopPropagation(); onRunCascade(item); }}
-                style={{ color: '#c5c7d0', fontSize: 12, lineHeight: 1, marginRight: 4, transition: 'color 0.15s' }}
-                title="Run date cascade"
-                onMouseEnter={e => e.currentTarget.style.color = '#00c875'}
-                onMouseLeave={e => e.currentTarget.style.color = '#c5c7d0'}
-              >📅</button>
-            )}
-          </>
-        )}
-        {canEdit && (
-          <button onClick={() => onItemDelete(item.id)}
-            style={{ color: hovered ? '#e2445c' : '#c5c7d0', fontSize: 18, lineHeight: 1, transition: 'color 0.15s' }}
-            title="Delete item">×</button>
-        )}
-      </td>
+      {/* Per-row Copy / Cascade / Delete icons removed — Duplicate and
+          Delete now live on the bottom BulkActionBar (select rows via
+          the checkbox column). Date Cascade was redundant here. */}
       <td />
     </tr >
   );
@@ -1195,6 +1151,10 @@ function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange
           }
         </div>
       </td>
+      {/* Updates column placeholder — keeps subitem rows aligned with the
+          parent ItemRow which has a 💬 cell here. Subitems use the inline
+          ⊡ button (above) to open detail; they don't get their own 💬 yet. */}
+      <td style={{ borderRight: '1px solid var(--border-color)', background: rowBg }} />
       {/* Data columns */}
       {columns.map(col => (
         //  <td key={col.id} style={{ padding: '3px 6px', borderRight: '1px solid #e6e9ef', background: rowBg }}>
@@ -1215,16 +1175,6 @@ function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange
           />
         </td>
       ))}
-      {/* Delete */}
-      <td style={{ width: 36, textAlign: 'center', borderRight: '1px solid #e6e9ef', background: rowBg }}>
-        {canEdit && hovered && (
-          <button
-            onClick={() => onDelete(subitem.id)}
-            style={{ color: '#e2445c', fontSize: 18, lineHeight: 1 }}
-            title="Delete subitem"
-          >×</button>
-        )}
-      </td>
       <td style={{ background: rowBg }} />
     </tr>
   );
@@ -1291,7 +1241,7 @@ function DropLine({ colSpan }) {
 }
 
 // ── Bulk action bar ───────────────────────────────────────────────────────────
-function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDelete, onClear, onBulkUpdate, onExportSelected }) {
+function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDelete, onClear, onBulkUpdate, onExportSelected, onDuplicate }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const [changeOpen, setChangeOpen] = useState(false);
@@ -1521,6 +1471,22 @@ function BulkActionBar({ count, groups, columns = [], members = [], onMove, onDe
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(155,114,245,0.30)'; }}
         >
           📥 Export selected
+        </button>
+      )}
+
+      {/* Duplicate selected */}
+      {onDuplicate && (
+        <button
+          onClick={onDuplicate}
+          style={{
+            background: 'transparent', border: '1px solid rgba(155,114,245,0.30)', color: '#3a2d5c',
+            borderRadius: 6, padding: '5px 12px', fontSize: 13, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(155,114,245,0.12)'; e.currentTarget.style.borderColor = '#9b72f5'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(155,114,245,0.30)'; }}
+        >
+          ⧉ Duplicate
         </button>
       )}
 
@@ -1911,27 +1877,6 @@ function FilterBar({ cols, filters, onFiltersChange }) {
   );
 }
 
-// ── Visibility badge ──────────────────────────────────────────────────────────
-function VisibilityBadge({ visibility, onChange, isManager }) {
-  const isPrivate = visibility === 'private';
-  return (
-    <button
-      onClick={() => isManager && onChange(isPrivate ? 'org_wide' : 'private')}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-        border: `1.5px solid ${isPrivate ? '#a25ddc' : '#00c875'}`,
-        color: isPrivate ? '#a25ddc' : '#037f4c',
-        background: isPrivate ? 'rgba(162,93,220,0.15)' : 'rgba(0,200,117,0.15)',
-        cursor: isManager ? 'pointer' : 'default',
-      }}
-      title={isManager ? `Click to make ${isPrivate ? 'Org-wide' : 'Private'}` : undefined}
-    >
-      {isPrivate ? '🔒 Private' : '🌐 Org-wide'}
-    </button>
-  );
-}
-
 // ── Mobile Card View (renders one group as cards) ─────────────────────────────
 function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onItemUpdate,
   onItemDelete, onValueChange, onEditSettings, onOpenDetail }) {
@@ -2112,9 +2057,9 @@ function MoreBottomSheet({ isManager, canEdit, activeAutoCount, trashCount, impo
     options.push({ icon: '📋', label: 'Forms', action: onForms });
   }
   options.push({ icon: '🔽', label: `Filter${filtersActive ? ' (active)' : ''}`, action: onFilter });
-  options.push({ icon: '⬇️', label: 'Export', action: onExport });
+  options.push({ icon: '⬇️', label: 'Export to Excel', action: onExport });
   if (canEdit) {
-    options.push({ icon: '⬆️', label: importing ? 'Importing…' : 'Import CSV', action: onImport, disabled: importing });
+    options.push({ icon: '⬆️', label: importing ? 'Importing…' : 'Import from Excel', action: onImport, disabled: importing });
   }
   options.push({ icon: '👥', label: `Members (${boardMembersCount})`, action: onMembers });
   options.push({ icon: '🗑️', label: `Trash${trashCount > 0 ? ` (${trashCount})` : ''}`, action: onTrash, danger: trashCount > 0 });
@@ -2466,10 +2411,12 @@ function AdvancedFilterBar({ activeFilters, setActiveFilters, allGroups, cols })
 }
 
 // ── View Tab Bar ──────────────────────────────────────────────────────────────
-function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch, onRename, onDelete, onCreate, isManager }) {
+function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch, onRename, onDelete, onCreate, onReorder, isManager }) {
   const [menuViewId, setMenuViewId] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [dragOverIdx, setDragOverIdx] = useState(null); // index where the dragged tab would land
   const menuRef = useRef(null);
+  const dragFromIdx = useRef(null);
 
   useEffect(() => {
     if (!menuViewId) return;
@@ -2487,6 +2434,39 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
     setMenuViewId(v => v === viewId ? null : viewId);
   };
 
+  // ── Drag-and-drop reorder ───────────────────────────────────────────────────
+  const handleDragStart = (e, idx) => {
+    if (!isManager) return;
+    dragFromIdx.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox needs *some* data on the dataTransfer for drag to start.
+    try { e.dataTransfer.setData('text/plain', String(idx)); } catch (_) {}
+  };
+
+  const handleDragOver = (e, idx) => {
+    if (dragFromIdx.current === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIdx !== idx) setDragOverIdx(idx);
+  };
+
+  const handleDrop = (e, idx) => {
+    e.preventDefault();
+    const from = dragFromIdx.current;
+    dragFromIdx.current = null;
+    setDragOverIdx(null);
+    if (from === null || from === idx) return;
+    const next = [...views];
+    const [moved] = next.splice(from, 1);
+    next.splice(idx, 0, moved);
+    onReorder?.(next);
+  };
+
+  const handleDragEnd = () => {
+    dragFromIdx.current = null;
+    setDragOverIdx(null);
+  };
+
   return (
     <div style={{
       height: 38, background: 'var(--viewbar-bg)',
@@ -2495,21 +2475,28 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
       display: 'flex', alignItems: 'center', padding: '0 16px',
       flexShrink: 0, gap: 0, overflowX: 'auto',
     }}>
-      {views.map(view => {
+      {views.map((view, idx) => {
         const isActive = view.id === activeViewId;
         const isMain = view.id === mainViewId;
         const showDot = isActive && unsavedChanges;
+        const isDropTarget = dragOverIdx === idx && dragFromIdx.current !== null && dragFromIdx.current !== idx;
         return (
           <div
             key={view.id}
+            draggable={isManager}
+            onDragStart={(e) => handleDragStart(e, idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={(e) => handleDrop(e, idx)}
+            onDragEnd={handleDragEnd}
             style={{
               display: 'flex', alignItems: 'center', height: '100%', gap: 4,
               borderBottom: isActive ? '2px solid #9b72f5' : '2px solid transparent',
-              padding: '0 4px 0 12px',
+              borderLeft: isDropTarget ? '2px solid #9b72f5' : '2px solid transparent',
+              padding: '0 4px 0 10px',
               fontSize: 13, fontWeight: 500,
               color: isActive ? '#9b72f5' : 'var(--text-secondary)',
-              cursor: 'pointer', userSelect: 'none', flexShrink: 0,
-              transition: 'color 0.12s',
+              cursor: isManager ? 'grab' : 'pointer', userSelect: 'none', flexShrink: 0,
+              transition: 'color 0.12s, border-left-color 0.12s',
             }}
             onClick={() => !isActive && onSwitch(view)}
             onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--hover-bg, #f5f6f8)'; }}
@@ -2529,16 +2516,18 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
             )}
             {isManager && !isMain && (
               <button
+                onMouseDown={e => e.stopPropagation()}
                 onClick={e => openMenu(e, view.id)}
                 style={{
-                  width: 20, height: 20, borderRadius: 4, border: 'none',
-                  background: 'transparent', color: '#c5c7d0', fontSize: 14,
+                  width: 22, height: 22, borderRadius: 4, border: 'none',
+                  background: 'transparent', color: 'var(--text-secondary)', fontSize: 16,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', flexShrink: 0, lineHeight: 1,
+                  cursor: 'pointer', flexShrink: 0, lineHeight: 1, fontWeight: 700,
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#e6e9ef'; e.currentTarget.style.color = '#676879'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#c5c7d0'; }}
-              >…</button>
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--menu-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                title="View options"
+              >⋯</button>
             )}
           </div>
         );
@@ -2550,22 +2539,24 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
           onClick={onCreate}
           style={{
             marginLeft: 6, padding: '4px 12px', fontSize: 12, fontWeight: 500,
-            color: '#676879', border: '1px dashed #c5c7d0',
+            color: 'var(--text-secondary)', border: '1px dashed var(--border-color)',
             borderRadius: 6, background: 'transparent', cursor: 'pointer', flexShrink: 0,
           }}
           onMouseEnter={e => { e.currentTarget.style.color = '#9b72f5'; e.currentTarget.style.borderColor = '#9b72f5'; }}
-          onMouseLeave={e => { e.currentTarget.style.color = '#676879'; e.currentTarget.style.borderColor = '#c5c7d0'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
         >+ Add View</button>
       )}
 
-      {/* Context menu */}
-      {menuViewId && (
+      {/* Context menu — portalled to document.body so the tab bar's
+          backdrop-filter doesn't trap position:fixed inside its
+          containing block. */}
+      {menuViewId && createPortal(
         <div
           ref={menuRef}
           style={{
             position: 'fixed', top: menuPos.top, left: menuPos.left,
-            background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            border: '1px solid #e6e9ef', zIndex: 10000, minWidth: 160, overflow: 'hidden',
+            background: 'var(--menu-bg)', borderRadius: 8, boxShadow: 'var(--menu-shadow)',
+            border: '1px solid var(--menu-border)', zIndex: 10000, minWidth: 160, overflow: 'hidden',
           }}
         >
           <div
@@ -2577,16 +2568,17 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
             }}
             style={{
               padding: '9px 14px', fontSize: 13, cursor: views.length <= 1 ? 'not-allowed' : 'pointer',
-              color: views.length <= 1 ? '#c5c7d0' : '#e2445c',
+              color: views.length <= 1 ? 'var(--text-muted)' : '#e2445c',
               display: 'flex', alignItems: 'center', gap: 8,
             }}
-            onMouseEnter={e => { if (views.length > 1) e.currentTarget.style.background = '#fff5f7'; }}
+            onMouseEnter={e => { if (views.length > 1) e.currentTarget.style.background = 'var(--menu-danger-hover)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = ''; }}
           >
             🗑 Delete view
-            {views.length <= 1 && <span style={{ fontSize: 11, color: '#aaa', marginLeft: 'auto' }}>last view</span>}
+            {views.length <= 1 && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>last view</span>}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -2910,11 +2902,14 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
 
   return (
     <div style={{
-      background: 'var(--card-bg, #fff)',
-      border: '1px solid var(--border-color, #e6e9ef)',
-      borderRadius: 8, padding: '12px 16px',
-      margin: '0 16px 8px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+      // --card-bg is lighter than the workspace bg in both themes (white in
+      // light, #2a2e57 in dark vs the workspace's #0f0f1e), so the popover
+      // visually lifts off the board instead of blending into it.
+      background: 'var(--card-bg)',
+      border: '1px solid var(--menu-border)',
+      borderRadius: 10, padding: '14px 18px',
+      // No outer margin — the popover wrapper handles left/width positioning.
+      boxShadow: 'var(--menu-shadow)',
       flexShrink: 0,
     }}>
       {/* Header row */}
@@ -3355,6 +3350,9 @@ function VirtualisedGroups({
               <td style={{ padding: '4px 12px', color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: 0.3, fontSize: 11, textTransform: 'uppercase', position: 'sticky', left: 42, background: 'var(--summary-row-bg)', zIndex: 5 }}>
                 Σ Total <span style={{ color: 'var(--text-tertiary, #999)', fontWeight: 500, marginLeft: 4 }}>({items.length})</span>
               </td>
+              {/* Updates-column slot — keeps the totals row aligned with
+                  the new 💬 column added to the header / item rows. */}
+              <td style={{ background: 'var(--summary-row-bg)' }} />
               {cols.map(col => {
                 const summary = computeColumnSummary(col, items, allCols);
                 if (!summary) return <td key={col.id} style={{ padding: '4px 8px', background: 'var(--summary-row-bg)' }} />;
@@ -3418,8 +3416,10 @@ function VirtualisedGroups({
                   </td>
                 );
               })}
+              {/* Trailing slot — pairs with the AddColumn col in <colgroup>
+                  (width 48 for managers, 0 for non-managers). Always rendered
+                  so the summary row's td count matches every other row. */}
               <td style={{ background: 'var(--summary-row-bg)' }} />
-              {isManager && <td style={{ background: 'var(--summary-row-bg)' }} />}
             </tr>
           );
         }
@@ -3469,10 +3469,13 @@ function VirtualisedGroups({
 }
 
 // ── Main Board ────────────────────────────────────────────────────────────────
-export default function Board({ board, onBoardChange, openItemId, onOpenItemDone }) {
+export default function Board({ board, onBoardChange, openItemId, onOpenItemDone, openTrashSignal }) {
   const scrollContainerRef = useRef(null);
   const [showAddColumn, setShowAddColumn] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [moreMenuPos, setMoreMenuPos] = useState({ top: 0, left: 0 });
+  const moreButtonRef = useRef(null);
+  const moreMenuRef = useRef(null);
   const [showAutomations, setShowAutomations] = useState(false);
   const [activeAutoCount, setActiveAutoCount] = useState(0);
   const [cascadePopover, setCascadePopover] = useState(null); // { itemId, item }
@@ -3647,20 +3650,6 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedRowItemId, detailItemId, showShortcuts]);
 
-  const handleShare = async () => {
-    const url = `${window.location.origin}/board/${board.id}`;
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      // Clipboard API not supported — show URL in a prompt as fallback
-      prompt('Copy this board link:', url);
-      return;
-    }
-    setShareCopied(true);
-    toast('Board link copied to clipboard!', 'success');
-    setTimeout(() => setShareCopied(false), 2000);
-  };
-
   // Open item panel when triggered from a notification click
   useEffect(() => {
     if (!openItemId) return;
@@ -3675,6 +3664,49 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       onOpenItemDone?.();
     }
   }, [openItemId, board.groups]);
+
+  // Open the Trash panel when the sidebar kebab fires the signal. Skip the
+  // initial render (signal=0) so it doesn't pop up on mount.
+  useEffect(() => {
+    if (openTrashSignal) setShowTrash(true);
+  }, [openTrashSignal]);
+
+  // Esc closes the filter popover. (Click-outside-to-close intentionally
+  // omitted: the panel hosts nested column/condition/value pickers that
+  // would race with an outside-click handler.)
+  useEffect(() => {
+    if (!filterPanelOpen) return;
+    const onKey = (e) => { if (e.key === 'Escape') setFilterPanelOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [filterPanelOpen]);
+
+  // Outside-click + Esc close for the toolbar `⋯ More` overflow menu.
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const onMouseDown = (e) => {
+      if (moreButtonRef.current?.contains(e.target)) return;
+      if (moreMenuRef.current?.contains(e.target)) return;
+      setMoreMenuOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setMoreMenuOpen(false); };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [moreMenuOpen]);
+
+  const toggleMoreMenu = () => {
+    if (moreMenuOpen) { setMoreMenuOpen(false); return; }
+    const r = moreButtonRef.current?.getBoundingClientRect();
+    if (r) {
+      // Align the menu's right edge with the button's right edge.
+      setMoreMenuPos({ top: r.bottom + 4, left: r.right - 200 });
+    }
+    setMoreMenuOpen(true);
+  };
 
   // ── Column resizing ───────────────────────────────────────────────────────
   const [colWidths, setColWidths] = useState({});
@@ -3725,8 +3757,10 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   };
 
   // ── View handlers ─────────────────────────────────────────────────────────
-  // The first view (by created_at ASC) is always the locked Main Table
-  const mainViewId = views[0]?.id ?? null;
+  // The locked Main Table is identified by its persistent `is_main` flag, not
+  // by tab position — so users can drag the Main tab anywhere and it still
+  // stays locked (no filters, no hidden columns/groups, can't be deleted).
+  const mainViewId = views.find(v => v.is_main)?.id ?? views[0]?.id ?? null;
   const isMainView = activeViewId !== null && activeViewId === mainViewId;
 
   const handleSwitchView = (view) => {
@@ -3782,6 +3816,19 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         setUnsavedChanges(false);
       }
     } catch { toast('Failed to delete view', 'error'); }
+  };
+
+  // Persist a new tab order. Optimistically updates local state, rolls back
+  // on failure. The server rewrites positions 1..N for the supplied IDs.
+  const handleViewReorder = async (newOrder) => {
+    const prevOrder = views;
+    setViews(newOrder);
+    try {
+      await reorderViews(board.id, newOrder.map(v => v.id));
+    } catch {
+      setViews(prevOrder);
+      toast('Failed to reorder views', 'error');
+    }
   };
 
   const handleSaveView = async () => {
@@ -3852,6 +3899,29 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       return next;
     });
   }, []);
+
+  const handleBulkDuplicate = async () => {
+    const itemIds = [...selectedItems];
+    if (!itemIds.length) return;
+    setSelectedItems(new Set());
+    try {
+      // Sequential, not Promise.all, so duplicates land in the same order as
+      // the originals — copyItem appends to the end of the group on the
+      // server, so concurrent calls would interleave unpredictably.
+      for (const id of itemIds) {
+        const r = await copyItem(id);
+        const newItem = { ...r.data, subitems: [] };
+        updateLocalBoard(b => ({
+          groups: b.groups.map(g =>
+            g.items.some(i => i.id === id)
+              ? { ...g, items: [...g.items, newItem] }
+              : g
+          ),
+        }));
+      }
+      toast(`Duplicated ${itemIds.length} item${itemIds.length !== 1 ? 's' : ''}`, 'success');
+    } catch { toast('Failed to duplicate items', 'error'); }
+  };
 
   const handleBulkMove = async (targetGroupId) => {
     const itemIds = [...selectedItems];
@@ -4330,7 +4400,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         settings: { ...(col.settings || {}), isOwnerColumn: nowOn },
       });
       updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === colId ? r.data : c) }));
-      toast(nowOn ? '🔒 Visibility control ON — only assigned members will see restricted items' : '🔓 Visibility control OFF', nowOn ? 'success' : 'success');
+      toast(nowOn ? '👤 Marked as Owner column — drives Strict access mode' : '👤 Unmarked as Owner column', 'success');
     } catch { toast('Failed to update column', 'error'); }
   };
 
@@ -4396,15 +4466,6 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     } catch { toast('Failed to save default value', 'error'); }
   };
 
-  // ── Visibility ────────────────────────────────────────────────────────────
-  const handleVisibilityChange = async (visibility) => {
-    try {
-      const r = await updateBoard(board.id, { name: board.name, description: board.description, visibility });
-      updateLocalBoard(() => ({ visibility: r.data.visibility }));
-      toast(`Board is now ${visibility === 'private' ? '🔒 Private' : '🌐 Org-wide'}`, 'success');
-    } catch { toast('Failed to update visibility', 'error'); }
-  };
-
   // ── Export ────────────────────────────────────────────────────────────────
   // Default export excludes hidden columns. Pass itemIds to limit rows.
   const doExport = async ({ itemIds } = {}) => {
@@ -4458,14 +4519,37 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   };
 
   // ── Import ────────────────────────────────────────────────────────────────
+  // Accepts .xlsx / .xls / .csv. Excel files are parsed with the xlsx
+  // library; CSV uses the existing in-house parser. Both produce the same
+  // [{ header: value, ... }] row shape consumed by the /import endpoint.
   const handleImportFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
-    const text = await file.text();
-    const rows = parseCSV(text);
-    if (!rows.length) { toast('CSV is empty or invalid', 'error'); return; }
-    // Show preview/validation modal instead of importing immediately
+    const ext = file.name.split('.').pop().toLowerCase();
+    let rows = [];
+    try {
+      if (ext === 'xlsx' || ext === 'xls') {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        // defval:'' keeps blank cells as empty strings (matches CSV parser);
+        // raw:false coerces dates/numbers to display strings so the backend
+        // sees the same text users would type in Excel.
+        rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+      } else {
+        const text = await file.text();
+        rows = parseCSV(text);
+      }
+    } catch (err) {
+      console.error('Import parse failed:', err);
+      toast('Could not read this file. Use .xlsx, .xls, or .csv.', 'error');
+      return;
+    }
+    if (!rows.length) { toast('File is empty or invalid', 'error'); return; }
+    // Show preview/validation modal instead of importing immediately.
+    // Key stays `csvRows` since the downstream modal/endpoint already
+    // accepts a generic [{header: value}] shape regardless of source.
     setImportPreview({ csvRows: rows });
   };
 
@@ -4665,19 +4749,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               minHeight: 44, display: 'flex', alignItems: 'center', gap: 5,
             }}
           >⋯ More</button>
-          <button
-            onClick={handleShare}
-            style={{
-              padding: '8px 12px', border: `1.5px solid ${shareCopied ? '#00c875' : 'var(--border-color)'}`,
-              borderRadius: 6, fontWeight: 600, fontSize: 13, minHeight: 44,
-              color: shareCopied ? '#00c875' : 'var(--text-secondary)', background: 'var(--bg-primary)',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}
-          >{shareCopied ? '✓ Copied!' : '🔗'}</button>
-          <div style={{ marginLeft: 'auto' }}>
-            <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
-          </div>
-          <input ref={importFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImportFile} />
+          <input ref={importFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportFile} />
         </div>
       ) : (
         /* Desktop toolbar: full button row */
@@ -4686,6 +4758,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           padding: '8px 20px', background: 'var(--board-toolbar-bg)',
           backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           borderBottom: 'none', flexShrink: 0, flexWrap: 'wrap',
+          position: 'relative', // anchor for the filter popover below
+          zIndex: 30,           // lift toolbar (and popover) above board content
         }}>
           {isManager && (
             <>
@@ -4693,19 +4767,6 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                 padding: '6px 14px', background: 'linear-gradient(90deg,#c9b4ff 0%,#d99fe0 60%,#f5c89a 100%)', color: '#fff',
                 borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none',
               }}>+ Add Group</button>
-              <button onClick={() => setShowAutomations(true)} style={{
-                padding: '5px 12px', border: '1.5px solid var(--automation-button-border, #a25ddc)', color: 'var(--automation-button-color, #a25ddc)',
-                borderRadius: 6, fontWeight: 600, fontSize: 12,
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}>
-                ⚡ Automations
-                {activeAutoCount > 0 && (
-                  <span style={{
-                    background: '#a25ddc', color: '#fff', borderRadius: 10,
-                    padding: '0px 6px', fontSize: 11, fontWeight: 700,
-                  }}>{activeAutoCount}</span>
-                )}
-              </button>
               <button onClick={() => setShowForms(true)} style={{
                 padding: '5px 12px', border: '1.5px solid var(--forms-button-border, #9b72f5)', color: 'var(--forms-button-color, #9b72f5)',
                 borderRadius: 6, fontWeight: 600, fontSize: 12,
@@ -4775,73 +4836,118 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             </button>
           )}
 
-          {/* Export / Import */}
-          <button onClick={handleExport} style={{
-            padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-            fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>⬇️ Export</button>
+          {/* ⋯ More actions — Export, Import (Excel/CSV).
+              Hidden file input lives here so canEdit-only users can still
+              trigger Import via the menu. */}
+          <button
+            ref={moreButtonRef}
+            onClick={toggleMoreMenu}
+            title="More actions"
+            style={{
+              padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
+              fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
+              display: 'flex', alignItems: 'center', gap: 5, lineHeight: 1, minWidth: 38, justifyContent: 'center',
+            }}
+          >⋯</button>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
 
-          {canEdit && (
-            <>
+          {/* Dropdown is portalled to <body> so the toolbar's
+              backdrop-filter doesn't trap position:fixed. */}
+          {moreMenuOpen && createPortal(
+            <div
+              ref={moreMenuRef}
+              style={{
+                position: 'fixed', top: moreMenuPos.top, left: moreMenuPos.left,
+                background: 'var(--menu-bg)', border: '1px solid var(--menu-border)',
+                borderRadius: 8, boxShadow: 'var(--menu-shadow)',
+                zIndex: 10000, minWidth: 200, padding: '4px 0', overflow: 'hidden',
+                color: 'var(--text-primary)',
+              }}
+            >
               <button
-                onClick={() => importFileRef.current?.click()}
-                disabled={importing}
+                onClick={() => { setMoreMenuOpen(false); handleExport(); }}
                 style={{
-                  padding: '5px 12px', border: '1.5px solid #e6e9ef', borderRadius: 6,
-                  fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  opacity: importing ? 0.6 : 1, cursor: importing ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  width: '100%', padding: '9px 14px',
+                  fontSize: 13, fontWeight: 500, textAlign: 'left',
+                  color: 'var(--text-primary)', background: 'transparent',
+                  border: 'none', cursor: 'pointer',
                 }}
-              >{importing ? 'Importing…' : '⬆️ Import CSV'}</button>
-              <input
-                ref={importFileRef}
-                type="file"
-                accept=".csv"
-                style={{ display: 'none' }}
-                onChange={handleImportFile}
-              />
-            </>
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >⬇ Export to Excel</button>
+              {canEdit && (
+                <button
+                  onClick={() => { setMoreMenuOpen(false); importFileRef.current?.click(); }}
+                  disabled={importing}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '9px 14px',
+                    fontSize: 13, fontWeight: 500, textAlign: 'left',
+                    color: 'var(--text-primary)', background: 'transparent',
+                    border: 'none', cursor: importing ? 'not-allowed' : 'pointer',
+                    opacity: importing ? 0.6 : 1,
+                  }}
+                  onMouseEnter={e => { if (!importing) e.currentTarget.style.background = 'var(--menu-hover)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >⬆ {importing ? 'Importing…' : 'Import from Excel'}</button>
+              )}
+            </div>,
+            document.body
           )}
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={handleShare}
-              style={{
-                padding: '6px 12px', border: `1px solid ${shareCopied ? '#00c875' : 'var(--border-color)'}`,
-                borderRadius: 6, background: 'var(--bg-primary)', fontSize: 13, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6,
-                color: shareCopied ? '#00c875' : 'var(--text-secondary)',
-                transition: 'color 0.15s, border-color 0.15s',
-              }}
-            >{shareCopied ? '✓ Copied!' : '🔗 Share'}</button>
-            <VisibilityBadge visibility={board.visibility || 'org_wide'} onChange={handleVisibilityChange} isManager={isManager} />
+            {isManager && (
+              <button onClick={() => setShowAutomations(true)} style={{
+                padding: '5px 12px', border: '1.5px solid var(--automation-button-border, #a25ddc)', color: 'var(--automation-button-color, #a25ddc)',
+                borderRadius: 6, fontWeight: 600, fontSize: 12,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}>
+                ⚡ Automations
+                {activeAutoCount > 0 && (
+                  <span style={{
+                    background: '#a25ddc', color: '#fff', borderRadius: 10,
+                    padding: '0px 6px', fontSize: 11, fontWeight: 700,
+                  }}>{activeAutoCount}</span>
+                )}
+              </button>
+            )}
             <button onClick={() => setShowMembers(true)} style={{
               display: 'flex', alignItems: 'center', gap: 5,
               padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
               fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
             }}>👥 {board.members?.length || 0} Members</button>
-            {/* Board-level Activity button removed — per-item Activity Log
-                is available inside the item detail panel (Activity Log tab). */}
-            <button
-              onClick={() => setShowTrash(true)}
-              style={{
-                padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                border: `1.5px solid ${trashCount > 0 ? '#e2445c' : '#e6e9ef'}`,
-                color: trashCount > 0 ? '#e2445c' : '#676879',
-                background: trashCount > 0 ? '#fff5f7' : 'var(--bg-primary)',
-                display: 'flex', alignItems: 'center', gap: 5,
-              }}
-            >
-              🗑️ Trash
-              {trashCount > 0 && (
-                <span style={{
-                  background: '#e2445c', color: '#fff', borderRadius: 10,
-                  padding: '0px 6px', fontSize: 11, fontWeight: 700,
-                }}>{trashCount}</span>
-              )}
-            </button>
           </div>
+
+          {/* ── Filter popover — floats over board content like monday.com ── */}
+          {filterPanelOpen && !isMainView && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 16,
+              width: 'min(820px, calc(100% - 32px))',
+              marginTop: 4, zIndex: 100,
+            }}>
+              <ViewFilterPanel
+                cols={allCols}
+                board={board}
+                activeFilters={activeFilters}
+                setActiveFilters={(f) => { setActiveFilters(f); setUnsavedChanges(true); }}
+                hiddenColumns={hiddenColumns}
+                setHiddenColumns={(v) => { setHiddenColumns(v); setUnsavedChanges(true); }}
+                hiddenGroups={hiddenGroups}
+                setHiddenGroups={(v) => { setHiddenGroups(v); setUnsavedChanges(true); }}
+                onSave={handleSaveView}
+                unsavedChanges={unsavedChanges}
+                totalItems={totalItems}
+                filteredItems={filteredItems}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -4856,29 +4962,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           onRename={handleViewRename}
           onDelete={handleViewDelete}
           onCreate={handleViewCreate}
+          onReorder={handleViewReorder}
           isManager={isManager}
         />
       )}
 
-      {/* ── View filter panel (desktop only, not on Main Table) ── */}
-      {!isMobile && filterPanelOpen && !isMainView && (
-        <div style={{ flexShrink: 0, paddingTop: 8 }}>
-          <ViewFilterPanel
-            cols={allCols}
-            board={board}
-            activeFilters={activeFilters}
-            setActiveFilters={(f) => { setActiveFilters(f); setUnsavedChanges(true); }}
-            hiddenColumns={hiddenColumns}
-            setHiddenColumns={(v) => { setHiddenColumns(v); setUnsavedChanges(true); }}
-            hiddenGroups={hiddenGroups}
-            setHiddenGroups={(v) => { setHiddenGroups(v); setUnsavedChanges(true); }}
-            onSave={handleSaveView}
-            unsavedChanges={unsavedChanges}
-            totalItems={totalItems}
-            filteredItems={filteredItems}
-          />
-        </div>
-      )}
 
       {/* ── Filter bar (mobile / old text-search — kept for MoreBottomSheet) ── */}
       {showFilters && (
@@ -4919,14 +5007,15 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             tableLayout: 'fixed',
             width: '100%',
             // Prevent columns shrinking when many are added — container scrolls instead
-            minWidth: 6 + 36 + getNameWidth() + cols.reduce((s, c) => s + getColWidth(c), 0) + 36 + (isManager ? 48 : 0),
+            minWidth: 6 + 36 + getNameWidth() + 36 + cols.reduce((s, c) => s + getColWidth(c), 0) + (isManager ? 48 : 0),
           }}>
             <colgroup>
               <col style={{ width: 6 }} />
               <col style={{ width: 36 }} />
               <col style={{ width: getNameWidth() }} />
-              {cols.map(c => <col key={c.id} style={{ width: getColWidth(c) }} />)}
+              {/* Updates / 💬 column — fixed 36px slot right after Item Name */}
               <col style={{ width: 36 }} />
+              {cols.map(c => <col key={c.id} style={{ width: getColWidth(c) }} />)}
               <col style={{ width: isManager ? 48 : 0 }} />
             </colgroup>
 
@@ -4956,6 +5045,19 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                     }
                     <ResizeHandle onMouseDown={e => startResize(e, '_name', getNameWidth())} />
                   </div>
+                </th>
+                {/* Updates / 💬 column header — empty label, just a slot. */}
+                <th
+                  className="board-neon-header-cell"
+                  title="Updates"
+                  style={{
+                    padding: 0, textAlign: 'center', fontSize: 13,
+                    color: 'var(--text-secondary)',
+                    background: 'rgba(255,255,255,0.92)',
+                    borderRight: '1px solid rgba(155,114,245,0.10)',
+                  }}
+                >
+                  💬
                 </th>
                 {cols.map(col => (
                   <th
@@ -4994,7 +5096,6 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                     <ResizeHandle onMouseDown={e => startResize(e, col.id, getColWidth(col))} />
                   </th>
                 ))}
-                <th style={{ background: 'rgba(255,255,255,0.92)', borderRight: '1px solid rgba(155,114,245,0.10)' }} />
                 {isManager && (
                   <th style={{ background: 'rgba(255,255,255,0.92)', textAlign: 'center', padding: '0 4px' }}>
                     <button
@@ -5063,6 +5164,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           members={board.members || []}
           onMove={handleBulkMove}
           onDelete={handleBulkDelete}
+          onDuplicate={canEdit ? handleBulkDuplicate : null}
           onBulkUpdate={handleBulkUpdate}
           onExportSelected={handleBulkExport}
           onClear={() => setSelectedItems(new Set())}

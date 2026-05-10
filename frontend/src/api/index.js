@@ -180,6 +180,8 @@ export const updateView = (id, data) =>
   api.put(`/views/${id}`, data).then(r => r.data);
 export const deleteView = (id) =>
   api.delete(`/views/${id}`).then(r => r.data);
+export const reorderViews = (board_id, view_ids) =>
+  api.post('/views/reorder', { board_id, view_ids }).then(r => r.data);
 
 // ── API Keys (admin only) ──────────────────────────────────────────────────────
 export const getApiKeys    = ()           => api.get('/keys').then(r => r.data);

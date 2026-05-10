@@ -67,7 +67,7 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
     }
   };
 
-  const labelStyle = { fontSize: 12, fontWeight: 600, color: '#676879', marginBottom: 4, display: 'block' };
+  const labelStyle = { fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' };
   const inputStyle = { width: '100%', padding: '7px 10px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, color: 'var(--text-primary)', background: 'var(--bg-primary)', boxSizing: 'border-box' };
 
   return (
@@ -87,12 +87,12 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
           <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
             {rule ? 'Edit Cascade Rule' : 'New Cascade Rule'}
           </span>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#676879' }}>×</button>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
         </div>
 
         {/* Body */}
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {error && <div style={{ background: '#fff0f0', color: '#e2445c', borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>{error}</div>}
+          {error && <div style={{ background: 'rgba(226,68,92,0.12)', color: '#e2445c', borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>{error}</div>}
 
           {/* Rule name */}
           <div>
@@ -169,7 +169,7 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
                   </div>
                 );
               })()}
-              <div style={{ fontSize: 11, color: '#676879', background: 'var(--bg-secondary)', borderRadius: 4, padding: '6px 10px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: 4, padding: '6px 10px' }}>
                 Anchor date will be taken from the anchor column's current value, or today if empty.
               </div>
             </>
@@ -198,11 +198,11 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
                     onChange={() => set('direction', opt.value)}
                     style={{ accentColor: '#9b72f5' }}
                   />
-                  <span>{opt.label} <span style={{ fontSize: 11, color: '#676879' }}>({opt.hint})</span></span>
+                  <span>{opt.label} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>({opt.hint})</span></span>
                 </label>
               ))}
             </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: '#676879', background: 'var(--bg-secondary)', borderRadius: 4, padding: '5px 8px' }}>
+            <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: 4, padding: '5px 8px' }}>
               Forward: anchor should not be the last step. Backward: anchor should not be the first step.
             </div>
           </div>
@@ -221,7 +221,7 @@ export default function AutomationRuleConfig({ boardId, boardColumns, anchorColu
 
         {/* Footer */}
         <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onClose} style={{ padding: '7px 16px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: '#676879', background: 'var(--bg-primary)' }}>
+          <button onClick={onClose} style={{ padding: '7px 16px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)', background: 'var(--bg-primary)' }}>
             Cancel
           </button>
           <button onClick={handleSave} disabled={saving || loading} style={{ padding: '7px 18px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (saving || loading) ? 0.7 : 1 }}>

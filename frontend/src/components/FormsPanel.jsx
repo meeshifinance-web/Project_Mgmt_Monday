@@ -11,7 +11,7 @@ const ACCENT_PRESETS = [
   // Vibrant
   '#9b72f5','#00c875','#e2445c','#fdab3d','#a25ddc','#037f4c','#ff5ac4','#0086c0','#ff642e','#333333',
   // Light / muted
-  '#94a3b8','#a8b8c8','#b0c4b1','#c9b8d8','#f4a96a','#f9c6c6','#b2d8d8','#c8daf4','#d4c5a9','#d9d9d9',
+  'var(--text-secondary)','#a8b8c8','#b0c4b1','#c9b8d8','#f4a96a','#f9c6c6','#b2d8d8','#c8daf4','#d4c5a9','#d9d9d9',
 ];
 
 const TYPE_META = {
@@ -31,12 +31,12 @@ const TYPE_META = {
   timeline:     { icon: '⟷', color: '#f59e0b' },
   tags:         { icon: '🏷', color: '#8b5cf6' },
   location:     { icon: '📍', color: '#ef4444' },
-  person:       { icon: '👤', color: '#64748b' },
+  person:       { icon: '👤', color: 'var(--text-secondary)' },
   color_picker: { icon: '🎨', color: '#ec4899' },
-  file:         { icon: '📎', color: '#64748b' },
+  file:         { icon: '📎', color: 'var(--text-secondary)' },
 };
 
-function getTypeMeta(t) { return TYPE_META[t] || { icon: '—', color: '#94a3b8' }; }
+function getTypeMeta(t) { return TYPE_META[t] || { icon: '—', color: 'var(--text-secondary)' }; }
 
 // ── Clipboard helper ──────────────────────────────────────────────────────────
 function copyTextToClipboard(text) {
@@ -56,15 +56,18 @@ function Toggle({ on, onChange, color = '#9b72f5', size = 'md' }) {
       title={on ? 'Visible — click to hide' : 'Hidden — click to show'}
       style={{
         width: w, height: h, borderRadius: h / 2,
-        background: on ? color : '#d1d5db',
+        // Off-track: translucent slate visible on both themes (var(--border-color)
+        // collapses to near-invisible in dark mode, so we use a fixed value).
+        background: on ? color : 'rgba(148,163,184,0.55)',
         position: 'relative', cursor: 'pointer', flexShrink: 0,
         transition: 'background 0.2s, box-shadow 0.2s',
         boxShadow: on ? `0 0 0 3px ${color}28` : 'none',
       }}>
       <div style={{
         position: 'absolute', top: (h - d) / 2, left: on ? w - d - (h - d) / 2 : (h - d) / 2,
+        // Thumb stays white in both themes so it contrasts against any track color.
         width: d, height: d, borderRadius: '50%', background: '#fff',
-        transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+        transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
       }} />
     </div>
   );
@@ -123,15 +126,15 @@ function PreviewField({ field, color }) {
     case 'checkbox':
       input = (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.6 }}>
-          <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid #cbd5e1', background: '#fff' }} />
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>Click to check</span>
+          <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid #cbd5e1', background: 'var(--card-bg)' }} />
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Click to check</span>
         </div>
       );
       break;
     case 'rating':
       input = (
         <div style={{ display: 'flex', gap: 4, opacity: 0.6 }}>
-          {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: 20, color: '#cbd5e1' }}>☆</span>)}
+          {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: 20, color: 'var(--text-muted)' }}>☆</span>)}
         </div>
       );
       break;
@@ -144,7 +147,7 @@ function PreviewField({ field, color }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, opacity: 0.75 }}>
             {opts.slice(0, 4).map(o => {
               const lbl = typeof o === 'string' ? o : o.label;
-              return <div key={lbl} style={{ padding: '4px 12px', borderRadius: 99, background: '#f1f5f9', border: '1.5px solid #e2e8f0', fontSize: 11, color: '#64748b', fontWeight: 500 }}>{lbl}</div>;
+              return <div key={lbl} style={{ padding: '4px 12px', borderRadius: 99, background: 'var(--bg-secondary)', border: '1.5px solid var(--border-color)', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>{lbl}</div>;
             })}
           </div>
         );
@@ -155,7 +158,7 @@ function PreviewField({ field, color }) {
       input = (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', opacity: 0.7 }}>
           <input type="date" disabled style={{ ...inputBase, flex: 1 }} />
-          <span style={{ color: '#cbd5e1', fontSize: 12 }}>→</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>→</span>
           <input type="date" disabled style={{ ...inputBase, flex: 1 }} />
         </div>
       );
@@ -213,7 +216,7 @@ function FormPreview({ form, fields, itemNameLabel, accentColor }) {
           {visible.map(f => <PreviewField key={f.id || f.column_id} field={f} color={color} />)}
 
           {visible.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '16px 0', color: '#cbd5e1', fontSize: 12, fontWeight: 500 }}>
+            <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
               No fields selected yet
             </div>
           )}
@@ -221,7 +224,7 @@ function FormPreview({ form, fields, itemNameLabel, accentColor }) {
           <button disabled style={{ width: '100%', padding: '10px 0', background: color, color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, marginTop: 6, opacity: 0.9, cursor: 'default' }}>Submit response →</button>
         </div>
 
-        <div style={{ textAlign: 'center', padding: '8px 0 14px', fontSize: 10, color: '#94a3b8' }}>Powered by Simplix</div>
+        <div style={{ textAlign: 'center', padding: '8px 0 14px', fontSize: 10, color: 'var(--text-secondary)' }}>Powered by Simplix</div>
       </div>
     </div>
   );
@@ -349,7 +352,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
             {/* Active toggle */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Toggle on={isActive} onChange={() => setActive(a => !a)} color="#00c875" size="sm" />
-              <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? '#059669' : '#94a3b8' }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? '#059669' : 'var(--text-secondary)' }}>
                 {isActive ? 'Active' : 'Inactive'}
               </span>
             </div>
@@ -406,7 +409,7 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <input type="color" value={coverColor} onChange={e => setColor(e.target.value)}
                     style={{ width: 44, height: 44, borderRadius: 8, border: '2px solid #e2e8f0', cursor: 'pointer', padding: 3, boxSizing: 'border-box' }} />
-                  <span style={{ fontSize: 12, color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>{coverColor}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace', fontWeight: 600 }}>{coverColor}</span>
                   <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                     {ACCENT_PRESETS.map(c => (
                       <div key={c} onClick={() => setColor(c)}
@@ -441,20 +444,20 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
           {/* ── Fields ── */}
           {activeSection === 'fields' && (
             <div>
-              <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 14, lineHeight: 1.5 }}>
-                Toggle fields on/off and rename them for your respondents. <strong style={{ color: '#64748b' }}>Item Name</strong> is always included.
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
+                Toggle fields on/off and rename them for your respondents. <strong style={{ color: 'var(--text-secondary)' }}>Item Name</strong> is always included.
               </p>
 
               {/* Item Name — always on */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#eff6ff', marginBottom: 10, border: '1.5px solid #bfdbfe' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(155,114,245,0.10)', marginBottom: 10, border: '1.5px solid rgba(155,114,245,0.32)' }}>
                 <Toggle on size="sm" onChange={() => {}} color="#9b72f5" />
-                <div style={{ width: 28, height: 28, borderRadius: 7, background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#3b82f6', fontWeight: 800, flexShrink: 0 }}>Aa</div>
+                <div style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(155,114,245,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#9b72f5', fontWeight: 800, flexShrink: 0 }}>Aa</div>
                 <input
                   value={itemNameLabel}
                   onChange={e => setItemNameLabel(e.target.value)}
-                  style={{ flex: 1, border: '1.5px solid #bfdbfe', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontWeight: 600, color: '#1d4ed8', background: '#fff', outline: 'none', minWidth: 0 }}
+                  style={{ flex: 1, border: '1.5px solid rgba(155,114,245,0.32)', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', background: 'var(--card-bg)', outline: 'none', minWidth: 0 }}
                   onFocus={e => e.target.style.borderColor = '#9b72f5'}
-                  onBlur={e => e.target.style.borderColor = '#bfdbfe'}
+                  onBlur={e => e.target.style.borderColor = 'rgba(155,114,245,0.32)'}
                 />
                 <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 700, letterSpacing: 0.3, flexShrink: 0 }}>REQUIRED</span>
               </div>
@@ -464,8 +467,8 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
                 <div key={f.column_id} style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
                   borderRadius: 10, marginBottom: 7,
-                  background: f.is_visible ? '#fff' : '#fafafa',
-                  border: `1.5px solid ${f.is_visible ? '#e2e8f0' : '#f1f5f9'}`,
+                  background: f.is_visible ? 'var(--card-bg)' : 'var(--bg-secondary)',
+                  border: '1.5px solid var(--border-color)',
                   transition: 'all 0.15s',
                   opacity: f.is_visible ? 1 : 0.55,
                 }}>
@@ -478,26 +481,26 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
                       disabled={!f.is_visible}
                       style={{
                         border: 'none', background: 'transparent', fontSize: 13, fontWeight: 600,
-                        color: f.is_visible ? '#0f172a' : '#94a3b8', width: '100%',
+                        color: f.is_visible ? 'var(--text-primary)' : 'var(--text-secondary)', width: '100%',
                         outline: 'none', padding: '1px 0',
                       }}
                       onFocus={e => { e.target.style.borderBottom = '1.5px solid #9b72f5'; }}
                       onBlur={e => { e.target.style.borderBottom = 'none'; }}
                     />
-                    <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 1, fontWeight: 500, letterSpacing: 0.3 }}>{f.column_type}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1, fontWeight: 500, letterSpacing: 0.3 }}>{f.column_type}</div>
                   </div>
                   {f.is_visible && (
                     <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', flexShrink: 0 }}>
                       <input type="checkbox" checked={f.is_required} onChange={() => toggleRequired(f.column_id)}
                         style={{ cursor: 'pointer', accentColor: '#dc2626', width: 13, height: 13 }} />
-                      <span style={{ fontSize: 10, color: f.is_required ? '#dc2626' : '#cbd5e1', fontWeight: 700, letterSpacing: 0.3 }}>REQ</span>
+                      <span style={{ fontSize: 10, color: f.is_required ? '#dc2626' : 'var(--text-muted)', fontWeight: 700, letterSpacing: 0.3 }}>REQ</span>
                     </label>
                   )}
                 </div>
               ))}
 
               {fields.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#cbd5e1', fontSize: 13 }}>
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>
                   No columns found on this board.
                 </div>
               )}
@@ -508,31 +511,31 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
           {activeSection === 'share' && slug && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* Status badge */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: isActive ? '#f0fdf4' : '#f8fafc', border: `1.5px solid ${isActive ? '#bbf7d0' : '#e2e8f0'}` }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? '#22c55e' : '#94a3b8', animation: isActive ? 'pulse 2s infinite' : 'none' }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? '#15803d' : '#64748b' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: isActive ? 'rgba(0,200,117,0.12)' : 'var(--bg-secondary)', border: `1.5px solid ${isActive ? 'rgba(0,200,117,0.32)' : 'var(--border-color)'}` }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? '#22c55e' : 'var(--text-secondary)', animation: isActive ? 'pulse 2s infinite' : 'none' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? '#22c55e' : 'var(--text-secondary)' }}>
                   {isActive ? 'Form is active and accepting responses' : 'Form is inactive — toggle Active to enable'}
                 </span>
               </div>
 
               <Field label="Public URL">
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input readOnly value={publicUrl} style={{ ...inp, flex: 1, background: '#f8fafc', fontSize: 12, color: '#64748b', cursor: 'text' }} />
+                  <input readOnly value={publicUrl} style={{ ...inp, flex: 1, background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-secondary)', cursor: 'text' }} />
                   <button onClick={() => copyToClipboard(publicUrl, 'URL')} style={shareBtn('#9b72f5')}>Copy</button>
-                  <button onClick={() => window.open(`/form/${slug}`, '_blank')} style={shareBtn('#64748b')} title="Open in new tab">↗</button>
+                  <button onClick={() => window.open(`/form/${slug}`, '_blank')} style={shareBtn('var(--text-secondary)')} title="Open in new tab">↗</button>
                 </div>
               </Field>
 
               <Field label="Embed Code">
                 <textarea readOnly value={embedCode} rows={4}
-                  style={{ ...inp, background: '#f8fafc', fontSize: 11, fontFamily: 'monospace', resize: 'none', color: '#64748b', cursor: 'text', lineHeight: 1.6 }} />
-                <button onClick={() => copyToClipboard(embedCode, 'Embed code')} style={{ ...shareBtn('#64748b'), marginTop: 8, width: '100%', justifyContent: 'center' }}>Copy Embed Code</button>
+                  style={{ ...inp, background: 'var(--bg-secondary)', fontSize: 11, fontFamily: 'monospace', resize: 'none', color: 'var(--text-secondary)', cursor: 'text', lineHeight: 1.6 }} />
+                <button onClick={() => copyToClipboard(embedCode, 'Embed code')} style={{ ...shareBtn('var(--text-secondary)'), marginTop: 8, width: '100%', justifyContent: 'center' }}>Copy Embed Code</button>
               </Field>
 
               {window.location.hostname === 'localhost' && (
-                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.55, display: 'flex', gap: 8 }}>
+                <div style={{ background: 'rgba(253,186,116,0.12)', border: '1px solid rgba(253,186,116,0.32)', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#fdab3d', lineHeight: 1.55, display: 'flex', gap: 8 }}>
                   <span style={{ flexShrink: 0 }}>💡</span>
-                  <span>Replace <code style={{ background: '#fef3c7', padding: '1px 4px', borderRadius: 4 }}>localhost</code> with your production domain when deploying.</span>
+                  <span>Replace <code style={{ background: 'rgba(253,186,116,0.22)', padding: '1px 4px', borderRadius: 4 }}>localhost</code> with your production domain when deploying.</span>
                 </div>
               )}
             </div>
@@ -544,9 +547,9 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
       <div className="forms-live-preview-pane" style={{ flex: 1, background: 'var(--bg-secondary, #f1f5f9)', overflowY: 'auto', padding: '28px 32px' }}>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, justifyContent: 'center' }}>
-            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>Live Preview</span>
-            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>Live Preview</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
           </div>
           <FormPreview
             form={{ title, description, cover_color: coverColor, thank_you_message: thankYou }}
@@ -562,16 +565,16 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
 
 // ── Shared input helpers ──────────────────────────────────────────────────────
 const inp = {
-  width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '9px 12px',
-  fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#0f172a',
+  width: '100%', border: '1.5px solid var(--border-color)', borderRadius: 8, padding: '9px 12px',
+  fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'var(--card-bg)', color: 'var(--text-primary)',
   transition: 'border-color 0.15s, box-shadow 0.15s',
 };
 const foc = e => { e.target.style.borderColor = '#9b72f5'; e.target.style.boxShadow = '0 0 0 3px rgba(0,115,234,0.12)'; };
-const blr = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; };
+const blr = e => { e.target.style.borderColor = 'var(--border-color)'; e.target.style.boxShadow = 'none'; };
 
 const shareBtn = (color) => ({
-  padding: '8px 14px', background: color === '#9b72f5' ? '#eff6ff' : '#f8fafc',
-  color, border: `1.5px solid ${color === '#9b72f5' ? '#bfdbfe' : '#e2e8f0'}`,
+  padding: '8px 14px', background: color === '#9b72f5' ? 'rgba(155,114,245,0.12)' : 'var(--bg-secondary)',
+  color, border: `1.5px solid ${color === '#9b72f5' ? 'rgba(155,114,245,0.32)' : 'var(--border-color)'}`,
   borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
   whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
 });
@@ -579,7 +582,7 @@ const shareBtn = (color) => ({
 function Field({ label, children }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</label>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</label>
       {children}
     </div>
   );
@@ -610,8 +613,8 @@ function FormsList({ boardId, onOpenBuilder }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'Inter', -apple-system, sans-serif" }}>
       {/* Header */}
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
-        <div style={{ fontSize: 13, color: '#64748b' }}>
+      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
           Create shareable forms that add items directly to your board
         </div>
         <button onClick={() => onOpenBuilder(null)}
@@ -622,14 +625,14 @@ function FormsList({ boardId, onOpenBuilder }) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#9b72f5', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--border-color)', borderTopColor: '#9b72f5', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
             Loading forms…
           </div>
         ) : forms.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8', maxWidth: 360, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)', maxWidth: 360, margin: '0 auto' }}>
             <div style={{ fontSize: 56, marginBottom: 16 }}>📋</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#334155', marginBottom: 8 }}>No forms yet</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>No forms yet</div>
             <div style={{ fontSize: 13, marginBottom: 28, lineHeight: 1.6 }}>Create a form to collect submissions directly into this board — no account needed for respondents.</div>
             <button onClick={() => onOpenBuilder(null)}
               style={{ padding: '11px 28px', background: '#9b72f5', color: '#fff', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', border: 'none', boxShadow: '0 4px 14px rgba(0,115,234,0.35)' }}>
@@ -658,7 +661,7 @@ function FormsList({ boardId, onOpenBuilder }) {
 function FormCard({ form, onEdit, onCopyLink, onCopyEmbed, onPreview, onDelete }) {
   const color = form.cover_color || '#9b72f5';
   return (
-    <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0', transition: 'transform 0.2s, box-shadow 0.2s' }}
+    <div style={{ background: 'var(--card-bg)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid var(--border-color)', transition: 'transform 0.2s, box-shadow 0.2s' }}
       onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.11)'; }}
       onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.07)'; }}
     >
@@ -667,18 +670,18 @@ function FormCard({ form, onEdit, onCopyLink, onCopyEmbed, onPreview, onDelete }
       <div style={{ padding: '14px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
               {form.title}
             </div>
-            <div style={{ fontSize: 11.5, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
               <span>→</span> {form.target_group_name || 'First group'}
             </div>
           </div>
           <span style={{
             padding: '3px 10px', borderRadius: 99, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
-            background: form.is_active ? '#f0fdf4' : '#f8fafc',
-            color: form.is_active ? '#15803d' : '#94a3b8',
-            border: `1px solid ${form.is_active ? '#bbf7d0' : '#e2e8f0'}`,
+            background: form.is_active ? 'rgba(0,200,117,0.12)' : 'var(--bg-secondary)',
+            color: form.is_active ? '#22c55e' : 'var(--text-secondary)',
+            border: `1px solid ${form.is_active ? 'rgba(0,200,117,0.32)' : 'var(--border-color)'}`,
           }}>
             {form.is_active ? '● Active' : '○ Inactive'}
           </span>
@@ -689,7 +692,7 @@ function FormCard({ form, onEdit, onCopyLink, onCopyEmbed, onPreview, onDelete }
           <button onClick={onCopyLink} style={cardBtn()}>🔗 Copy Link</button>
           <button onClick={onCopyEmbed} style={cardBtn()}>&lt;/&gt; Embed</button>
           <button onClick={onPreview} style={cardBtn()}>↗ Preview</button>
-          <button onClick={onDelete} style={{ ...cardBtn(), color: '#dc2626', borderColor: '#fecaca', marginLeft: 'auto' }}>Delete</button>
+          <button onClick={onDelete} style={{ ...cardBtn(), color: '#dc2626', borderColor: 'rgba(226,68,92,0.32)', marginLeft: 'auto' }}>Delete</button>
         </div>
       </div>
     </div>
@@ -699,9 +702,9 @@ function FormCard({ form, onEdit, onCopyLink, onCopyEmbed, onPreview, onDelete }
 function cardBtn(color, primary) {
   return {
     padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-    background: primary ? color : '#f8fafc',
-    color: primary ? '#fff' : '#64748b',
-    border: `1.5px solid ${primary ? color : '#e2e8f0'}`,
+    background: primary ? color : 'var(--bg-secondary)',
+    color: primary ? '#fff' : 'var(--text-secondary)',
+    border: `1.5px solid ${primary ? color : 'var(--border-color)'}`,
     transition: 'all 0.15s',
   };
 }
@@ -718,8 +721,8 @@ export default function FormsPanel({ boardId, groups, columns, onClose }) {
   const handleSaved = f  => { setSavedId(f.id); setEditingId(f.id); };
   const handleBack  = () => { setView('list'); setEditingId(null); setSavedId(null); };
   const closeBg = isDark ? 'rgba(255,255,255,0.14)' : '#f1f5f9';
-  const closeHoverBg = isDark ? 'rgba(255,255,255,0.22)' : '#e2e8f0';
-  const closeColor = isDark ? '#E6EAF6' : '#64748b';
+  const closeHoverBg = isDark ? 'rgba(255,255,255,0.22)' : 'var(--border-color)';
+  const closeColor = isDark ? '#E6EAF6' : 'var(--text-secondary)';
 
   return (
     <div className="wb-side-panel-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 400, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }}
@@ -734,7 +737,7 @@ export default function FormsPanel({ boardId, groups, columns, onClose }) {
             <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)', display: 'flex', alignItems: 'center', gap: 7, letterSpacing: -0.2 }}>
               <span style={{ fontSize: 18 }}>📋</span> Forms
             </h2>
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0', fontWeight: 500 }}>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0', fontWeight: 500 }}>
               {view === 'builder' ? 'Design your form and manage fields' : 'Collect data from anyone — no account needed'}
             </p>
           </div>

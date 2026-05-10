@@ -14,19 +14,19 @@ router.get('/board/:boardId', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
 
     let { rows } = await pool.query(
-      `SELECT id, board_id, name, type, filters, created_at, updated_at
+      `SELECT id, board_id, name, type, filters, position, is_main, created_at, updated_at
          FROM board_views
         WHERE board_id = $1
-        ORDER BY created_at ASC`,
+        ORDER BY position ASC, created_at ASC`,
       [boardId]
     );
 
     // Auto-create default view on first access
     if (rows.length === 0) {
       const insert = await pool.query(
-        `INSERT INTO board_views (board_id, name, type, filters, created_by)
-         VALUES ($1, 'Main Table', 'table', '[]', $2)
-         RETURNING id, board_id, name, type, filters, created_at, updated_at`,
+        `INSERT INTO board_views (board_id, name, type, filters, position, is_main, created_by)
+         VALUES ($1, 'Main Table', 'table', '[]', 1, true, $2)
+         RETURNING id, board_id, name, type, filters, position, is_main, created_at, updated_at`,
         [boardId, req.user.id]
       );
       rows = insert.rows;
@@ -49,11 +49,21 @@ router.post('/', ...canWrite, async (req, res) => {
     if (!(await canAccessBoard(board_id, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
 
+    // Place the new view at the end of the board's tab strip.
+    const posRes = await pool.query(
+      'SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM board_views WHERE board_id = $1',
+      [board_id]
+    );
+    const nextPos = posRes.rows[0].next_pos;
+
+    // is_main is intentionally NEVER accepted from the request body — the
+    // locked Main Table is auto-created on board first-access and there is
+    // no path for users to mark a custom view as main.
     const { rows } = await pool.query(
-      `INSERT INTO board_views (board_id, name, type, filters, created_by)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, board_id, name, type, filters, created_at, updated_at`,
-      [board_id, name, type, JSON.stringify(filters), req.user.id]
+      `INSERT INTO board_views (board_id, name, type, filters, position, is_main, created_by)
+       VALUES ($1, $2, $3, $4, $5, false, $6)
+       RETURNING id, board_id, name, type, filters, position, is_main, created_at, updated_at`,
+      [board_id, name, type, JSON.stringify(filters), nextPos, req.user.id]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -95,7 +105,7 @@ router.put('/:id', ...canWrite, async (req, res) => {
       `UPDATE board_views
           SET ${setClauses.join(', ')}
         WHERE id = $${idx}
-        RETURNING id, board_id, name, type, filters, created_at, updated_at`,
+        RETURNING id, board_id, name, type, filters, position, is_main, created_at, updated_at`,
       values
     );
     if (!rows.length) return res.status(404).json({ error: 'View not found' });
@@ -106,22 +116,57 @@ router.put('/:id', ...canWrite, async (req, res) => {
   }
 });
 
+// ── POST reorder views on a board ─────────────────────────────────────────────
+// Body: { board_id, view_ids: [int, int, ...] }  — order = visual order left→right.
+// Writes positions 1..N for the supplied IDs in a single transaction.
+router.post('/reorder', ...canWrite, async (req, res) => {
+  const { board_id, view_ids } = req.body;
+  if (!board_id || !Array.isArray(view_ids) || view_ids.length === 0) {
+    return res.status(400).json({ error: 'board_id and view_ids[] are required' });
+  }
+  const client = await pool.connect();
+  try {
+    if (!(await canAccessBoard(board_id, req.user, client)))
+      return res.status(403).json({ error: 'Access denied' });
+
+    await client.query('BEGIN');
+    for (let i = 0; i < view_ids.length; i++) {
+      await client.query(
+        'UPDATE board_views SET position = $1, updated_at = NOW() WHERE id = $2 AND board_id = $3',
+        [i + 1, view_ids[i], board_id]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
 // ── DELETE a view ─────────────────────────────────────────────────────────────
 // Cannot delete the last remaining view on a board.
 router.delete('/:id', ...canWrite, async (req, res) => {
   const { id } = req.params;
   try {
-    // Find the view to get its board_id
+    // Find the view to get its board_id and lock-status
     const viewRes = await pool.query(
-      'SELECT board_id FROM board_views WHERE id = $1',
+      'SELECT board_id, is_main FROM board_views WHERE id = $1',
       [id]
     );
     if (!viewRes.rows.length) return res.status(404).json({ error: 'View not found' });
 
-    const { board_id } = viewRes.rows[0];
+    const { board_id, is_main } = viewRes.rows[0];
 
     if (!(await canAccessBoard(board_id, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
+
+    if (is_main) {
+      return res.status(400).json({ error: 'The Main Table view is locked and cannot be deleted' });
+    }
 
     // Count remaining views on this board
     const countRes = await pool.query(

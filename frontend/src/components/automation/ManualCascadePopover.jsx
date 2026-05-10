@@ -74,7 +74,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
   };
 
   const inputStyle = { width: '100%', padding: '6px 8px', border: '1px solid var(--border-color)', borderRadius: 5, fontSize: 12, color: 'var(--text-primary)', background: 'var(--bg-primary)', boxSizing: 'border-box' };
-  const labelStyle = { fontSize: 11, fontWeight: 600, color: '#676879', marginBottom: 3, display: 'block' };
+  const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3, display: 'block' };
 
   return (
     <div ref={ref} style={{
@@ -89,14 +89,14 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
       <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>📅 Run Date Cascade</div>
-          <div style={{ fontSize: 11, color: '#676879', marginTop: 1, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{itemName}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{itemName}</div>
         </div>
-        <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: '#676879' }}>×</button>
+        <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-secondary)' }}>×</button>
       </div>
 
       <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {steps.length === 0 && (
-          <div style={{ color: '#676879', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>
             No step template configured for this board.<br />
             Use the 📅 Date Cascade toolbar button to set one up.
           </div>
@@ -104,7 +104,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
 
         {steps.length > 0 && (
           <>
-            {error && <div style={{ background: '#fff0f0', color: '#e2445c', borderRadius: 5, padding: '6px 9px', fontSize: 11 }}>{error}</div>}
+            {error && <div style={{ background: 'rgba(226,68,92,0.12)', color: '#e2445c', borderRadius: 5, padding: '6px 9px', fontSize: 11 }}>{error}</div>}
 
             {!result ? (
               <>
@@ -155,7 +155,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {opts.map(o => (
-                          <label key={o.v} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: o.disabled ? 'not-allowed' : 'pointer', color: o.disabled ? '#c5c7d0' : 'var(--text-primary)' }}>
+                          <label key={o.v} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: o.disabled ? 'not-allowed' : 'pointer', color: o.disabled ? 'var(--text-muted)' : 'var(--text-primary)' }}>
                             <input type="radio" name="cascade_dir" value={o.v}
                               checked={direction === o.v}
                               onChange={() => !o.disabled && setDirection(o.v)}
@@ -170,7 +170,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
                 </div>
 
                 {/* Force overwrite */}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', color: '#676879' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                   <input type="checkbox" checked={force} onChange={e => setForce(e.target.checked)} style={{ accentColor: '#e2445c' }} />
                   Recalculate all (overwrite manually-set dates)
                 </label>
@@ -198,7 +198,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
                       {result.stepsUpdated > 0 ? `✅ ${result.stepsUpdated} date${result.stepsUpdated !== 1 ? 's' : ''} updated` : '⚠ 0 dates updated'}
                     </div>
                     {result.note && (
-                      <div style={{ fontSize: 11, color: '#676879', marginBottom: 6, background: 'var(--bg-secondary)', borderRadius: 4, padding: '5px 8px' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6, background: 'var(--bg-secondary)', borderRadius: 4, padding: '5px 8px' }}>
                         {result.note}
                       </div>
                     )}
@@ -206,7 +206,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
                       {Object.entries(result.datesCalculated).map(([colId, date]) => {
                         const step = steps.find(s => String(s.column_id) === String(colId));
                         return (
-                          <div key={colId} style={{ fontSize: 11, color: '#676879', padding: '2px 0' }}>
+                          <div key={colId} style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '2px 0' }}>
                             {step ? `${step.step_order}. ${step.step_name}` : `Column #${colId}`}: {date}
                           </div>
                         );
@@ -222,7 +222,7 @@ export default function ManualCascadePopover({ boardId, itemId, itemName, itemVa
                 )}
                 <button
                   onClick={onClose}
-                  style={{ marginTop: 10, padding: '6px 0', width: '100%', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#676879', background: 'none' }}
+                  style={{ marginTop: 10, padding: '6px 0', width: '100%', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)', background: 'none' }}
                 >
                   Close
                 </button>
