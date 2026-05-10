@@ -339,7 +339,7 @@ export default function LoginPage() {
         .spx-field input {
           width: 100%;
           height: 54px;
-          border: 1.5px solid #e8e4f0;
+          border: 1.5px solid #b8aed0;
           border-radius: 11px;
           padding: 0 18px;
           font-family: 'DM Sans', sans-serif;
@@ -348,6 +348,7 @@ export default function LoginPage() {
           background: #ffffff;
           outline: none;
           transition: border-color 0.2s, box-shadow 0.2s;
+          box-shadow: 0 1px 2px rgba(100, 70, 180, 0.04);
         }
         .spx-field input:focus {
           border-color: #b48aff;
@@ -469,7 +470,7 @@ export default function LoginPage() {
           width: 100%;
           height: 50px;
           background: none;
-          border: 1.5px solid #e8e4f0;
+          border: 1.5px solid #b8aed0;
           border-radius: 12px;
           font-family: 'DM Sans', sans-serif;
           font-size: 14px;
@@ -602,8 +603,15 @@ export default function LoginPage() {
             margin: 0 auto 10px;
           }
 
-          /* Hide description + tagline on mobile — saves ~80px */
-          .spx-desc    { display: none; }
+          /* Keep "Designed for teams that build the future" on mobile,
+             matching the desktop styling but slightly tightened. Tagline
+             stays hidden to save space. */
+          .spx-desc {
+            display: block;
+            font-size: 15px;
+            margin: 0 auto 10px;
+            max-width: 320px;
+          }
           .spx-tagline { display: none; }
 
           /* Character — compact, decorative */
@@ -651,7 +659,14 @@ export default function LoginPage() {
           .spx-label { font-size: 12px; margin-bottom: 4px; }
 
           .spx-field            { margin-bottom: 8px; }
-          .spx-field input      { height: 42px; font-size: 15px; border-radius: 9px; padding: 0 14px; }
+          .spx-field input {
+            height: 44px;
+            font-size: 15px;
+            border-radius: 9px;
+            padding: 0 14px;
+            border: 1.5px solid #a89cc7;
+            box-shadow: 0 1px 2px rgba(100, 70, 180, 0.06);
+          }
           .spx-field input[style] { padding-right: 42px !important; }
 
           .spx-hint   { font-size: 10.5px; margin-top: -6px; margin-bottom: 6px; }
@@ -737,7 +752,7 @@ export default function LoginPage() {
               {!mfaStep ? (
                 <>
                   <h2 className="spx-card-title">Sign In</h2>
-                  <p className="spx-card-sub">Your Social Campaigns</p>
+                  <p className="spx-card-sub">Plan. Build. Ship. Repeat.</p>
 
                   <form onSubmit={handleLogin}>
                     {/* Email */}
