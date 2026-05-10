@@ -9,11 +9,11 @@ async function seed() {
     const adminHash = await bcrypt.hash('Admin@1234', 12);
     await client.query(
       `INSERT INTO users (email, password_hash, name, role)
-       VALUES ('admin@ddecor.com', $1, 'Admin', 'admin')
+       VALUES ('admin@simplixart.com', $1, 'Admin', 'admin')
        ON CONFLICT (email) DO NOTHING`,
       [adminHash]
     );
-    console.log('✅ Default admin: admin@ddecor.com / Admin@1234');
+    console.log('✅ Default admin: admin@simplixart.com / Admin@1234');
 
     await client.query('BEGIN');
 
@@ -101,7 +101,7 @@ async function seed() {
         'status_change',
         JSON.stringify({ column_title: 'Status', to_value: 'Done' }),
         'send_email',
-        JSON.stringify({ to: 'manager@ddecor.com', subject: 'Item marked Done', body: 'An item has been marked as Done on the board.' }),
+        JSON.stringify({ to: 'manager@simplixart.com', subject: 'Item marked Done', body: 'An item has been marked as Done on the board.' }),
         true,
       ]
     );

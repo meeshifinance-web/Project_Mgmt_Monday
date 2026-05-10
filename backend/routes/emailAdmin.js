@@ -32,7 +32,7 @@ router.post('/test', requireAuth, requireRole('admin', 'manager'), async (req, r
     await transporter.sendMail({
       from:    EMAIL_FROM || EMAIL_USER,
       to,
-      subject: "D'Decor Workboard — SMTP Test",
+      subject: "simplixart Workboard — SMTP Test",
       text:    `SMTP test successful.\n\nSent from: ${EMAIL_USER}\nHost: ${EMAIL_HOST}:${port}`,
     });
     console.log(`[EmailTest] ✅ Test email sent to <${to}>`);

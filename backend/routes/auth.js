@@ -332,7 +332,7 @@ router.post('/mfa/setup', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT email FROM users WHERE id=$1', [req.user.id]);
     const secret = speakeasy.generateSecret({
-      name: `D'Decor Workboard (${rows[0].email})`,
+      name: `simplixart Workboard (${rows[0].email})`,
       length: 20,
     });
     await pool.query('UPDATE users SET mfa_secret=$1 WHERE id=$2', [secret.base32, req.user.id]);

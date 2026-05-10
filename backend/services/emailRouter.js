@@ -47,7 +47,7 @@ function matchesFilter(email, cfg) {
 
 async function findSystemUser() {
   const res = await pool.query(
-    `SELECT id, name FROM users WHERE email = 'noreply+bot@ddecor.com' LIMIT 1`
+    `SELECT id, name FROM users WHERE email = 'noreply+bot@simplixart.com' LIMIT 1`
   );
   return res.rows[0] || { id: null, name: 'Email Bot' };
 }

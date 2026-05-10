@@ -1,4 +1,4 @@
-# D'Decor Workboard
+# simplixart Workboard
 
 A Monday.com-style project management board built with React + Express + PostgreSQL.
 

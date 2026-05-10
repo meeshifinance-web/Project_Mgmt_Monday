@@ -14,13 +14,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
       manifest: {
-        name: "D'Decor Workboard",
-        short_name: 'Workboard',
-        description: "D'Decor Home Fabrics Project Management",
+        name: 'Simplix',
+        short_name: 'Simplix',
+        description: 'Simplix project management',
         start_url: '/',
         display: 'standalone',
         background_color: '#1f2d3d',
-        theme_color: '#0073ea',
+        theme_color: '#9b72f5',
         orientation: 'portrait-primary',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
@@ -33,9 +33,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',   // allow access via domain/IP
     port: 5173,
-    // ❌ remove https
-    // ❌ remove basicSsl
-    allowedHosts: ['nocode.ddecor.com'],
+    strictPort: true,  // fail loudly if 5173 is taken — never fall back to 5174+
     proxy: {
       '/api': 'http://localhost:3001',
     },

@@ -1,7 +1,7 @@
 /**
  * emailTemplate.js
  *
- * Shared HTML / plain-text scaffolding for every automated email Tuesday.com
+ * Shared HTML / plain-text scaffolding for every automated email Simplix
  * sends — assignment notifications, automation send_email actions, future
  * digests, etc. The goal: every transactional email feels like it came from
  * the same well-designed product, not a hand-rolled one-off.
@@ -21,8 +21,8 @@
  */
 
 const BRAND = {
-  name:        'TUESDAY.COM',
-  tagline:     "D'Decor Project Management",
+  name:        'SIMPLIX',
+  tagline:     "simplixart Project Management",
   primary:     '#0073ea',
   primaryDark: '#0060c4',
   ink:         '#172b4d',
@@ -151,7 +151,7 @@ function renderEmailShell(opts) {
     facts = [],
     extraHtml = '',
     ctaUrl,
-    ctaLabel = 'Open in Tuesday',
+    ctaLabel = 'Open in Simplix',
     footerNote = '',
   } = opts;
 
@@ -216,7 +216,7 @@ function renderEmailShell(opts) {
 
       <!-- Outer footer -->
       <tr><td style="padding:18px 8px;text-align:center;color:${BRAND.muted};font-size:11px;line-height:1.6">
-        Sent by ${BRAND.name} &middot; D'Decor Home Fabrics Pvt. Ltd.<br>
+        Sent by ${BRAND.name} &middot; simplixart.com<br>
         Please do not reply to this email — it is sent from an automated mailbox.
       </td></tr>
 
@@ -229,7 +229,7 @@ function renderEmailShell(opts) {
 }
 
 // ── Plain-text fallback ──────────────────────────────────────────────────────
-function renderPlainText({ heading, greeting, introText, itemName, facts, extraText, ctaUrl, ctaLabel = 'Open in Tuesday', footerNote }) {
+function renderPlainText({ heading, greeting, introText, itemName, facts, extraText, ctaUrl, ctaLabel = 'Open in Simplix', footerNote }) {
   const lines = [];
   if (greeting) lines.push(`Hi ${greeting},`, '');
   if (heading)  lines.push(heading, '');
@@ -245,7 +245,7 @@ function renderPlainText({ heading, greeting, introText, itemName, facts, extraT
   if (extraText) lines.push(extraText, '');
   if (ctaUrl)   lines.push(`${ctaLabel}: ${ctaUrl}`, '');
   if (footerNote) lines.push('— ', footerNote);
-  lines.push('', `${BRAND.name} · D'Decor Home Fabrics Pvt. Ltd.`);
+  lines.push('', `${BRAND.name} · simplixart.com`);
   return lines.join('\n');
 }
 

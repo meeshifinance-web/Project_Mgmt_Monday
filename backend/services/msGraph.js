@@ -12,7 +12,7 @@
  *   GRAPH_MAIL_TENANT_ID      — real tenant GUID (NOT "common")
  *   GRAPH_MAIL_CLIENT_ID      — from Azure app registration (mail-routing app)
  *   GRAPH_MAIL_CLIENT_SECRET  — from Azure app registration (mail-routing app)
- *   EMAIL_M365_MAILBOX        — e.g. tuesday@ddecor.com
+ *   EMAIL_M365_MAILBOX        — e.g. simplix@simplixart.com
  *
  * NOTE: these are intentionally separate from the Microsoft SSO app's
  * MICROSOFT_* vars so the two Azure registrations don't collide.

@@ -245,7 +245,7 @@ async function sendAutomationEmail({ boardId, itemId, to, toType, toColumnId, su
 
     const html = renderEmailShell({
       preheader: (resolvedSubject || resolvedBody || '').slice(0, 110),
-      heading: resolvedSubject || 'Update from Tuesday.com',
+      heading: resolvedSubject || 'Update from Simplix',
       itemName: item.item_name || '',
       breadcrumbHtml,
       facts,
@@ -256,13 +256,13 @@ async function sendAutomationEmail({ boardId, itemId, to, toType, toColumnId, su
     });
 
     const text = renderPlainText({
-      heading: resolvedSubject || 'Update from Tuesday.com',
+      heading: resolvedSubject || 'Update from Simplix',
       itemName: item.item_name || '',
       extraText: resolvedBody || '',
       facts,
       ctaUrl: itemUrl,
       ctaLabel: 'View task',
-      footerNote: 'Sent automatically by a Tuesday.com automation rule.',
+      footerNote: 'Sent automatically by a Simplix automation rule.',
     });
 
     await transporter.sendMail({

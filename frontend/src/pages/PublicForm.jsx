@@ -489,7 +489,7 @@ export default function PublicForm() {
       </div>
 
       <div style={{ textAlign: 'center', fontSize: 12, color: '#aaa', paddingBottom: 24 }}>
-        Powered by <span style={{ fontWeight: 600, color: '#888' }}>Tuesday.com</span>
+        Powered by <span style={{ fontWeight: 600, color: '#888' }}>Simplix</span>
       </div>
     </div>
   );

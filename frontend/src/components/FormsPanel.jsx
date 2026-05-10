@@ -221,7 +221,7 @@ function FormPreview({ form, fields, itemNameLabel, accentColor }) {
           <button disabled style={{ width: '100%', padding: '10px 0', background: color, color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, marginTop: 6, opacity: 0.9, cursor: 'default' }}>Submit response →</button>
         </div>
 
-        <div style={{ textAlign: 'center', padding: '8px 0 14px', fontSize: 10, color: '#94a3b8' }}>Powered by Tuesday.com</div>
+        <div style={{ textAlign: 'center', padding: '8px 0 14px', fontSize: 10, color: '#94a3b8' }}>Powered by Simplix</div>
       </div>
     </div>
   );

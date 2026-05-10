@@ -8,7 +8,7 @@
  * upsert, fire-and-forget (never blocks the save).
  *
  * Kill switch:   NOTIFY_ON_ASSIGN=false   (defaults to true)
- * From address:  EMAIL_FROM env (tuesday@ddecor.com)
+ * From address:  EMAIL_FROM env (simplix@simplixart.com)
  */
 
 const nodemailer = require('nodemailer');
@@ -184,7 +184,7 @@ async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }
       });
 
       const text = renderPlainText({
-        heading: "You've been assigned a new task on Tuesday.com",
+        heading: "You've been assigned a new task on Simplix",
         greeting: rcpt.name.split(/\s+/)[0] || rcpt.name,
         introText: `${actorName} added you as an owner. Take a quick look when you have a moment.`,
         itemName,
@@ -203,7 +203,7 @@ async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }
             `INSERT INTO item_emails
                (item_id, board_id, direction, from_address, from_name, to_address, subject, body_text)
              VALUES ($1,$2,'outgoing',$3,$4,$5,$6,$7)`,
-            [itemId, boardId, from, 'Tuesday.com', rcpt.email, subject, `Assignment notification to ${rcpt.name}`]
+            [itemId, boardId, from, 'Simplix', rcpt.email, subject, `Assignment notification to ${rcpt.name}`]
           );
         } catch (_) { /* non-fatal */ }
 

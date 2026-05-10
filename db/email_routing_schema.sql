@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS email_seen_messages (
 --    lets us find/create idempotently. `created_by_user_id` on items is
 --    nullable, but having a real row keeps joins and UIs happy.
 INSERT INTO users (name, email, role, is_active)
-SELECT 'Email Bot', 'noreply+bot@ddecor.com', 'user', true
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'noreply+bot@ddecor.com');
+SELECT 'Email Bot', 'noreply+bot@simplixart.com', 'user', true
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'noreply+bot@simplixart.com');
 
 -- 5. Add a field to automations config to remember the last-seen Graph
 --    delta token per-rule. Graph supports incremental sync which is much
@@ -54,5 +54,5 @@ WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'noreply+bot@ddecor.com');
 --   \d item_emails
 --   \d items
 --   \d email_seen_messages
---   SELECT id, name, email FROM users WHERE email = 'noreply+bot@ddecor.com';
+--   SELECT id, name, email FROM users WHERE email = 'noreply+bot@simplixart.com';
 -- ═══════════════════════════════════════════════════════════════════════════
