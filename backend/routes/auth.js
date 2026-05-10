@@ -7,7 +7,7 @@ const QRCode = require('qrcode');
 const rateLimit = require('express-rate-limit');
 const pool = require('../db');
 const { signToken } = require('../services/token');
-const { sendPasswordReset } = require('../services/email');
+const { sendPasswordReset, sendWelcomeEmail } = require('../services/email');
 const ms = require('../services/microsoft');
 const { requireAuth } = require('../middleware/auth');
 
@@ -64,6 +64,12 @@ router.post('/register', loginLimiter, async (req, res) => {
     const token = signToken(rows[0]);
     res.cookie('wb_token', token, COOKIE_OPTIONS);
     res.status(201).json({ token, user: safeUser(rows[0]) });
+
+    // Fire-and-forget welcome email — never block / fail the registration
+    // response on SMTP issues.
+    sendWelcomeEmail(rows[0].email, rows[0].name).catch(e =>
+      console.error('[Welcome] dispatch failed:', e.message)
+    );
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
     console.error(err);

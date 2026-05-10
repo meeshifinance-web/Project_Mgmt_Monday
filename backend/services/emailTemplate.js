@@ -22,16 +22,23 @@
 
 const BRAND = {
   name:        'SIMPLIX',
-  tagline:     "simplixart Project Management",
-  primary:     '#0073ea',
-  primaryDark: '#0060c4',
-  ink:         '#172b4d',
-  text:        '#42526e',
-  muted:       '#7a869a',
-  border:      '#dfe1e6',
-  bgPage:      '#f4f5f7',
-  bgCard:      '#ffffff',
-  bgSoft:      '#f7f8fa',
+  tagline:     'Plan. Build. Ship. Repeat.',
+  primary:     '#9b72f5',
+  primaryDark: '#7f55d6',
+  // App-matching gradient (lavender → orchid → pink → peach) used for the
+  // hero banner and the primary CTA. Email-safe: we always set a flat
+  // `primary` colour first so Outlook desktop has a fallback.
+  gradientStart: '#6C4CFF',
+  gradientMid1:  '#B45CFF',
+  gradientMid2:  '#FF78B2',
+  gradientEnd:   '#FFB38A',
+  ink:           '#1a1a2e',
+  text:          '#42526e',
+  muted:         '#7a869a',
+  border:        '#ede9f5',
+  bgPage:        '#f7f5fb',
+  bgCard:        '#ffffff',
+  bgSoft:        '#fbf9ff',
 };
 
 function escapeHtml(s) {
@@ -155,8 +162,6 @@ function renderEmailShell(opts) {
     footerNote = '',
   } = opts;
 
-  const brandTagline = BRAND.tagline;
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -174,28 +179,27 @@ function renderEmailShell(opts) {
   <tr><td align="center">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%">
 
-      <!-- Header / brand -->
-      <tr><td style="padding:0 4px 18px;text-align:center">
-        <div style="display:inline-block;background:${BRAND.primary};color:#fff;padding:8px 18px;border-radius:8px;font-weight:800;letter-spacing:1px;font-size:13px">${BRAND.name}</div>
-        <div style="margin-top:8px;color:${BRAND.muted};font-size:12px">${escapeHtml(brandTagline)}</div>
-      </td></tr>
+      <!-- Card with gradient brand banner inside -->
+      <tr><td style="background:${BRAND.bgCard};border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(108,76,255,0.10),0 1px 4px rgba(108,76,255,0.05)">
 
-      <!-- Card -->
-      <tr><td style="background:${BRAND.bgCard};border:1px solid ${BRAND.border};border-radius:14px;padding:0;box-shadow:0 1px 4px rgba(9,30,66,0.05);overflow:hidden">
-
-        <!-- Top accent bar -->
-        <div style="height:4px;background:linear-gradient(90deg,${BRAND.primary} 0%,#5e9eff 100%)"></div>
+        <!-- Gradient brand banner -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr><td style="background:${BRAND.primary};background-image:linear-gradient(135deg,${BRAND.gradientStart} 0%,${BRAND.gradientMid1} 32%,${BRAND.gradientMid2} 66%,${BRAND.gradientEnd} 100%);padding:22px 28px;text-align:center">
+            <div style="font-weight:800;color:#ffffff;font-size:22px;letter-spacing:5px;font-family:Arial,Helvetica,sans-serif">SIMPLIX</div>
+            <div style="margin-top:4px;color:rgba(255,255,255,0.92);font-size:12px;letter-spacing:1px;text-transform:uppercase">${escapeHtml(BRAND.tagline)}</div>
+          </td></tr>
+        </table>
 
         <!-- Hero -->
         <div style="padding:28px 28px 8px">
           ${greeting ? `<p style="margin:0 0 6px;color:${BRAND.text};font-size:14px">Hi ${escapeHtml(greeting)},</p>` : ''}
-          ${heading ? `<h1 style="margin:0 0 10px;color:${BRAND.ink};font-size:20px;font-weight:700;line-height:1.35">${escapeHtml(heading)}</h1>` : ''}
-          ${introHtml ? `<div style="color:${BRAND.text};font-size:14px;line-height:1.55">${introHtml}</div>` : ''}
+          ${heading ? `<h1 style="margin:0 0 10px;color:${BRAND.ink};font-size:22px;font-weight:800;line-height:1.3;letter-spacing:-0.01em">${escapeHtml(heading)}</h1>` : ''}
+          ${introHtml ? `<div style="color:${BRAND.text};font-size:14.5px;line-height:1.6">${introHtml}</div>` : ''}
         </div>
 
         <!-- Item card -->
-        <div style="padding:18px 28px 4px">
-          ${breadcrumbHtml ? `<div style="color:${BRAND.muted};font-size:12px;margin-bottom:6px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase">${breadcrumbHtml}</div>` : ''}
+        <div style="padding:14px 28px 4px">
+          ${breadcrumbHtml ? `<div style="color:${BRAND.muted};font-size:11px;margin-bottom:6px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase">${breadcrumbHtml}</div>` : ''}
           ${itemName ? `<div style="color:${BRAND.ink};font-size:18px;font-weight:700;line-height:1.4">${escapeHtml(itemName)}</div>` : ''}
           ${factsTableHtml(facts)}
           ${extraHtml ? `<div style="margin-top:14px;color:${BRAND.text};font-size:14px;line-height:1.6">${extraHtml}</div>` : ''}
@@ -204,20 +208,119 @@ function renderEmailShell(opts) {
         <!-- CTA -->
         ${ctaUrl ? `
         <div style="padding:24px 28px 28px;text-align:center">
-          <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:${BRAND.primary};color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 28px;border-radius:8px;box-shadow:0 1px 2px rgba(0,115,234,0.3)">${escapeHtml(ctaLabel)} &rarr;</a>
-          <div style="margin-top:10px;color:${BRAND.muted};font-size:12px">
-            or copy &amp; paste this URL: <a href="${escapeHtml(ctaUrl)}" style="color:${BRAND.primary};text-decoration:none">${escapeHtml(ctaUrl)}</a>
+          <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:${BRAND.primary};background-image:linear-gradient(90deg,${BRAND.gradientStart} 0%,${BRAND.gradientMid1} 50%,${BRAND.gradientMid2} 100%);color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:14px 32px;border-radius:11px;box-shadow:0 6px 18px rgba(108,76,255,0.32);letter-spacing:0.3px">${escapeHtml(ctaLabel)} &rarr;</a>
+          <div style="margin-top:12px;color:${BRAND.muted};font-size:11px;line-height:1.5">
+            Or paste this link in your browser:<br>
+            <a href="${escapeHtml(ctaUrl)}" style="color:${BRAND.primary};text-decoration:none;word-break:break-all">${escapeHtml(ctaUrl)}</a>
           </div>
         </div>` : ''}
 
         <!-- Inline footer note -->
-        ${footerNote ? `<div style="padding:14px 28px;border-top:1px solid ${BRAND.border};background:${BRAND.bgSoft};color:${BRAND.muted};font-size:12px;line-height:1.5">${escapeHtml(footerNote)}</div>` : ''}
+        ${footerNote ? `<div style="padding:14px 28px;border-top:1px solid ${BRAND.border};background:${BRAND.bgSoft};color:${BRAND.muted};font-size:12px;line-height:1.55">${escapeHtml(footerNote)}</div>` : ''}
       </td></tr>
 
       <!-- Outer footer -->
-      <tr><td style="padding:18px 8px;text-align:center;color:${BRAND.muted};font-size:11px;line-height:1.6">
-        Sent by ${BRAND.name} &middot; simplixart.com<br>
-        Please do not reply to this email — it is sent from an automated mailbox.
+      <tr><td style="padding:20px 8px;text-align:center;color:${BRAND.muted};font-size:11px;line-height:1.6">
+        Sent by ${BRAND.name} &middot; <a href="https://simplixart.com" style="color:${BRAND.muted};text-decoration:none">simplixart.com</a><br>
+        This is an automated message. Please don&rsquo;t reply.
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+
+</body>
+</html>`;
+}
+
+// ── Hero shell — for marketing-flavored emails (welcome, announcements) ──────
+// Differences from renderEmailShell:
+//  - Big emoji + large hero title in the gradient banner
+//  - Optional 3-up "feature highlights" grid below the body
+//  - Optional secondary text block under the CTA
+function featureRowHtml(features) {
+  const cells = (features || []).filter(Boolean).map(f => `
+    <td style="vertical-align:top;padding:8px;width:33.33%">
+      <div style="background:${BRAND.bgSoft};border:1px solid ${BRAND.border};border-radius:12px;padding:18px 14px;text-align:center">
+        <div style="font-size:30px;line-height:1;margin-bottom:8px">${f.icon || '✨'}</div>
+        <div style="color:${BRAND.ink};font-size:13.5px;font-weight:700;margin-bottom:6px">${escapeHtml(f.title || '')}</div>
+        <div style="color:${BRAND.muted};font-size:12px;line-height:1.5">${escapeHtml(f.body || '')}</div>
+      </div>
+    </td>`).join('');
+  if (!cells) return '';
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px"><tr>${cells}</tr></table>`;
+}
+
+function renderHeroEmailShell(opts) {
+  const {
+    preheader = '',
+    heroEmoji = '✨',
+    heroTitle = '',
+    heroSub = '',
+    greeting = '',
+    bodyHtml = '',
+    features = [],
+    ctaUrl,
+    ctaLabel = 'Get started',
+    secondaryHtml = '',
+    footerNote = '',
+  } = opts;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<title>${escapeHtml(heroTitle || BRAND.name)}</title>
+</head>
+<body style="margin:0;padding:0;background:${BRAND.bgPage};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${BRAND.text};-webkit-font-smoothing:antialiased">
+
+<div style="display:none;font-size:1px;color:${BRAND.bgPage};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${escapeHtml(preheader)}</div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${BRAND.bgPage};padding:32px 12px">
+  <tr><td align="center">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%">
+
+      <tr><td style="background:${BRAND.bgCard};border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(108,76,255,0.10),0 1px 4px rgba(108,76,255,0.05)">
+
+        <!-- Hero gradient banner -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr><td style="background:${BRAND.primary};background-image:linear-gradient(135deg,${BRAND.gradientStart} 0%,${BRAND.gradientMid1} 32%,${BRAND.gradientMid2} 66%,${BRAND.gradientEnd} 100%);padding:42px 28px 38px;text-align:center">
+            <div style="display:inline-block;background:rgba(255,255,255,0.18);color:#ffffff;font-weight:800;letter-spacing:3px;font-size:11px;padding:5px 14px;border-radius:999px;margin-bottom:18px;font-family:Arial,Helvetica,sans-serif">SIMPLIX</div>
+            <div style="font-size:52px;line-height:1;margin-bottom:14px">${heroEmoji}</div>
+            <div style="font-weight:800;color:#ffffff;font-size:28px;letter-spacing:-0.02em;line-height:1.2">${escapeHtml(heroTitle)}</div>
+            ${heroSub ? `<div style="margin:12px auto 0;color:rgba(255,255,255,0.94);font-size:15px;line-height:1.5;max-width:440px">${escapeHtml(heroSub)}</div>` : ''}
+          </td></tr>
+        </table>
+
+        <!-- Body -->
+        <div style="padding:30px 28px 6px">
+          ${greeting ? `<p style="margin:0 0 14px;color:${BRAND.ink};font-size:16px;font-weight:700">Hi ${escapeHtml(greeting)} 👋</p>` : ''}
+          ${bodyHtml ? `<div style="color:${BRAND.text};font-size:15px;line-height:1.65">${bodyHtml}</div>` : ''}
+        </div>
+
+        <!-- Features grid -->
+        ${features.length ? `<div style="padding:6px 14px 4px">${featureRowHtml(features)}</div>` : ''}
+
+        <!-- CTA -->
+        ${ctaUrl ? `
+        <div style="padding:28px 28px 14px;text-align:center">
+          <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:${BRAND.primary};background-image:linear-gradient(90deg,${BRAND.gradientStart} 0%,${BRAND.gradientMid1} 50%,${BRAND.gradientMid2} 100%);color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:16px 38px;border-radius:12px;box-shadow:0 6px 20px rgba(108,76,255,0.32);letter-spacing:0.3px">${escapeHtml(ctaLabel)} &rarr;</a>
+          <div style="margin-top:12px;color:${BRAND.muted};font-size:11px;line-height:1.5">
+            Or paste this link in your browser:<br>
+            <a href="${escapeHtml(ctaUrl)}" style="color:${BRAND.primary};text-decoration:none;word-break:break-all">${escapeHtml(ctaUrl)}</a>
+          </div>
+        </div>` : ''}
+
+        ${secondaryHtml ? `<div style="padding:8px 28px 24px;color:${BRAND.text};font-size:13.5px;line-height:1.6">${secondaryHtml}</div>` : ''}
+
+        ${footerNote ? `<div style="padding:14px 28px;border-top:1px solid ${BRAND.border};background:${BRAND.bgSoft};color:${BRAND.muted};font-size:12px;line-height:1.55">${escapeHtml(footerNote)}</div>` : ''}
+      </td></tr>
+
+      <tr><td style="padding:20px 8px;text-align:center;color:${BRAND.muted};font-size:11px;line-height:1.6">
+        Sent by ${BRAND.name} &middot; <a href="https://simplixart.com" style="color:${BRAND.muted};text-decoration:none">simplixart.com</a><br>
+        Need help? Just reply to this email and a real person will get back to you.
       </td></tr>
 
     </table>
@@ -259,6 +362,8 @@ module.exports = {
   statusBadgeHtml,
   dueDateChipHtml,
   factsTableHtml,
+  featureRowHtml,
   renderEmailShell,
+  renderHeroEmailShell,
   renderPlainText,
 };
