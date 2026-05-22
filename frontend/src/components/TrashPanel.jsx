@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTrashItems, restoreTrashItem, deleteTrashItem, emptyTrash } from '../api';
+import { toISODate } from '../utils/dateFormat';
 
 export default function TrashPanel({ boardId, onClose, onRestore, onCountChange }) {
   const [items, setItems] = useState([]);
@@ -48,8 +49,7 @@ export default function TrashPanel({ boardId, onClose, onRestore, onCountChange 
 
   const daysLeft = (item) => Math.max(0, Math.ceil(Number(item.days_left) || 0));
 
-  const formatDate = (ts) =>
-    new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const formatDate = (ts) => toISODate(ts);
 
   return (
     <>

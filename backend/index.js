@@ -409,6 +409,17 @@ async function start() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_cascade_meta_item     ON column_value_meta(item_id)`);
     console.log('✅ Date Cascade tables ready');
 
+    // Per-user board favourites (the "star" toggle, monday-style)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS board_favorites (
+        board_id   INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+        user_id    INTEGER NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (board_id, user_id)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_board_favorites_user ON board_favorites(user_id)`);
+
     // Board-owner visibility columns
     await pool.query(`ALTER TABLE board_members ADD COLUMN IF NOT EXISTS is_owner BOOLEAN DEFAULT false`);
     await pool.query(`ALTER TABLE boards ADD COLUMN IF NOT EXISTS enforce_owner_visibility BOOLEAN DEFAULT false`);

@@ -56,7 +56,10 @@ const DEFAULT_STATUS_OPTIONS = [
 router.get('/', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT b.* FROM boards b
+      `SELECT b.*, (bf.user_id IS NOT NULL) AS is_favorite
+         FROM boards b
+         LEFT JOIN board_favorites bf
+           ON bf.board_id = b.id AND bf.user_id = $2
        WHERE (b.is_deleted IS NULL OR b.is_deleted = false)
          AND ($1 = 'admin'
           OR EXISTS (
@@ -73,11 +76,49 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /:id/favorite — star a board for the current user ───────────────────
+router.post('/:id/favorite', requireAuth, async (req, res) => {
+  try {
+    if (!(await canAccessBoard(req.params.id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+    await pool.query(
+      `INSERT INTO board_favorites (board_id, user_id) VALUES ($1, $2)
+       ON CONFLICT (board_id, user_id) DO NOTHING`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true, is_favorite: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── DELETE /:id/favorite — un-star a board for the current user ──────────────
+router.delete('/:id/favorite', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM board_favorites WHERE board_id=$1 AND user_id=$2',
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true, is_favorite: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── GET full board ────────────────────────────────────────────────────────────
 router.get('/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
-    const boardRes = await pool.query('SELECT * FROM boards WHERE id=$1 AND (is_deleted IS NULL OR is_deleted = false)', [id]);
+    const boardRes = await pool.query(
+      `SELECT b.*, (bf.user_id IS NOT NULL) AS is_favorite
+         FROM boards b
+         LEFT JOIN board_favorites bf
+           ON bf.board_id = b.id AND bf.user_id = $2
+       WHERE b.id = $1 AND (b.is_deleted IS NULL OR b.is_deleted = false)`,
+      [id, req.user.id]
+    );
     if (!boardRes.rows.length) return res.status(404).json({ error: 'Board not found' });
 
     const board = boardRes.rows[0];

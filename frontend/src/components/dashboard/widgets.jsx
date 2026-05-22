@@ -17,6 +17,7 @@ import {
   SkeletonPulse, EmptyWidgetState, Field, ButtonGroup, Toggle, ColorPicker,
   GroupFilter, BoardSelect, selectStyle,
 } from './common';
+import { toISODate } from '../../utils/dateFormat';
 
 // Reusable axis builder for crowded x-axis charts
 function rotatedXAxisProps(data) {
@@ -1096,7 +1097,7 @@ function humanAgo(d) {
   if (s < 3600) return `${Math.floor(s/60)}m ago`;
   if (s < 86400) return `${Math.floor(s/3600)}h ago`;
   if (s < 604800) return `${Math.floor(s/86400)}d ago`;
-  return d.toLocaleDateString();
+  return toISODate(d);
 }
 
 // ───── Widget #24: Upcoming Deadlines ───────────────────────────────────────
@@ -1155,7 +1156,8 @@ const CalendarWidget = {
     const cells = [];
     for (let i = 0; i < startDow; i++) cells.push(null);
     for (let d = 1; d <= last.getDate(); d++) cells.push(d);
-    const monthName = first.toLocaleString('default', { month: 'long', year: 'numeric' });
+    // Calendar header shown as YYYY-MM (ISO) — single date format across the app.
+    const monthName = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}`;
     return (
       <div>
         <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{monthName}</div>
@@ -1219,14 +1221,14 @@ const TimelineWidget = {
             <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => onOpenItem?.(i.id)}>
               <span style={{ width: 110, fontSize: 11, color: '#323338', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.name}</span>
               <div style={{ flex: 1, height: 18, background: '#f5f6f8', borderRadius: 3, position: 'relative', cursor: 'pointer' }}>
-                <div title={`${i._from.toLocaleDateString()} → ${i._to.toLocaleDateString()}`} style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: 2, bottom: 2, background: CHART_COLORS[idx % CHART_COLORS.length], borderRadius: 3 }} />
+                <div title={`${toISODate(i._from)} → ${toISODate(i._to)}`} style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: 2, bottom: 2, background: CHART_COLORS[idx % CHART_COLORS.length], borderRadius: 3 }} />
               </div>
             </div>
           );
         })}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9699a6', marginTop: 4, paddingLeft: 118 }}>
-          <span>{new Date(min).toLocaleDateString()}</span>
-          <span>{new Date(max).toLocaleDateString()}</span>
+          <span>{toISODate(min)}</span>
+          <span>{toISODate(max)}</span>
         </div>
       </div>
     );
@@ -1651,7 +1653,7 @@ const CountdownWidget = {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
         <div style={{ fontSize: 56, fontWeight: 800, color: c, lineHeight: 1 }}>{Math.abs(days)}</div>
         <div style={{ fontSize: 12, color: '#676879' }}>{past ? 'days ago' : 'days remaining'}</div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#323338', marginTop: 4 }}>{config.label || target.toLocaleDateString()}</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#323338', marginTop: 4 }}>{config.label || toISODate(target)}</div>
       </div>
     );
   },

@@ -55,6 +55,8 @@ export const updateBoard = (id, data) => api.put(`/boards/${id}`, data);
 export const updateBoardEmailSettings = (id, emailFrom) => api.patch(`/boards/${id}/email-settings`, { email_from: emailFrom });
 export const deleteBoard = (id) => api.delete(`/boards/${id}`);
 export const cloneBoard = (id, data) => api.post(`/boards/${id}/clone`, data).then(r => r.data);
+export const favoriteBoard   = (id) => api.post(`/boards/${id}/favorite`);
+export const unfavoriteBoard = (id) => api.delete(`/boards/${id}/favorite`);
 
 // ── Board members ─────────────────────────────────────────────────────────────
 export const getBoardMembers = (boardId) => api.get(`/boards/${boardId}/members`);

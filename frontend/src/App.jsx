@@ -13,7 +13,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import PublicForm from './pages/PublicForm';
-import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, moveFolderToParent, cloneBoard } from './api';
+import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, moveFolderToParent, cloneBoard, favoriteBoard, unfavoriteBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
 import CommandPalette from './components/CommandPalette';
 import EmptyState from './components/EmptyState';
@@ -518,6 +518,24 @@ function MainApp() {
     });
   }, []);
 
+  // Toggle the per-user favourite ("star") on a board. Updates both the
+  // sidebar list and the active board so the header star icon stays in sync.
+  const handleToggleFavorite = async (b, e) => {
+    if (e) e.stopPropagation();
+    const next = !b.is_favorite;
+    // Optimistic update — revert on failure.
+    setBoards(bs => bs.map(x => x.id === b.id ? { ...x, is_favorite: next } : x));
+    if (activeBoard?.id === b.id) setActiveBoard(prev => ({ ...prev, is_favorite: next }));
+    try {
+      if (next) await favoriteBoard(b.id);
+      else      await unfavoriteBoard(b.id);
+    } catch {
+      setBoards(bs => bs.map(x => x.id === b.id ? { ...x, is_favorite: !next } : x));
+      if (activeBoard?.id === b.id) setActiveBoard(prev => ({ ...prev, is_favorite: !next }));
+      toast('Failed to update favourite', 'error');
+    }
+  };
+
   // ── Folder handlers ──────────────────────────────────────────────────────────
   // Legacy prompt-based create — kept only for the EmptyState "Create one"
   // button inside the move-folder picker, where the inline create row would
@@ -709,6 +727,17 @@ function MainApp() {
           }}>
             {b.name}
           </span>
+          <button
+            onClick={e => handleToggleFavorite(b, e)}
+            title={b.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
+            aria-label={b.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
+            style={{
+              color: b.is_favorite ? '#fdab3d' : 'var(--sidebar-text-muted)',
+              fontSize: 14, flexShrink: 0, lineHeight: 1, padding: '0 4px',
+              background: 'none', border: 'none', cursor: 'pointer',
+              opacity: b.is_favorite ? 1 : 0.55,
+            }}
+          >{b.is_favorite ? '★' : '☆'}</button>
           {isManager && (
             <button
               onClick={e => { e.stopPropagation(); setBoardMenuId(menuOpen ? null : b.id); }}
@@ -1163,6 +1192,23 @@ function MainApp() {
             </>
           )}
 
+          {/* Favourites — per-user starred boards, shown above folder tree */}
+          {(() => {
+            const favBoards = boards.filter(b => b.is_favorite);
+            if (!favBoards.length || isNavCollapsed) return null;
+            return (
+              <>
+                <div style={{ padding: '10px 18px 6px', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 12, color: '#fdab3d' }}>★</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Favourites
+                  </span>
+                </div>
+                {favBoards.map(b => renderBoardRow(b, false))}
+              </>
+            );
+          })()}
+
           {/* Header row */}
           {!isNavCollapsed && (
             <div style={{ padding: '10px 18px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
@@ -1460,9 +1506,35 @@ function MainApp() {
               {dashboards.find(d => d.id === activeDashboardId)?.name || 'Dashboard'}
             </h1>
           ) : activeBoard && isManager ? (
-            <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
+            <>
+              <BoardNameEditor name={activeBoard.name} onSave={name => handleBoardRename(activeBoard.id, name)} />
+              <button
+                onClick={() => handleToggleFavorite(activeBoard)}
+                title={activeBoard.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
+                aria-label={activeBoard.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: activeBoard.is_favorite ? '#fdab3d' : 'var(--text-muted)',
+                  fontSize: 20, lineHeight: 1, padding: '2px 6px',
+                }}
+              >{activeBoard.is_favorite ? '★' : '☆'}</button>
+            </>
+          ) : activeBoard ? (
+            <>
+              <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', flex: 1, fontFamily: "'Cormorant Garamond', 'Playfair Display', Georgia, serif", letterSpacing: '-0.01em', lineHeight: 1.2 }}>{activeBoard.name}</h1>
+              <button
+                onClick={() => handleToggleFavorite(activeBoard)}
+                title={activeBoard.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
+                aria-label={activeBoard.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: activeBoard.is_favorite ? '#fdab3d' : 'var(--text-muted)',
+                  fontSize: 20, lineHeight: 1, padding: '2px 6px',
+                }}
+              >{activeBoard.is_favorite ? '★' : '☆'}</button>
+            </>
           ) : (
-            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', flex: 1, fontFamily: "'Cormorant Garamond', 'Playfair Display', Georgia, serif", letterSpacing: '-0.01em', lineHeight: 1.2 }}>{activeBoard?.name || 'Select a Board'}</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', flex: 1, fontFamily: "'Cormorant Garamond', 'Playfair Display', Georgia, serif", letterSpacing: '-0.01em', lineHeight: 1.2 }}>Select a Board</h1>
           )}
           {!activeDashboardId && isAdmin && activeBoard && !activeBoard.members?.some(m => m.id === currentUser?.id) && (
             <span style={{

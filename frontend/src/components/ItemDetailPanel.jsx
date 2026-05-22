@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ColumnCell from './ColumnCell';
 import { getComments, createComment, deleteComment, getItemActivityLogs, getBoardMembers, getItemEmails } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { toISODate } from '../utils/dateFormat';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -11,7 +12,7 @@ function timeAgo(dateStr) {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 172800) return 'yesterday';
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  return toISODate(dateStr);
 }
 
 function nameInitials(name = '') {

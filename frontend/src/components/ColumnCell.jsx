@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { updateColumn, uploadFile, deleteFile } from '../api';
 import { evaluateFormula } from '../utils/formulaEngine';
 import { useThemeContext } from '../context/ThemeContext';
+import { toISODate } from '../utils/dateFormat';
 
 const STAR = '★';
 const STAR_E = '☆';
@@ -1190,8 +1191,8 @@ function CreationLogCell({ item }) {
   const avatarColor = nameToColor(creatorName);
   const dt = new Date(item.created_at);
 
-  const dateStr = dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  const timeStr = dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const dateStr = toISODate(dt);
+  const timeStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
 
   return (
     <div

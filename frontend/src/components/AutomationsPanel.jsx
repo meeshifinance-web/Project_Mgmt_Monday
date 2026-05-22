@@ -6,6 +6,7 @@ import StepTemplateConfig from './automation/StepTemplateConfig';
 import AutomationRuleConfig from './automation/AutomationRuleConfig';
 import DateCascadeIndicator from './automation/DateCascadeIndicator';
 import EmptyState from './EmptyState';
+import { toISODateTime } from '../utils/dateFormat';
 
 // ── Trigger definitions ───────────────────────────────────────────────────────
 const TRIGGERS = [
@@ -864,7 +865,7 @@ function DateCascadeTab({ boardId, boardName, columns }) {
                   <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
                     Anchor: {log.anchor_column_title || `col #${log.anchor_column_id}`} = {log.anchor_date}
                     &nbsp;·&nbsp;{Object.keys(log.dates_calculated || {}).length} dates set
-                    &nbsp;·&nbsp;{new Date(log.created_at).toLocaleString()}
+                    &nbsp;·&nbsp;{toISODateTime(log.created_at)}
                   </div>
                 </div>
               ))

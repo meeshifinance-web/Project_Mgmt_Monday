@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getNotifications, markNotificationRead } from '../api';
 import { useNotifications } from '../context/NotificationContext';
 import EmptyState from './EmptyState';
+import { toISODate } from '../utils/dateFormat';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr)) / 1000;
@@ -9,7 +10,7 @@ function timeAgo(dateStr) {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 172800) return 'yesterday';
-  return new Date(dateStr).toLocaleDateString();
+  return toISODate(dateStr);
 }
 
 // What icon/accent to show per notification type (inferred from message)

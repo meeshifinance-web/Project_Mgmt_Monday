@@ -5,14 +5,13 @@ import {
   permanentDeleteBoard, permanentDeleteFolder,
   emptyGlobalTrash,
 } from '../api';
+import { toISODate } from '../utils/dateFormat';
 
 function daysLeft(item) {
   return Math.max(0, Math.ceil(Number(item.days_left) || 0));
 }
 
-function formatDate(ts) {
-  return new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+const formatDate = toISODate;
 
 // ── Single trashed entry ──────────────────────────────────────────────────────
 function TrashEntry({ entry, type, onRestore, onDelete }) {

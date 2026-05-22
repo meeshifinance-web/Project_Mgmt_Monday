@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getEmailStatus, triggerEmailPoll } from '../api';
+import { toISODateTime } from '../utils/dateFormat';
 
 export default function EmailStatusPanel({ onClose }) {
   const [status, setStatus]       = useState(null);
@@ -35,9 +36,7 @@ export default function EmailStatusPanel({ onClose }) {
     }
   };
 
-  const fmt = (iso) => iso
-    ? new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : '—';
+  const fmt = (iso) => iso ? toISODateTime(iso) : '—';
 
   return (
     <>

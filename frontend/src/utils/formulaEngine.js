@@ -317,7 +317,12 @@ class Parser {
 
       // ── Date ─────────────────────────────────────────────────────────────
       case 'TODAY':       return new Date().toISOString().slice(0, 10);
-      case 'NOW':         return new Date().toLocaleString('en-IN');
+      case 'NOW':         {
+        // ISO yyyy-mm-dd HH:mm using local clock — matches every other timestamp in the UI.
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
       case 'YEAR':        { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getFullYear(); }
       case 'MONTH':       { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getMonth() + 1; }
       case 'DAY':         { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getDate(); }

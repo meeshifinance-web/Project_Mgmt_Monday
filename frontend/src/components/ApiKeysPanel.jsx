@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getApiKeys, generateApiKey, revokeApiKey, renameApiKey } from '../api';
+import { toISODate } from '../utils/dateFormat';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -635,7 +636,7 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
                       {/* Created */}
                       <td style={cellStyle}>
                         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {new Date(k.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {toISODate(k.created_at)}
                         </span>
                       </td>
 

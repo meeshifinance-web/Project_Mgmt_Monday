@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getMyWork } from '../api';
 import { parseOwners } from './ColumnCell';
 import EmptyState from './EmptyState';
+import { toISODate } from '../utils/dateFormat';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ function ItemRow({ item, onNavigate }) {
           {item.group_name}
           {dateCols.length > 0 && (
             <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>
-              · {new Date(dateCols[0].value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              · {toISODate(dateCols[0].value)}
             </span>
           )}
         </div>

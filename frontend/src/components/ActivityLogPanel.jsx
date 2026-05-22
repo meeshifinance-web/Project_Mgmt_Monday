@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getActivityLogs } from '../api';
+import { toISODate } from '../utils/dateFormat';
 
 const ACTION_ICONS = {
   item_created: { icon: '✚', color: '#00c875' },
@@ -16,7 +17,7 @@ function timeAgo(dateStr) {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  return toISODate(dateStr);
 }
 
 function formatAction(log) {
@@ -37,22 +38,16 @@ function formatAction(log) {
 function groupByDate(logs) {
   const groups = {};
   for (const log of logs) {
-    const d = new Date(log.created_at);
-    const key = d.toDateString();
+    const key = toISODate(log.created_at);
     if (!groups[key]) groups[key] = [];
     groups[key].push(log);
   }
   return groups;
 }
 
-function dateLabel(dateStr) {
-  const d = new Date(dateStr);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+// Section labels render the same ISO key used for grouping — single format, no exceptions.
+function dateLabel(isoKey) {
+  return isoKey;
 }
 
 export default function ActivityLogPanel({ boardId, onClose }) {

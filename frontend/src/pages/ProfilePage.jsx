@@ -6,6 +6,7 @@ import {
   updateMe, changePassword, setupMfa, enableMfa, disableMfa,
   getUsers, adminCreateUser, adminResetPassword, updateUserRole, setUserActive, deleteUser,
 } from '../api';
+import { toISODate, toISODateTime } from '../utils/dateFormat';
 
 const TABS = ['Profile', 'Security', 'Admin'];
 const ROLES = ['admin', 'manager', 'member', 'user'];
@@ -373,8 +374,8 @@ export default function ProfilePage() {
           {/* ── Admin Tab ── */}
           {tab === 'Admin' && isAdmin && (() => {
             // ── Helpers ──────────────────────────────────────────────────────
-            const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-            const fmtDateFull = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+            const fmtDate = (d) => d ? toISODate(d) : '—';
+            const fmtDateFull = (d) => d ? toISODateTime(d) : null;
 
             const toggleSort = (col) => {
               if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -598,7 +599,7 @@ export default function ProfilePage() {
                               {u.last_login ? (
                                 <div>
                                   <div style={{ color: 'var(--text-primary,#323338)', fontWeight: 500 }}>{fmtDate(u.last_login)}</div>
-                                  <div style={{ color: 'var(--text-secondary,#888)', fontSize: 11 }}>{new Date(u.last_login).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</div>
+                                  <div style={{ color: 'var(--text-secondary,#888)', fontSize: 11 }}>{(() => { const d = new Date(u.last_login); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()}</div>
                                 </div>
                               ) : (
                                 <span style={{ color: 'var(--text-muted,#ccc)' }}>Never</span>

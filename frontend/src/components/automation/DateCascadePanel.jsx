@@ -3,6 +3,7 @@ import { useAutomation } from '../../hooks/useAutomation';
 import StepTemplateConfig from './StepTemplateConfig';
 import AutomationRuleConfig from './AutomationRuleConfig';
 import DateCascadeIndicator from './DateCascadeIndicator';
+import { toISODateTime } from '../../utils/dateFormat';
 
 /**
  * Slide-in side panel (420px) showing date cascade config for a board.
@@ -218,7 +219,7 @@ export default function DateCascadePanel({ boardId, boardName, boardColumns, onC
                       <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
                         Anchor: {log.anchor_column_title || `col #${log.anchor_column_id}`} = {log.anchor_date}
                         &nbsp;·&nbsp;{Object.keys(log.dates_calculated || {}).length} dates set
-                        &nbsp;·&nbsp;{new Date(log.created_at).toLocaleString()}
+                        &nbsp;·&nbsp;{toISODateTime(log.created_at)}
                       </div>
                     </div>
                   ))}
