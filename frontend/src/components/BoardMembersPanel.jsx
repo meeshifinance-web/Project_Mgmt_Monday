@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { addBoardMember, removeBoardMember, searchUsers, setBoardMemberOwner, updateBoard } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -19,19 +20,24 @@ function Avatar({ name, url, size = 36 }) {
 }
 
 // ── User search typeahead ─────────────────────────────────────────────────────
+// The suggestions list is rendered into a portal so it always floats above
+// any sibling content (hint text, the member list below, etc.) — Monday-style
+// clean dropdown, never pushed below or visually clipped.
 function UserSearchInput({ members, onSelect }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [anchor, setAnchor] = useState(null); // { top, left, width } in viewport coords
   const debounceRef = useRef(null);
-  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  // Search after 3 chars with 250ms debounce
+  // Search after 2 chars with 200ms debounce (snappier than the old 3-char rule).
   useEffect(() => {
     clearTimeout(debounceRef.current);
-    if (query.trim().length < 3) {
+    if (query.trim().length < 2) {
       setSuggestions([]);
       setOpen(false);
       return;
@@ -40,7 +46,6 @@ function UserSearchInput({ members, onSelect }) {
       setLoading(true);
       try {
         const r = await searchUsers(query.trim());
-        // Filter out users already on the board
         const memberIds = new Set(members.map(m => m.id));
         setSuggestions(r.data.filter(u => !memberIds.has(u.id)));
         setOpen(true);
@@ -50,18 +55,37 @@ function UserSearchInput({ members, onSelect }) {
       } finally {
         setLoading(false);
       }
-    }, 250);
+    }, 200);
     return () => clearTimeout(debounceRef.current);
   }, [query, members]);
 
-  // Close dropdown when clicking outside
+  // Close on outside click — guard the portal node too so clicks on
+  // suggestions don't immediately collapse the list.
   useEffect(() => {
     const handler = (e) => {
-      if (!containerRef.current?.contains(e.target)) setOpen(false);
+      if (inputRef.current?.contains(e.target)) return;
+      if (dropdownRef.current?.contains(e.target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Reposition the portal whenever the input moves (open, scroll, resize).
+  useLayoutEffect(() => {
+    if (!open || !inputRef.current) return;
+    const recompute = () => {
+      const r = inputRef.current.getBoundingClientRect();
+      setAnchor({ top: r.bottom + 4, left: r.left, width: r.width });
+    };
+    recompute();
+    window.addEventListener('scroll', recompute, true);
+    window.addEventListener('resize', recompute);
+    return () => {
+      window.removeEventListener('scroll', recompute, true);
+      window.removeEventListener('resize', recompute);
+    };
+  }, [open, suggestions.length]);
 
   const selectUser = (user) => {
     onSelect(user);
@@ -74,68 +98,83 @@ function UserSearchInput({ members, onSelect }) {
   const handleKeyDown = (e) => {
     if (!open || !suggestions.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
     if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); selectUser(suggestions[activeIdx]); }
     if (e.key === 'Escape') setOpen(false);
   };
 
+  const showEmpty = open && !loading && query.trim().length >= 2 && suggestions.length === 0;
+  const showList  = open && suggestions.length > 0;
+
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <div style={{ flex: 1, position: 'relative' }}>
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => suggestions.length && setOpen(true)}
-            placeholder="Type name or email (min 3 chars)…"
+    <>
+      <div style={{ position: 'relative' }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => suggestions.length && setOpen(true)}
+          placeholder="Search name or email…"
+          style={{
+            width: '100%', border: '1.5px solid var(--border-color, #ddd)', borderRadius: 8,
+            padding: '9px 34px 9px 34px', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+            background: 'var(--input-bg, #fff)', color: 'var(--text-primary, #323338)',
+          }}
+          onFocusCapture={e => e.target.style.borderColor = '#9b72f5'}
+          onBlur={e => e.target.style.borderColor = 'var(--border-color, #ddd)'}
+          autoComplete="off"
+        />
+        {/* Leading search icon */}
+        <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-muted, #aaa)', pointerEvents: 'none' }}>
+          🔍
+        </span>
+        {/* Trailing spinner / clear button */}
+        {loading ? (
+          <span style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text-muted, #aaa)' }}>⏳</span>
+        ) : query ? (
+          <button
+            type="button"
+            onClick={() => { setQuery(''); setSuggestions([]); setOpen(false); inputRef.current?.focus(); }}
+            title="Clear"
             style={{
-              width: '100%', border: '1.5px solid #ddd', borderRadius: 8,
-              padding: '8px 32px 8px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--text-muted, #aaa)', fontSize: 14, lineHeight: 1, padding: '2px 4px',
             }}
-            onFocusCapture={e => e.target.style.borderColor = '#9b72f5'}
-            onBlur={e => e.target.style.borderColor = '#ddd'}
-            autoComplete="off"
-          />
-          {/* Search / spinner icon */}
-          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#aaa', pointerEvents: 'none' }}>
-            {loading ? '⏳' : '🔍'}
-          </span>
-        </div>
+          >×</button>
+        ) : null}
       </div>
 
-      {/* Hints */}
-      {query.length > 0 && query.length < 3 && (
-        <p style={{ fontSize: 11, color: '#aaa', margin: '5px 0 0' }}>
-          Type {3 - query.length} more character{3 - query.length !== 1 ? 's' : ''} to search…
-        </p>
-      )}
-
-      {/* Suggestions dropdown */}
-      {open && suggestions.length > 0 && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-          background: '#fff', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.13)',
-          border: '1px solid #e6e9ef', zIndex: 200, overflow: 'hidden',
-        }}>
-          {suggestions.map((u, idx) => (
+      {/* Portal-rendered dropdown — sits on top of everything cleanly */}
+      {(showList || showEmpty) && anchor && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'fixed', top: anchor.top, left: anchor.left, width: anchor.width,
+            background: 'var(--menu-bg, #fff)', color: 'var(--text-primary, #323338)',
+            borderRadius: 10, boxShadow: '0 10px 32px rgba(0,0,0,0.18)',
+            border: '1px solid var(--menu-border, #e6e9ef)',
+            zIndex: 1000, overflow: 'hidden', maxHeight: 320, overflowY: 'auto',
+          }}
+        >
+          {showList ? suggestions.map((u, idx) => (
             <div
               key={u.id}
-              onMouseDown={() => selectUser(u)}
+              onMouseDown={(e) => { e.preventDefault(); selectUser(u); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 14px', cursor: 'pointer',
-                background: idx === activeIdx ? '#f0f6ff' : '#fff',
-                borderBottom: idx < suggestions.length - 1 ? '1px solid #f5f5f5' : 'none',
+                padding: '8px 12px', cursor: 'pointer',
+                background: idx === activeIdx ? 'var(--menu-hover, #f0f6ff)' : 'transparent',
                 transition: 'background 0.1s',
               }}
               onMouseEnter={() => setActiveIdx(idx)}
             >
-              <Avatar name={u.name} url={u.avatar_url} size={32} />
+              <Avatar name={u.name} url={u.avatar_url} size={30} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: '#323338' }}>{u.name}</div>
-                <div style={{ fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted, #888)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</div>
               </div>
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10, flexShrink: 0,
@@ -144,21 +183,15 @@ function UserSearchInput({ members, onSelect }) {
                 textTransform: 'capitalize',
               }}>{u.role}</span>
             </div>
-          ))}
-        </div>
+          )) : (
+            <div style={{ padding: '14px', textAlign: 'center', color: 'var(--text-muted, #888)', fontSize: 13 }}>
+              No matches
+            </div>
+          )}
+        </div>,
+        document.body
       )}
-
-      {/* No results */}
-      {open && !loading && query.trim().length >= 3 && suggestions.length === 0 && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-          background: '#fff', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.13)',
-          border: '1px solid #e6e9ef', zIndex: 200, padding: '14px', textAlign: 'center', color: '#888', fontSize: 13,
-        }}>
-          No users found — check the spelling or ask admin to create an account.
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -303,23 +336,13 @@ export default function BoardMembersPanel({ board, onClose, onMembersChange }) {
           </div>
         )}
 
-        {/* Search & invite */}
+        {/* Search & invite — clean Monday-style: input + dropdown, no extra hint copy */}
         {isManager && (
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0' }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: '#323338', marginBottom: 10 }}>
-              Add member
-            </p>
-
-            {adding && (
-              <div style={{ fontSize: 12, color: '#9b72f5', marginBottom: 8 }}>Adding…</div>
-            )}
-
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f0f0f0', position: 'relative' }}>
             <UserSearchInput members={members} onSelect={handleSelect} />
-
-            <p style={{ fontSize: 11, color: '#aaa', marginTop: 8 }}>
-              Search by name or email · user must be registered.
-              <span style={{ color: '#a25ddc' }}> Person & Owner columns update automatically.</span>
-            </p>
+            {adding && (
+              <div style={{ fontSize: 11, color: '#9b72f5', marginTop: 6 }}>Adding…</div>
+            )}
           </div>
         )}
 
