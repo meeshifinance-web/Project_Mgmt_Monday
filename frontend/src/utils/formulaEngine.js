@@ -1,3 +1,5 @@
+import { toISODate, toISODateTime } from './dateFormat';
+
 /**
  * formulaEngine.js
  *
@@ -316,13 +318,10 @@ class Parser {
       case 'COUNTA':      return a.filter(x => x !== '' && x !== null && x !== undefined).length;
 
       // ── Date ─────────────────────────────────────────────────────────────
-      case 'TODAY':       return new Date().toISOString().slice(0, 10);
-      case 'NOW':         {
-        // ISO yyyy-mm-dd HH:mm using local clock — matches every other timestamp in the UI.
-        const d = new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      }
+      // TODAY / NOW render in IST so they line up with the rest of the UI,
+      // regardless of the viewer's browser timezone.
+      case 'TODAY':       return toISODate(new Date());
+      case 'NOW':         return toISODateTime(new Date());
       case 'YEAR':        { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getFullYear(); }
       case 'MONTH':       { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getMonth() + 1; }
       case 'DAY':         { const d = parseDate(a[0]); return isNaN(d) ? '#VALUE!' : d.getDate(); }

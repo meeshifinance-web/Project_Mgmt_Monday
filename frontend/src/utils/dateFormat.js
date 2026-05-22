@@ -1,6 +1,22 @@
 // Single source of truth for date display in the UI.
-// Every visible date is ISO yyyy-mm-dd. Timestamps that need a time component
-// use yyyy-mm-dd HH:mm (24-hour, ISO-style).
+// Every visible date is ISO yyyy-mm-dd in IST (Asia/Kolkata).
+// Timestamps that need a time component use yyyy-mm-dd HH:mm (24-hour, IST).
+//
+// Timezone is pinned to Asia/Kolkata regardless of the viewer's browser
+// timezone — the product is India-based, so a US/UTC traveller should still
+// see the same dates as a colleague sitting in Mumbai.
+
+const TZ = 'Asia/Kolkata';
+
+// en-CA's date format is natively YYYY-MM-DD — saves manual padding.
+const DATE_FMT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+// en-GB with hour12:false yields HH:mm in 24-hour form.
+const TIME_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+});
 
 function _toDate(d) {
   if (!d && d !== 0) return null;
@@ -11,17 +27,11 @@ function _toDate(d) {
 export function toISODate(d) {
   const date = _toDate(d);
   if (!date) return '';
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return DATE_FMT.format(date);
 }
 
 export function toISODateTime(d) {
   const date = _toDate(d);
   if (!date) return '';
-  const datePart = toISODate(date);
-  const h = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${datePart} ${h}:${min}`;
+  return `${DATE_FMT.format(date)} ${TIME_FMT.format(date)}`;
 }
