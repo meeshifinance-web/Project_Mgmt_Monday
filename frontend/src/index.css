@@ -32,7 +32,7 @@
 
   /* ── Sidebar ── */
   --sidebar-text:         #111122;
-  --sidebar-text-muted:   rgba(17, 17, 34, 0.38);
+  --sidebar-text-muted:   rgba(17, 17, 34, 0.60);
   --sidebar-border:       rgba(155, 114, 245, 0.09);
   --sidebar-hover:        rgba(155, 114, 245, 0.055);
   --sidebar-active-bg:    rgba(155, 114, 245, 0.10);
@@ -693,6 +693,32 @@ select {
   border-color: rgba(255, 255, 255, 0.18) !important;
 }
 
+/* ── Dark-only text-colour remap ─────────────────────────────────────────────
+   The side panel (incl. the Updates / comments section) hardcodes near-black
+   inline text colours that vanish on the dark background. The tag-based rule
+   above only whitened p/td/button/etc — not div/span/textarea — so comment
+   bodies, author names and the composer were invisible. These rules remap the
+   specific inline colours to readable ones in DARK THEME ONLY; light theme is
+   completely untouched (selectors are scoped to [data-theme="dark"]). Both the
+   hex and browser-normalised rgb() forms are listed so the match is reliable. */
+[data-theme="dark"] .wb-side-panel [style*="color: #323338"],
+[data-theme="dark"] .wb-side-panel [style*="color:#323338"],
+[data-theme="dark"] .wb-side-panel [style*="color: rgb(50, 51, 56)"],
+[data-theme="dark"] .wb-side-panel [style*="color: #172b4d"],
+[data-theme="dark"] .wb-side-panel [style*="color: rgb(23, 43, 77)"] {
+  color: var(--text-primary) !important;
+}
+[data-theme="dark"] .wb-side-panel [style*="color: #676879"],
+[data-theme="dark"] .wb-side-panel [style*="color:#676879"],
+[data-theme="dark"] .wb-side-panel [style*="color: rgb(103, 104, 121)"] {
+  color: var(--text-secondary) !important;
+}
+/* The comment composer textarea also needs a readable caret/typed-text colour */
+[data-theme="dark"] .wb-side-panel textarea,
+[data-theme="dark"] .wb-side-panel input[type="text"] {
+  color: var(--text-primary) !important;
+}
+
 [data-theme="dark"] .wb-side-panel [style*="background: #f8fafc"],
 [data-theme="dark"] .wb-side-panel [style*="background:#f8fafc"],
 [data-theme="dark"] .wb-side-panel [style*="background: #f1f5f9"],
@@ -809,6 +835,57 @@ select {
 [data-theme="dark"] .board-member-email {
   color: #ffffff !important;
   font-weight: 800 !important;
+}
+
+/* ── Forms: always a light surface ───────────────────────────────────────────
+   The public form (/form/:slug) and its in-builder "Live preview" mirror the
+   externally-shared form, which is ALWAYS light (white card, dark labels, white
+   inputs). But this page renders inside the app-wide dark theme — and the live
+   preview additionally sits inside .wb-side-panel — so the aggressive dark
+   overrides above (generic input remaps + the .wb-side-panel inline-colour
+   remaps) bleed in with !important, turning the white card's inputs dark and
+   its labels white-on-white. Re-assert the intended light styling, scoped to
+   .simplix-form-light, with enough specificity (and source order) to win. */
+[data-theme="dark"] .simplix-form-light input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]),
+[data-theme="dark"] .simplix-form-light textarea,
+[data-theme="dark"] .simplix-form-light select {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #323338 !important;
+  border-color: #d0d4e4 !important;
+  font-weight: 400 !important;
+}
+
+[data-theme="dark"] .simplix-form-light input::placeholder,
+[data-theme="dark"] .simplix-form-light textarea::placeholder {
+  color: #9699a6 !important;
+  font-weight: 400 !important;
+  opacity: 1;
+}
+
+[data-theme="dark"] .simplix-form-light select option,
+[data-theme="dark"] .simplix-form-light select optgroup {
+  background-color: #ffffff !important;
+  color: #323338 !important;
+  font-weight: 400 !important;
+}
+
+/* Labels & primary text on the white card stay dark (the .wb-side-panel
+   remaps otherwise force them to light/white = invisible on white). */
+[data-theme="dark"] .simplix-form-light label,
+[data-theme="dark"] .simplix-form-light [style*="color: #323338"],
+[data-theme="dark"] .simplix-form-light [style*="color:#323338"],
+[data-theme="dark"] .simplix-form-light [style*="color: rgb(50, 51, 56)"] {
+  color: #323338 !important;
+}
+
+/* Secondary text (help text, chip labels, "Attach files") stays mid-grey. */
+[data-theme="dark"] .simplix-form-light [style*="color: #676879"],
+[data-theme="dark"] .simplix-form-light [style*="color:#676879"],
+[data-theme="dark"] .simplix-form-light [style*="color: rgb(103, 104, 121)"],
+[data-theme="dark"] .simplix-form-light [style*="color: #555"],
+[data-theme="dark"] .simplix-form-light [style*="color:#555"] {
+  color: #676879 !important;
 }
 
 

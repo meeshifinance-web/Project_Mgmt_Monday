@@ -13,6 +13,21 @@ node_modules/
 # Build output
 frontend/dist/
 backend/uploads/
+dist/
+
+# Generated artifacts — decks, reports, exported docs (not source)
+*.pdf
+*.pptx
+
+# Internal analysis/report docs (kept out of the repo)
+BUG_REPORT.md
+FEATURE_ANALYSIS_REPORT.md
+FEATURE_PERFECTION_STANDARD.md
+FEATURE_TEST_MATRIX.md
+MEETING_GAPS_SUMMARY.md
+MISSING_FEATURES_ROADMAP.md
+PRODUCT_AUDIT_REPORT.md
+STRATEGIC_PRODUCT_REPORT.md
 
 # Local data / backups
 backup.sql

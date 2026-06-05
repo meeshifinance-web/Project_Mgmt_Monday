@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { getNotifications, markNotificationRead } from '../api';
 import { useNotifications } from '../context/NotificationContext';
 import EmptyState from './EmptyState';
@@ -25,7 +26,26 @@ export default function NotificationBell({ onOpenItem }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
   const panelRef = useRef(null);
+  const buttonRef = useRef(null);
+
+  // Compute the dropdown's screen position from the bell button. The panel is
+  // rendered in a portal on <body> (see below) so it can't be trapped behind
+  // other panels' stacking contexts; that means we position it with fixed
+  // coordinates relative to the button instead of CSS `absolute`.
+  const positionPanel = useCallback(() => {
+    const r = buttonRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    positionPanel();
+    window.addEventListener('resize', positionPanel);
+    window.addEventListener('scroll', positionPanel, true);
+    return () => { window.removeEventListener('resize', positionPanel); window.removeEventListener('scroll', positionPanel, true); };
+  }, [open, positionPanel]);
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +63,9 @@ export default function NotificationBell({ onOpenItem }) {
   useEffect(() => {
     if (!open) return;
     const handler = e => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
+      if (panelRef.current && panelRef.current.contains(e.target)) return;
+      if (buttonRef.current && buttonRef.current.contains(e.target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -76,50 +98,54 @@ export default function NotificationBell({ onOpenItem }) {
   }, [markAllRead]);
 
   return (
-    <div ref={panelRef} style={{ position: 'relative', marginRight: 8 }}>
+    <div style={{ position: 'relative', marginRight: 8 }}>
       {/* Bell button */}
       <button
+        ref={buttonRef}
         onClick={() => setOpen(o => !o)}
         title="Notifications"
         style={{
           position: 'relative', width: 36, height: 36, borderRadius: '50%',
-          background: open ? '#f0f0f0' : 'transparent',
+          background: open ? 'var(--hover-bg)' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 18, transition: 'background 0.15s',
         }}
-        onMouseEnter={e => { if (!open) e.currentTarget.style.background = '#f5f5f5'; }}
-        onMouseLeave={e => { if (!open) e.currentTarget.style.background = open ? '#f0f0f0' : 'transparent'; }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.background = 'var(--hover-bg)'; }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = open ? 'var(--hover-bg)' : 'transparent'; }}
       >
         🔔
         {unreadCount > 0 && (
           <span style={{
-            position: 'absolute', top: 2, right: 2,
+            position: 'absolute', top: 0, right: 0,
             background: '#e2445c', color: '#fff', borderRadius: '50%',
-            width: 16, height: 16, fontSize: 9, fontWeight: 700,
+            minWidth: 16, height: 16, padding: '0 3px', fontSize: 9, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '2px solid #fff',
+            border: '2px solid var(--topbar-bg, #fff)', boxSizing: 'border-box',
           }}>
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown panel */}
-      {open && (
-        <div className="wb-notif-dropdown" style={{
-          position: 'absolute', right: 0, top: 'calc(100% + 8px)',
-          width: 380, maxHeight: 520,
-          background: '#fff', borderRadius: 10,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
-          zIndex: 1000, display: 'flex', flexDirection: 'column',
-          border: '1px solid #e6e9ef',
+      {/* Dropdown panel — portalled to <body> so it always sits above every
+          other panel (column menus, automations, board header) regardless of
+          their stacking contexts. */}
+      {open && createPortal((
+        <div ref={panelRef} className="wb-notif-dropdown" style={{
+          position: 'fixed', right: pos.right, top: pos.top,
+          width: 380, maxWidth: 'calc(100vw - 24px)', maxHeight: 520,
+          background: 'var(--menu-bg, #fff)', borderRadius: 10,
+          boxShadow: 'var(--menu-shadow, 0 8px 32px rgba(0,0,0,0.16))',
+          zIndex: 100000, display: 'flex', flexDirection: 'column',
+          border: '1px solid var(--menu-border, #e6e9ef)',
+          color: 'var(--text-primary, #323338)',
         }}>
           {/* Header */}
           <div style={{
-            padding: '13px 16px 10px', borderBottom: '1px solid #f0f0f0',
+            padding: '13px 16px 10px', borderBottom: '1px solid var(--border-color, #f0f0f0)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
           }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#323338', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary, #323338)', display: 'flex', alignItems: 'center', gap: 8 }}>
               Notifications
               {unreadCount > 0 && (
                 <span style={{ background: '#e2445c', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>
@@ -137,7 +163,7 @@ export default function NotificationBell({ onOpenItem }) {
           {/* List */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {loading ? (
-              <div style={{ textAlign: 'center', padding: 32, color: '#aaa' }}>Loading…</div>
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted, #aaa)' }}>Loading…</div>
             ) : notifications.length === 0 ? (
               <EmptyState
                 icon="🔔"
@@ -154,14 +180,14 @@ export default function NotificationBell({ onOpenItem }) {
                     onClick={() => handleClick(n)}
                     style={{
                       display: 'flex', gap: 10, padding: '11px 16px',
-                      background: n.is_read ? '#fff' : '#f0f6ff',
-                      borderBottom: '1px solid #f5f5f5',
+                      background: n.is_read ? 'transparent' : 'rgba(155,114,245,0.12)',
+                      borderBottom: '1px solid var(--border-color, #f5f5f5)',
                       cursor: isClickable ? 'pointer' : 'default',
                       transition: 'background 0.12s',
                       alignItems: 'flex-start',
                     }}
-                    onMouseEnter={e => { if (isClickable) e.currentTarget.style.background = n.is_read ? '#fafafa' : '#e4eeff'; }}
-                    onMouseLeave={e => e.currentTarget.style.background = n.is_read ? '#fff' : '#f0f6ff'}
+                    onMouseEnter={e => { if (isClickable) e.currentTarget.style.background = n.is_read ? 'var(--hover-bg)' : 'rgba(155,114,245,0.2)'; }}
+                    onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : 'rgba(155,114,245,0.12)'}
                   >
                     {/* Type icon */}
                     <div style={{
@@ -175,7 +201,7 @@ export default function NotificationBell({ onOpenItem }) {
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {/* Main message */}
-                      <div style={{ fontSize: 13, color: '#323338', lineHeight: 1.4, fontWeight: n.is_read ? 400 : 600 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary, #323338)', lineHeight: 1.4, fontWeight: n.is_read ? 400 : 600 }}>
                         {n.message}
                       </div>
 
@@ -191,18 +217,18 @@ export default function NotificationBell({ onOpenItem }) {
                             </span>
                           )}
                           {n.board_name && n.item_name && (
-                            <span style={{ fontSize: 11, color: '#aaa' }}>›</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted, #aaa)' }}>›</span>
                           )}
                           {n.item_name && (
                             <span style={{
-                              fontSize: 11, color: '#9b72f5', background: '#e8f4ff',
+                              fontSize: 11, color: 'var(--primary-blue, #9b72f5)', background: 'rgba(155,114,245,0.18)',
                               borderRadius: 4, padding: '1px 6px', fontWeight: 600,
                             }}>
                               {n.item_name}
                             </span>
                           )}
                           {isClickable && (
-                            <span style={{ fontSize: 10, color: '#aaa', marginLeft: 2 }}>· click to open ↗</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted, #aaa)', marginLeft: 2 }}>· click to open ↗</span>
                           )}
                         </div>
                       )}
@@ -212,7 +238,7 @@ export default function NotificationBell({ onOpenItem }) {
                         {!n.is_read && (
                           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#9b72f5', flexShrink: 0, display: 'inline-block' }} />
                         )}
-                        <span style={{ fontSize: 11, color: '#aaa' }}>{timeAgo(n.created_at)}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted, #aaa)' }}>{timeAgo(n.created_at)}</span>
                       </div>
                     </div>
                   </div>
@@ -222,12 +248,12 @@ export default function NotificationBell({ onOpenItem }) {
           </div>
 
           {notifications.length > 0 && (
-            <div style={{ padding: '8px 16px', borderTop: '1px solid #f0f0f0', textAlign: 'center', flexShrink: 0 }}>
-              <button onClick={() => { setOpen(false); refresh(); }} style={{ fontSize: 12, color: '#888' }}>Close</button>
+            <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border-color, #f0f0f0)', textAlign: 'center', flexShrink: 0 }}>
+              <button onClick={() => { setOpen(false); refresh(); }} style={{ fontSize: 12, color: 'var(--text-secondary, #888)' }}>Close</button>
             </div>
           )}
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

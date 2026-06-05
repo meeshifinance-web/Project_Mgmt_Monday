@@ -7,9 +7,12 @@ import { toISODate } from '../utils/dateFormat';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getStatusStyle(settings, value) {
-  if (!settings?.labels || !value) return { bg: '#c4c4c4', color: '#fff' };
-  const labels = Array.isArray(settings.labels) ? settings.labels : Object.values(settings.labels);
-  const match = labels.find(l => l.text === value || l.id === value);
+  // Status/dropdown options are stored under settings.options as
+  // { label, color } — previously this read settings.labels/l.text, which
+  // never matched, so every pill rendered grey.
+  if (!settings?.options || !value) return { bg: '#c4c4c4', color: '#fff' };
+  const options = Array.isArray(settings.options) ? settings.options : Object.values(settings.options);
+  const match = options.find(o => o.label === value || o.id === value);
   return { bg: match?.color || '#c4c4c4', color: '#fff' };
 }
 

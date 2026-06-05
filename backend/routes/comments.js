@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { notifyCommentRecipients } = require('../services/commentEmail');
 
 // Helper: create notifications for an array of user IDs
 async function createNotifications(notifications) {
@@ -50,6 +51,9 @@ router.get('/item/:itemId', requireAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   const { item_id, board_id, body, parent_id, mentions = [] } = req.body;
   if (!body?.trim()) return res.status(400).json({ error: 'Comment body required' });
+  const COMMENT_MAX = 5000;
+  if (body.length > COMMENT_MAX)
+    return res.status(400).json({ error: `Comment too long (max ${COMMENT_MAX} characters)` });
 
   try {
     // Resolve board from the item (do not trust board_id from the request body)
@@ -58,6 +62,18 @@ router.post('/', requireAuth, async (req, res) => {
 
     if (!(await canAccessBoard(resolvedBoardId, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
+
+    // Validate @mentions: keep only real, active users who can actually see this
+    // board. Previously a mention of a non-existent user id was accepted and
+    // created a dangling notification.
+    let validMentions = [];
+    const mentionIds = (Array.isArray(mentions) ? mentions : []).map(Number).filter(Number.isInteger);
+    if (mentionIds.length) {
+      const ures = await pool.query('SELECT id, role FROM users WHERE id = ANY($1) AND is_active = true', [mentionIds]);
+      for (const u of ures.rows) {
+        if (await canAccessBoard(resolvedBoardId, { id: u.id, role: u.role }, pool)) validMentions.push(u.id);
+      }
+    }
 
     // Fetch item name + board name for notification messages
     const itemRow = await pool.query('SELECT name FROM items WHERE id=$1', [item_id]);
@@ -78,7 +94,7 @@ router.post('/', requireAuth, async (req, res) => {
     const notifiedUserIds = new Set();
 
     // 1. @mention notifications
-    for (const mentionedUserId of mentions) {
+    for (const mentionedUserId of validMentions) {
       if (mentionedUserId === req.user.id) continue; // don't notify yourself
       if (notifiedUserIds.has(mentionedUserId)) continue;
       notifiedUserIds.add(mentionedUserId);
@@ -116,6 +132,40 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     await createNotifications(notifBatch);
+
+    // ── Email the same people we just notified in-app (mentions + reply author).
+    // Fire-and-forget so the POST stays fast; no-ops cleanly if SMTP is off.
+    if (notifBatch.length) {
+      const reasonById = new Map();
+      for (const n of notifBatch) {
+        reasonById.set(n.user_id, n.message.includes('replied') ? 'reply' : 'mention');
+      }
+      const ids = [...reasonById.keys()];
+      const usersQ = pool.query(
+        `SELECT id, name, email FROM users
+          WHERE id = ANY($1) AND is_active = true AND email IS NOT NULL AND email <> ''`,
+        [ids]
+      );
+      const groupQ = pool.query(
+        `SELECT g.name FROM items i JOIN groups g ON g.id = i.group_id WHERE i.id = $1`,
+        [item_id]
+      );
+      Promise.all([usersQ, groupQ]).then(([ures, gres]) => {
+        const recipients = ures.rows.map(u => ({ id: u.id, name: u.name, email: u.email, reason: reasonById.get(u.id) }));
+        if (!recipients.length) return;
+        return notifyCommentRecipients({
+          recipients,
+          actorName: req.user.name,
+          itemId: parseInt(item_id),
+          boardId: resolvedBoardId,
+          itemName,
+          boardName,
+          groupName: gres.rows[0]?.name || '',
+          commentBody: body.trim(),
+        });
+      }).catch(err => console.error('[CommentEmail] async error:', err.message));
+    }
+
     res.json(comment);
   } catch (err) {
     console.error(err);

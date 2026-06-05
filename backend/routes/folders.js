@@ -43,12 +43,16 @@ router.get('/', requireAuth, async (req, res) => {
          WHERE (f.is_deleted IS NULL OR f.is_deleted = false)
            AND (
              f.created_by = $1
+             -- A board is "visible" to the user when it's org-wide (public) OR
+             -- they're a member. Folders containing any visible board must show,
+             -- otherwise a public board nested in a folder the user doesn't own
+             -- becomes invisible in the sidebar.
              OR EXISTS (
                SELECT 1 FROM boards b
-               JOIN board_members bm ON bm.board_id = b.id
+               LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
                WHERE b.folder_id = f.id
-                 AND bm.user_id = $1
                  AND (b.is_deleted IS NULL OR b.is_deleted = false)
+                 AND (b.visibility = 'org_wide' OR bm.user_id IS NOT NULL)
              )
              -- Also surface a parent folder if any of its subfolders contain
              -- a board the user can see. Without this, a subfolder appears
@@ -56,11 +60,11 @@ router.get('/', requireAuth, async (req, res) => {
              OR EXISTS (
                SELECT 1 FROM board_folders sf
                JOIN boards b ON b.folder_id = sf.id
-               JOIN board_members bm ON bm.board_id = b.id
+               LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
                WHERE sf.parent_folder_id = f.id
                  AND (sf.is_deleted IS NULL OR sf.is_deleted = false)
-                 AND bm.user_id = $1
                  AND (b.is_deleted IS NULL OR b.is_deleted = false)
+                 AND (b.visibility = 'org_wide' OR bm.user_id IS NOT NULL)
              )
            )
          ORDER BY f.position, f.name`,

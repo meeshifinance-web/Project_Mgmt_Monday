@@ -47,6 +47,13 @@ api.interceptors.response.use(
 
 export default api;
 
+// ── AI builders (natural language) ──────────────────────────────────────────────
+export const aiBoard      = (prompt) => api.post('/ai/board', { prompt }).then(r => r.data);
+export const aiFormula    = (prompt, columns) => api.post('/ai/formula', { prompt, columns }).then(r => r.data);
+export const aiAutomation = (boardId, prompt) => api.post('/ai/automation', { board_id: boardId, prompt }).then(r => r.data);
+export const aiAsk        = (question) => api.post('/ai/ask', { question }).then(r => r.data);
+export const aiDigest     = (params) => api.get('/ai/digest', { params }).then(r => r.data);
+
 // ── Boards ────────────────────────────────────────────────────────────────────
 export const getBoards = () => api.get('/boards');
 export const getBoard = (id) => api.get(`/boards/${id}`);
@@ -70,6 +77,8 @@ export const createGroup = (data) => api.post('/groups', data);
 export const updateGroup = (id, data) => api.put(`/groups/${id}`, data);
 export const deleteGroup = (id) => api.delete(`/groups/${id}`);
 export const reorderGroups = (boardId, orderedIds) => api.patch('/groups/reorder', { board_id: boardId, ordered_ids: orderedIds });
+export const duplicateGroup = (id) => api.post(`/groups/${id}/duplicate`).then(r => r.data);
+export const moveGroupItems = (id, targetGroupId) => api.post(`/groups/${id}/move-items`, { target_group_id: targetGroupId }).then(r => r.data);
 
 // ── Items ─────────────────────────────────────────────────────────────────────
 export const createItem = (data) => api.post('/items', data);
@@ -82,11 +91,36 @@ export const moveItem   = (id, data) => api.patch(`/items/${id}/move`, data);
 export const createColumn = (data) => api.post('/columns', data);
 export const updateColumn = (id, data) => api.put(`/columns/${id}`, data);
 export const deleteColumn = (id) => api.delete(`/columns/${id}`);
+export const duplicateColumn = (id) => api.post(`/columns/${id}/duplicate`).then(r => r.data);
 export const reorderColumns = (boardId, orderedIds) => api.patch('/columns/reorder', { board_id: boardId, ordered_ids: orderedIds });
+
+// ── Server-side item query (typed filter / sort / pagination) ──────────────────
+// Scales boards to thousands of rows: filtering, sorting and pagination run in
+// SQL with typed casts. Returns { items, total, page, pageSize, hasMore }.
+export const queryItems = (params) => api.post('/items/query', params).then(r => r.data);
+
+// ── Time tracking ───────────────────────────────────────────────────────────────
+export const timeStart   = (item_id, column_id) => api.post('/time/start', { item_id, column_id }).then(r => r.data);
+export const timeStop    = (item_id, column_id) => api.post('/time/stop', { item_id, column_id }).then(r => r.data);
+export const timeManual  = (data) => api.post('/time/manual', data).then(r => r.data);
+export const timeCell    = (itemId, columnId) => api.get(`/time/cell/${itemId}/${columnId}`).then(r => r.data);
+export const timeEditEntry   = (id, data) => api.put(`/time/entry/${id}`, data).then(r => r.data);
+export const timeDeleteEntry = (id) => api.delete(`/time/entry/${id}`).then(r => r.data);
+export const timeRunning = () => api.get('/time/running').then(r => r.data);
+export const getTimesheet = (params) => api.get('/time/timesheet', { params }).then(r => r.data);
+export const setUserBilling = (id, data) => api.put(`/time/user/${id}/billing`, data).then(r => r.data);
 
 // ── Column values ─────────────────────────────────────────────────────────────
 export const upsertColumnValue = (data) => api.post('/column-values/upsert', data);
 export const bulkUpsertColumnValue = (data) => api.post('/column-values/bulk-upsert', data);
+
+// ── Connections (Connect Boards / Mirror / Rollup) ──────────────────────────────
+export const searchConnectItems = (boardId, q, exclude) =>
+  api.get(`/connections/board/${boardId}/items`, { params: { q, exclude: (exclude || []).join(',') } }).then(r => r.data);
+export const getConnectionColumns = (boardId) =>
+  api.get(`/connections/board/${boardId}/columns`).then(r => r.data);
+export const resolveConnectItems = (ids) =>
+  api.get('/connections/items', { params: { ids: (ids || []).join(',') } }).then(r => r.data);
 
 // ── Automations ───────────────────────────────────────────────────────────────
 export const getAutomations = (boardId) => api.get(`/automations/board/${boardId}`);
@@ -113,8 +147,10 @@ export const adminResetPassword = (id, password) => api.put(`/auth/admin/users/$
 export const updateUserRole = (id, role) => api.put(`/auth/users/${id}/role`, { role });
 export const setUserActive = (id, is_active) => api.put(`/auth/users/${id}/active`, { is_active });
 export const deleteUser = (id) => api.delete(`/auth/users/${id}`);
-export const getActivityLogs = (boardId) => api.get(`/activity-logs/board/${boardId}`);
+export const getActivityLogs = (boardId, params) => api.get(`/activity-logs/board/${boardId}`, { params });
 export const getItemActivityLogs = (itemId) => api.get(`/activity-logs/item/${itemId}`);
+export const getAuditLogs = (params) => api.get('/activity-logs/audit', { params }).then(r => r.data);
+export const getAuditMeta = () => api.get('/activity-logs/audit/meta').then(r => r.data);
 
 // ── Comments ───────────────────────────────────────────────────────────────────
 export const getComments   = (itemId) => api.get(`/comments/item/${itemId}`);
@@ -153,6 +189,8 @@ export const getForm        = (id)             => api.get(`/forms/${id}`);
 export const updateForm     = (id, data)       => api.put(`/forms/${id}`, data);
 export const deleteForm     = (id)             => api.delete(`/forms/${id}`);
 export const saveFormFields = (id, fields)     => api.put(`/forms/${id}/fields`, { fields });
+export const shareForm      = (id, data)       => api.post(`/forms/${id}/share`, data);
+export const getFormQr      = (id)             => api.get(`/forms/${id}/qr`);
 
 // ── Export / Import ────────────────────────────────────────────────────────────
 export const exportBoard = (boardId, opts = {}) => {
@@ -215,6 +253,14 @@ export const getDashboardWidgets    = (id)          => api.get(`/dashboards/${id
 export const createDashboardWidget  = (id, data)    => api.post(`/dashboards/${id}/widgets`, data).then(r => r.data);
 export const updateDashboardWidget  = (id, wid, data) => api.put(`/dashboards/${id}/widgets/${wid}`, data).then(r => r.data);
 export const deleteDashboardWidget  = (id, wid)     => api.delete(`/dashboards/${id}/widgets/${wid}`).then(r => r.data);
+export const getDashboardSnapshots  = (boardId, days) => api.get('/dashboards/snapshots', { params: { board_id: boardId, days } }).then(r => r.data);
+export const getDashboardSchedule   = (id)          => api.get(`/dashboards/${id}/schedule`).then(r => r.data);
+export const setDashboardSchedule   = (id, data)    => api.put(`/dashboards/${id}/schedule`, data).then(r => r.data);
+export const sendDashboardNow       = (id)          => api.post(`/dashboards/${id}/send-now`).then(r => r.data);
+// Sharing — who can view a dashboard (owner-only management)
+export const getDashboardShareUsers = ()            => api.get('/dashboards/users').then(r => r.data);
+export const getDashboardShares     = (id)          => api.get(`/dashboards/${id}/shares`).then(r => r.data);
+export const setDashboardShares     = (id, userIds) => api.put(`/dashboards/${id}/shares`, { user_ids: userIds }).then(r => r.data);
 
 // Public form endpoints (no auth header needed — use plain fetch)
 export const getPublicForm    = (slug) => fetch(`/api/public/forms/${slug}`).then(r => r.json());
@@ -224,6 +270,14 @@ export const submitPublicForm = (slug, data) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }).then(r => r.json());
+export const uploadPublicFormFile = (slug, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return fetch(`/api/public/forms/${slug}/upload`, {
+    method: 'POST',
+    body: fd,
+  }).then(r => r.json());
+};
 
 // ── Date Cascade ──────────────────────────────────────────────────────────────
 export const getCascadeTemplates   = (boardId)           => api.get(`/date-cascade/templates/${boardId}`).then(r => r.data);

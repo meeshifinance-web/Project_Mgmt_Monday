@@ -15,6 +15,8 @@ import AuthCallbackPage from './pages/AuthCallbackPage';
 import PublicForm from './pages/PublicForm';
 import { getBoards, getBoard, createBoard, deleteBoard, updateBoard, getFolders, createFolder, updateFolder, deleteFolder, moveBoardToFolder, moveFolderToParent, cloneBoard, favoriteBoard, unfavoriteBoard } from './api';
 import GlobalTrashPanel from './components/GlobalTrashPanel';
+import AuditCenterPanel from './components/AuditCenterPanel';
+import AiAssistantPanel from './components/AiAssistantPanel';
 import CommandPalette from './components/CommandPalette';
 import EmptyState from './components/EmptyState';
 import WelcomeTour, { shouldShowWelcomeTour } from './components/WelcomeTour';
@@ -301,6 +303,9 @@ function MainApp() {
   const [trashOpenSignal, setTrashOpenSignal] = useState(0);
   const [newBoardName, setNewBoardName] = useState('');
   const [newBoardVisibility, setNewBoardVisibility] = useState('private');
+  const [newBoardTemplate, setNewBoardTemplate] = useState('blank');
+  const [newBoardPrompt, setNewBoardPrompt] = useState('');
+  const [aiBuilding, setAiBuilding] = useState(false);
   const [showNewBoard, setShowNewBoard] = useState(false);
   const [folders, setFolders] = useState([]);
   const [collapsedFolders, setCollapsedFolders] = useState(new Set());
@@ -311,6 +316,8 @@ function MainApp() {
   const [creatingInParent, setCreatingInParent] = useState(null);
   const [newFolderDraft, setNewFolderDraft] = useState('');
   const [showGlobalTrash, setShowGlobalTrash] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
+  const [showAi, setShowAi] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [showMyWork, setShowMyWork] = useState(false);
   const [dashboards, setDashboards] = useState([]);
@@ -366,7 +373,7 @@ function MainApp() {
   const navigate = useNavigate();
   const { boardId: urlBoardId } = useParams();
 
-  const closeNewBoard = () => { setShowNewBoard(false); setNewBoardName(''); setNewBoardVisibility('private'); };
+  const closeNewBoard = () => { setShowNewBoard(false); setNewBoardName(''); setNewBoardVisibility('private'); setNewBoardTemplate('blank'); setNewBoardPrompt(''); };
 
   useEffect(() => {
     if (!showNewBoard) return;
@@ -460,14 +467,82 @@ function MainApp() {
     if (activeBoard?.id !== board_id) loadBoard(board_id);
   }, [activeBoard?.id]);
 
+  // ── Real-time: keep the sidebar board/folder list fresh ─────────────────────
+  // Refetches boards + folders periodically so newly-shared/public boards (or
+  // renames, new folders) appear without a manual page refresh. Only the list
+  // is touched here — the open board has its own poll below.
+  const refreshBoardList = useCallback(() => {
+    if (document.hidden) return;
+    Promise.all([getBoards(), getFolders()])
+      .then(([b, f]) => { setBoards(b.data); setFolders(f.data); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(refreshBoardList, 20000);
+    const onFocus = () => refreshBoardList();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { clearInterval(id); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
+  }, [refreshBoardList]);
+
+  // ── Real-time: keep the OPEN board fresh ────────────────────────────────────
+  // Polls the active board and applies server state so edits from automations,
+  // the item detail panel, forms, or other users show up live. Guards:
+  //   • never overwrite while the user is mid-edit (focus in an input/textarea)
+  //   • skip when the tab is hidden
+  //   • only re-render when the data actually changed (cheap JSON compare)
+  const lastBoardJsonRef = useRef('');
+  const lastLocalEditRef = useRef(0);
+  useEffect(() => { lastBoardJsonRef.current = ''; }, [activeBoard?.id]);
+  useEffect(() => {
+    const bid = activeBoard?.id;
+    if (!bid) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (document.hidden) return;
+      // Don't reconcile right after a local edit — the save may still be
+      // in flight, and we'd briefly revert the user's change.
+      if (Date.now() - lastLocalEditRef.current < 5000) return;
+      const ae = document.activeElement;
+      if (ae && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable)) return;
+      try {
+        const r = await getBoard(bid);
+        if (cancelled || !r?.data) return;
+        const json = JSON.stringify(r.data);
+        if (json === lastBoardJsonRef.current) return; // nothing changed
+        lastBoardJsonRef.current = json;
+        setActiveBoard(prev => (prev && String(prev.id) === String(r.data.id)) ? r.data : prev);
+      } catch { /* transient network error — try again next tick */ }
+    };
+    const id = setInterval(tick, 10000);
+    const onFocus = () => tick();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { cancelled = true; clearInterval(id); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBoard?.id]);
+
   const handleCreateBoard = async (e) => {
     e.preventDefault();
-    if (!newBoardName.trim()) return;
+    const isAi = newBoardTemplate === 'ai';
+    if (isAi && !newBoardPrompt.trim()) { toast('Describe the board you want', 'error'); return; }
+    if (!isAi && !newBoardName.trim()) return;
     try {
-      const r = await createBoard({ name: newBoardName.trim(), visibility: newBoardVisibility });
+      let payload = { name: newBoardName.trim(), visibility: newBoardVisibility, template: newBoardTemplate };
+      if (isAi) {
+        setAiBuilding(true);
+        const { aiBoard } = await import('./api');
+        const { spec } = await aiBoard(newBoardPrompt.trim());
+        payload = { name: (newBoardName.trim() || spec.name || 'New Board'), visibility: newBoardVisibility, spec };
+      }
+      const r = await createBoard(payload);
       setBoards(b => [...b, r.data]);
       setNewBoardName('');
       setNewBoardVisibility('private');
+      setNewBoardTemplate('blank');
+      setNewBoardPrompt('');
+      setAiBuilding(false);
       setShowNewBoard(false);
       loadBoard(r.data.id);
       navigate(`/board/${r.data.id}`, { replace: true });
@@ -509,6 +584,7 @@ function MainApp() {
   };
 
   const handleBoardChange = useCallback((updater) => {
+    lastLocalEditRef.current = Date.now(); // pause real-time reconcile briefly
     setActiveBoard(prev => {
       const next = updater(prev);
       if (next.visibility !== prev?.visibility || next.name !== prev?.name) {
@@ -848,11 +924,14 @@ function MainApp() {
     );
   };
 
-  // Group boards by folder
+  // Group boards by folder. A board whose folder isn't in the visible folder
+  // list (e.g. a public board nested in a folder the user doesn't own) falls
+  // back to "unfiled" so it can never be hidden from the sidebar.
   const boardsByFolder = {};
   const unfiledBoards = [];
+  const visibleFolderIds = new Set(folders.map(f => f.id));
   for (const b of boards) {
-    if (b.folder_id) {
+    if (b.folder_id && visibleFolderIds.has(b.folder_id)) {
       if (!boardsByFolder[b.folder_id]) boardsByFolder[b.folder_id] = [];
       boardsByFolder[b.folder_id].push(b);
     } else {
@@ -1010,6 +1089,44 @@ function MainApp() {
             </button>
           )}
 
+          {/* AI Assistant */}
+          {isNavCollapsed ? (
+            <div onClick={() => setShowAi(true)} title="AI Assistant"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 36, cursor: 'pointer', borderLeft: '3px solid transparent' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <span style={{ fontSize: 15 }}>✨</span>
+            </div>
+          ) : (
+            <button onClick={() => setShowAi(true)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', cursor: 'pointer', textAlign: 'left', background: 'transparent', borderLeft: '3px solid transparent', color: 'var(--sidebar-text)', fontWeight: 800, fontSize: 16 }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <span style={{ fontSize: 17, flexShrink: 0 }}>✨</span>
+              AI Assistant
+            </button>
+          )}
+
+          {/* Audit Center (admin) */}
+          {isAdmin && (
+            isNavCollapsed ? (
+              <div onClick={() => setShowAudit(true)} title="Audit Center"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 36, cursor: 'pointer', borderLeft: '3px solid transparent' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <span style={{ fontSize: 15 }}>🛡</span>
+              </div>
+            ) : (
+              <button onClick={() => setShowAudit(true)}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', cursor: 'pointer', textAlign: 'left', background: 'transparent', borderLeft: '3px solid transparent', color: 'var(--sidebar-text)', fontWeight: 800, fontSize: 16 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--sidebar-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <span style={{ fontSize: 17, flexShrink: 0 }}>🛡</span>
+                Audit Center
+              </button>
+            )
+          )}
+
           {/* Create actions — intentionally placed below My Work */}
           {isNavCollapsed ? (
             isManager && (
@@ -1043,6 +1160,42 @@ function MainApp() {
                       marginBottom: 7, boxSizing: 'border-box',
                     }}
                   />
+                  {/* Template picker — a small curated set */}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>Start from</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, marginBottom: 8 }}>
+                    {[
+                      ['blank', '➕', 'Blank'], ['ai', '✨', 'AI build'], ['project', '📋', 'Project'], ['tasks', '✅', 'Tasks'],
+                      ['crm', '💰', 'Sales CRM'], ['bugs', '🐞', 'Bugs'], ['content', '🗓️', 'Content'],
+                    ].map(([key, icon, label]) => {
+                      const active = newBoardTemplate === key;
+                      return (
+                        <button
+                          key={key} type="button" title={label}
+                          onClick={() => setNewBoardTemplate(key)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 6,
+                            border: `1.5px solid ${active ? '#9b72f5' : 'var(--sidebar-input-border)'}`,
+                            background: active ? 'rgba(155,114,245,0.18)' : 'transparent',
+                            color: active ? '#9b72f5' : 'var(--sidebar-text)', fontSize: 12, fontWeight: 700,
+                            cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                          }}
+                        >
+                          <span style={{ fontSize: 13 }}>{icon}</span>{label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {newBoardTemplate === 'ai' && (
+                    <textarea
+                      value={newBoardPrompt} onChange={e => setNewBoardPrompt(e.target.value)}
+                      placeholder="Describe it, e.g. “a content calendar with status, owner, due date and a publish checklist”"
+                      style={{
+                        width: '100%', boxSizing: 'border-box', minHeight: 60, resize: 'vertical',
+                        border: '1.5px solid rgba(155,114,245,0.5)', background: 'var(--sidebar-input-bg)',
+                        color: 'var(--sidebar-text)', borderRadius: 6, padding: '7px 9px', outline: 'none', fontSize: 13, marginBottom: 8,
+                      }}
+                    />
+                  )}
                   <div style={{ display: 'flex', gap: 6 }}>
                     {['org_wide', 'private'].map(v => (
                       <button
@@ -1059,10 +1212,10 @@ function MainApp() {
                       </button>
                     ))}
                   </div>
-                  <button type="submit" style={{
-                    width: '100%', marginTop: 7, padding: '7px 0',
+                  <button type="submit" disabled={aiBuilding} style={{
+                    width: '100%', marginTop: 7, padding: '7px 0', opacity: aiBuilding ? 0.7 : 1,
                     background: 'linear-gradient(90deg, #9b72f5 0%, #b86cff 100%)', color: '#fff', borderRadius: 6, fontSize: 14, fontWeight: 800,
-                  }}>Create Board</button>
+                  }}>{aiBuilding ? '✨ Building…' : newBoardTemplate === 'ai' ? '✨ Generate Board' : 'Create Board'}</button>
                 </form>
               ) : (
                 <>
@@ -1168,7 +1321,7 @@ function MainApp() {
                           <span style={{ fontSize: 15, flexShrink: 0 }}>📊</span>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
                         </button>
-                        {isManager && isActive && (
+                        {(isAdmin || d.created_by === currentUser?.id) && isActive && (
                           <button
                             onClick={async () => {
                               if (!window.confirm(`Delete dashboard "${d.name}"?`)) return;
@@ -1616,6 +1769,9 @@ function MainApp() {
           }}
         />
       )}
+
+      {showAudit && <AuditCenterPanel boards={boards} onClose={() => setShowAudit(false)} />}
+      {showAi && <AiAssistantPanel boards={boards} onClose={() => setShowAi(false)} onOpenBoard={(bid) => { loadBoard(bid); navigate(`/board/${bid}`); }} />}
 
       {/* API Keys panel */}
       {showApiKeys && (

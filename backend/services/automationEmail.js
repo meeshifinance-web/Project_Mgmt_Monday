@@ -150,10 +150,21 @@ async function sendAutomationEmail({ boardId, itemId, to, toType, toColumnId, su
     return;
   }
 
-  const resolvedTo = await resolveRecipients({ boardId, itemId, to, toType, toColumnId });
+  const rawResolvedTo = await resolveRecipients({ boardId, itemId, to, toType, toColumnId });
+
+  // Keep only well-formed, de-duplicated addresses. Previously a typo in the
+  // "specific" field (or a non-email value in a text column used as the
+  // recipient) was passed straight to the SMTP server, which then threw.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const seenAddr = new Set();
+  const resolvedTo = String(rawResolvedTo || '')
+    .split(',')
+    .map(a => a.trim())
+    .filter(a => EMAIL_RE.test(a) && !seenAddr.has(a.toLowerCase()) && seenAddr.add(a.toLowerCase()))
+    .join(', ');
 
   if (!resolvedTo) {
-    console.log(`[AutomationEmail] No recipient resolved (to_type=${toType || 'specific'}) — skipping`);
+    console.log(`[AutomationEmail] No valid recipient resolved (to_type=${toType || 'specific'}, raw="${rawResolvedTo}") — skipping`);
     return;
   }
 

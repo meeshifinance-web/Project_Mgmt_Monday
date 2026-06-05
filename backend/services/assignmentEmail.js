@@ -23,15 +23,17 @@ const {
   renderPlainText,
 } = require('./emailTemplate');
 
-function parseOwners(val) {
+// People are stored as {id,name} objects (legacy: name strings). Return entries
+// so we can diff by stable identity (id) and resolve recipients precisely.
+function parseOwnerEntries(val) {
   if (!val) return [];
-  try {
-    const p = JSON.parse(val);
-    return Array.isArray(p) ? p.map(String) : p ? [String(p)] : [];
-  } catch {
-    return val.trim() ? [val.trim()] : [];
-  }
+  let arr;
+  try { arr = JSON.parse(val); } catch { return String(val).trim() ? [{ id: null, name: String(val).trim() }] : []; }
+  if (!Array.isArray(arr)) arr = arr ? [arr] : [];
+  return arr.map(e => (e && typeof e === 'object') ? { id: e.id ?? null, name: e.name || '' } : { id: null, name: String(e) })
+            .filter(e => e.name || e.id != null);
 }
+const ownerKey = (e) => (e.id != null ? `id:${e.id}` : `nm:${e.name}`);
 
 function getTransporter() {
   if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER) return null;
@@ -85,17 +87,20 @@ async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }
     return;
   }
 
-  const oldNames = new Set(parseOwners(oldValue));
-  const newNames = parseOwners(newValue);
-  const addedNames = newNames.filter(n => !oldNames.has(n));
-  if (!addedNames.length) return;
+  const oldKeys = new Set(parseOwnerEntries(oldValue).map(ownerKey));
+  const added = parseOwnerEntries(newValue).filter(e => !oldKeys.has(ownerKey(e)));
+  if (!added.length) return;
 
   try {
-    // Look up users by name (matches how person column stores values)
+    // Resolve newly-added owners to users — by stable id when present, else by
+    // name (legacy). Email-matching this way means renamed users still notify.
+    const addedIds = added.filter(e => e.id != null).map(e => e.id);
+    const addedNames = added.filter(e => e.id == null).map(e => e.name);
     const userRes = await pool.query(
       `SELECT id, name, email FROM users
-        WHERE name = ANY($1) AND email IS NOT NULL AND email <> '' AND is_active = true`,
-      [addedNames]
+        WHERE (id = ANY($1) OR name = ANY($2))
+          AND email IS NOT NULL AND email <> '' AND is_active = true`,
+      [addedIds, addedNames]
     );
     const recipients = userRes.rows;
     if (!recipients.length) return;

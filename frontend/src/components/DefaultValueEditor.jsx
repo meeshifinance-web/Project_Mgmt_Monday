@@ -92,19 +92,33 @@ function DefaultInput({ col, value, onChange }) {
       );
 
     case 'rating': {
-      const num = parseInt(value) || 0;
+      // Half-star support: click a star's LEFT half for ½, right half for full.
+      const num = Math.max(0, Math.min(5, parseFloat(value) || 0));
+      const pickRating = (i, e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        const v = (e.clientX - r.left) < r.width / 2 ? i - 0.5 : i;
+        onChange(v === num ? '' : String(v));
+      };
       return (
         <div style={{ display: 'flex', gap: 6, padding: '2px 0' }}>
-          {[1, 2, 3, 4, 5].map(i => (
-            <span
-              key={i}
-              onClick={() => onChange(i === num ? '' : String(i))}
-              style={{ fontSize: 24, cursor: 'pointer', color: i <= num ? '#fdab3d' : '#c4c4c4', transition: 'color 0.1s' }}
-              title={`${i} star${i > 1 ? 's' : ''}`}
-            >
-              {i <= num ? '★' : '☆'}
-            </span>
-          ))}
+          {[1, 2, 3, 4, 5].map(i => {
+            const fill = num >= i ? 'full' : (num >= i - 0.5 ? 'half' : 'empty');
+            return (
+              <span
+                key={i}
+                onClick={e => pickRating(i, e)}
+                style={{ fontSize: 24, cursor: 'pointer', position: 'relative', display: 'inline-block', width: '1em', lineHeight: 1, color: fill === 'empty' ? '#c4c4c4' : '#fdab3d', transition: 'color 0.1s' }}
+                title={`${num} star${num === 1 ? '' : 's'}`}
+              >
+                {fill === 'half' ? (
+                  <>
+                    <span style={{ color: '#c4c4c4' }}>☆</span>
+                    <span style={{ position: 'absolute', left: 0, top: 0, width: '50%', overflow: 'hidden', color: '#fdab3d' }}>★</span>
+                  </>
+                ) : (fill === 'full' ? '★' : '☆')}
+              </span>
+            );
+          })}
           {num > 0 && (
             <span
               onClick={() => onChange('')}

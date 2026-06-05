@@ -6,6 +6,7 @@ const { requireScope } = require('../middleware/apiAuth');
 const { sendAutomationEmail } = require('../services/automationEmail');
 const { computeRelativeDate } = require('../services/relativeDate');
 const { notifyNewAssignees } = require('../services/assignmentEmail');
+const { getConditions, getActions, evaluateConditions, executeActions, runDeferred } = require('../services/automationEngine');
 
 async function logActivity(client, data) {
   try {
@@ -27,6 +28,8 @@ router.post('/', requireAuth, requireScope('write'), async (req, res) => {
 
   const { group_id, name, parent_item_id } = req.body;
   if (!group_id) return res.status(400).json({ error: 'group_id is required' });
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Item name cannot be empty' });
+  if (String(name).length > 255) return res.status(400).json({ error: 'Item name too long (max 255)' });
 
   // Resolve board and verify access BEFORE opening a transaction
   let board_id;
@@ -59,6 +62,7 @@ router.post('/', requireAuth, requireScope('write'), async (req, res) => {
     item.values = {};
 
     const triggeredAutomations = [];
+    const deferredEffects = []; // automation side-effects (emails) to run after commit
 
     // Automations only fire for top-level items, not subitems
     if (!parent_item_id) {
@@ -68,71 +72,18 @@ router.post('/', requireAuth, requireScope('write'), async (req, res) => {
       );
 
       for (const auto of autoRes.rows) {
-        const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : auto.action_config;
-        if (auto.action_type === 'set_status') {
-          const { column_id: colId, value: val } = acfg;
-          if (colId && val) {
-            await client.query(
-              `INSERT INTO column_values (item_id, column_id, value)
-               VALUES ($1,$2,$3)
-               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-              [item.id, colId, val]
-            );
-            item.values[parseInt(colId)] = val;
-          }
-        } else if (auto.action_type === 'assign_person') {
-          const { column_id: colId, user_name: userName } = acfg;
-          if (colId && userName) {
-            await client.query(
-              `INSERT INTO column_values (item_id, column_id, value)
-               VALUES ($1,$2,$3)
-               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-              [item.id, colId, userName]
-            );
-            item.values[parseInt(colId)] = userName;
-            // Fire assignment notification — fresh item, so oldValue is empty.
-            // Run after commit (setImmediate) so the row is durable before email.
-            setImmediate(() => notifyNewAssignees({
-              oldValue: null,
-              newValue: userName,
-              itemId:   item.id,
-              boardId:  board_id,
-              actor:    { id: req.user?.id, name: req.user?.name },
-            }).catch(err => console.error('[AssignEmail] automation async error:', err.message)));
-          }
-        } else if (auto.action_type === 'send_email') {
-          // Fire after commit so item exists in DB for placeholder resolution
-          setImmediate(() => sendAutomationEmail({
-            boardId:    board_id,
-            itemId:     item.id,
-            to:         acfg.to || '',
-            toType:     acfg.to_type || 'specific',
-            toColumnId: acfg.to_column_id || null,
-            subject:    acfg.subject || '',
-            body:       acfg.body || '',
-          }).catch(err => console.error('[AutomationEmail] async error:', err.message)));
-        } else if (auto.action_type === 'set_due_date') {
-          // Compute a date relative to today based on weekday + weeks_ahead and
-          // write it to the configured date column. Lets directors auto-set
-          // recurring review/meeting due dates ("next Monday", "Thursday in 2
-          // weeks") on every newly-created task without manual entry.
-          const { column_id: colId, weekday, weeks_ahead } = acfg;
-          if (colId && weekday !== undefined && weekday !== '' && weekday !== null) {
-            try {
-              const dateStr = computeRelativeDate({ weekday, weeks_ahead });
-              await client.query(
-                `INSERT INTO column_values (item_id, column_id, value)
-                 VALUES ($1,$2,$3)
-                 ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-                [item.id, colId, dateStr]
-              );
-              item.values[parseInt(colId)] = dateStr;
-            } catch (e) {
-              console.error('[Automation set_due_date] failed:', e.message);
-            }
-          }
-        } else {
-          triggeredAutomations.push(auto);
+        // "Only if" CONDITIONS (all must pass), then the ordered ACTION list.
+        if (!(await evaluateConditions(client, item.id, getConditions(auto)))) continue;
+        const r = await executeActions(client, {
+          actions: getActions(auto), auto,
+          itemId: item.id, boardId: board_id, itemName: name,
+          actor: { id: req.user.id, name: req.user.name },
+        });
+        for (const sv of r.setValues) item.values[sv.column_id] = sv.value;
+        if (r.movedItem) item.group_id = r.movedItem.group_id;
+        deferredEffects.push(...r.deferred);
+        for (const n of r.notifies) {
+          triggeredAutomations.push({ id: auto.id, name: auto.name, action_type: 'notify', action_config: { message: n.message } });
         }
       }
     }
@@ -166,6 +117,7 @@ router.post('/', requireAuth, requireScope('write'), async (req, res) => {
     });
 
     await client.query('COMMIT');
+    runDeferred(deferredEffects); // emails / assignment notifications, post-commit
     item.triggeredAutomations = triggeredAutomations;
     res.status(201).json(item);
   } catch (err) {
@@ -182,6 +134,8 @@ router.put('/:id', requireAuth, requireScope('write'), async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot edit items' });
   const { name } = req.body;
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Item name cannot be empty' });
+  if (String(name).length > 255) return res.status(400).json({ error: 'Item name too long (max 255)' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -468,6 +422,33 @@ router.patch('/:id/move', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   } finally {
     client.release();
+  }
+});
+
+// ── POST /query — server-side filtered / sorted / paginated items ─────────────
+// Body: { board_id, filters[], sort:{column_id,dir,type}, search, group_id,
+//         page, page_size }. Returns { items, total, page, pageSize, hasMore }.
+// Filter/sort/paginate happen in SQL with typed casts so boards scale to
+// thousands of rows without shipping every row to the browser.
+router.post('/query', requireAuth, async (req, res) => {
+  const { board_id, filters, sort, search, group_id, page, page_size } = req.body;
+  if (!board_id) return res.status(400).json({ error: 'board_id is required' });
+  try {
+    if (!(await canAccessBoard(board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
+    const { queryItems } = require('../services/itemQuery');
+    const result = await queryItems(pool, {
+      boardId: parseInt(board_id, 10),
+      filters: Array.isArray(filters) ? filters : [],
+      sort: sort || null,
+      search: typeof search === 'string' ? search.trim() : '',
+      groupId: group_id || null,
+      page, pageSize: page_size,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('[items/query]', err.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

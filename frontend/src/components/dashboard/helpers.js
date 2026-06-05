@@ -59,10 +59,11 @@ export function parseNumber(v) {
 
 export function parsePersons(raw) {
   if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [String(raw)];
-  } catch { return raw ? [String(raw)] : []; }
+  let arr;
+  try { arr = JSON.parse(raw); } catch { return raw ? [String(raw)] : []; }
+  if (!Array.isArray(arr)) arr = arr ? [arr] : [];
+  // People are stored as {id,name} objects (legacy: name strings). Return names.
+  return arr.map(e => (e && typeof e === 'object') ? (e.name || '') : String(e)).filter(Boolean);
 }
 
 export function computeKpi(boardData, config, filters) {

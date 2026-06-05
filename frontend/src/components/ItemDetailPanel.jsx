@@ -169,6 +169,7 @@ function Composer({ members, onPost, placeholder = 'Write an update… (Ctrl+Ent
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={compact ? 2 : 3}
+          maxLength={5000}
           style={{
             width: '100%', resize: 'vertical', border: '1.5px solid #e6e9ef',
             borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none',
@@ -651,6 +652,7 @@ export default function ItemDetailPanel({ item, group, columns, boardId, onClose
                       value={item.values?.[col.id] || ''}
                       onChange={!canEdit || (col.type === 'person' && !isManager) ? undefined : val => onValueChange(col.id, val)}
                       item={item}
+                      columns={fieldColumns}
                     />
                   </div>
                 </div>

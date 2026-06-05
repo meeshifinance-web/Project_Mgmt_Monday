@@ -57,13 +57,24 @@ function requireRole(...roles) {
 }
 
 // Shared board-access check used by all resource routes.
-// Admins can access every board; other roles must be members.
+// Access is granted when ANY of these hold:
+//   • the user is a system admin, OR
+//   • the board is org-wide ("public") — every authenticated user can see it, OR
+//   • the user is a member of the board.
+// org-wide visibility is what the "Make Public" toggle sets; without consulting
+// it here, public boards stayed members-only (the visibility flag was ignored).
 // Pass `pool` explicitly so the function stays dependency-free and testable.
 async function canAccessBoard(boardId, user, dbPool) {
   if (!boardId) return false;
   if (user.role === 'admin') return true;
   const result = await dbPool.query(
-    `SELECT 1 FROM board_members WHERE board_id = $1 AND user_id = $2 LIMIT 1`,
+    `SELECT 1 FROM boards b
+      WHERE b.id = $1
+        AND (b.is_deleted IS NULL OR b.is_deleted = false)
+        AND ( b.visibility = 'org_wide'
+           OR EXISTS (SELECT 1 FROM board_members bm
+                       WHERE bm.board_id = b.id AND bm.user_id = $2) )
+      LIMIT 1`,
     [boardId, user.id]
   );
   return result.rows.length > 0;

@@ -11,8 +11,12 @@ const canWrite = [requireAuth, requireRole('admin', 'manager')];
 // Parse multi-owner value — handles JSON array or legacy single-name string
 function parseOwners(val) {
   if (!val) return [];
-  try { const p = JSON.parse(val); return Array.isArray(p) ? p : p ? [String(p)] : []; }
-  catch { return val.trim() ? [val.trim()] : []; }
+  let arr;
+  try { arr = JSON.parse(val); } catch { return String(val).trim() ? [String(val).trim()] : []; }
+  if (!Array.isArray(arr)) arr = arr ? [arr] : [];
+  // People are stored as {id,name} objects (id added later); legacy values are
+  // plain name strings. Either way, return the names.
+  return arr.map(e => (e && typeof e === 'object') ? (e.name || '') : String(e)).filter(Boolean);
 }
 
 // Sync member options on all person-type columns.
@@ -62,6 +66,7 @@ router.get('/', requireAuth, async (req, res) => {
            ON bf.board_id = b.id AND bf.user_id = $2
        WHERE (b.is_deleted IS NULL OR b.is_deleted = false)
          AND ($1 = 'admin'
+          OR b.visibility = 'org_wide'
           OR EXISTS (
             SELECT 1 FROM board_members bm
             WHERE bm.board_id = b.id AND bm.user_id = $2
@@ -105,6 +110,11 @@ router.delete('/:id/favorite', requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// ── GET board templates (curated picker list) ────────────────────────────────
+router.get('/templates', requireAuth, (req, res) => {
+  res.json(require('../services/boardTemplates').listTemplates());
 });
 
 // ── GET full board ────────────────────────────────────────────────────────────
@@ -266,6 +276,34 @@ router.get('/:id', requireAuth, async (req, res) => {
     );
     board.members = membersRes.rows;
 
+    // Resolve cross-board connect/mirror/rollup columns: injects live mirror &
+    // rollup values into each item and attaches board.linkedItems for chips.
+    try {
+      await require('../services/connectionResolver').resolveConnections(pool, board, req.user);
+    } catch (connErr) {
+      console.error('[connections] resolve failed:', connErr.message);
+    }
+
+    // Compute the critical path for the board's dependency column (if any).
+    try {
+      await require('../services/dependencyEngine').attachCriticalPath(pool, board);
+    } catch (depErr) {
+      console.error('[dependencies] critical path failed:', depErr.message);
+    }
+
+    // Attach live running timers so time-tracking cells can show ticking state.
+    try {
+      const rt = await pool.query(
+        `SELECT item_id, column_id, user_id, user_name, started_at
+           FROM time_entries WHERE board_id = $1 AND ended_at IS NULL`,
+        [id]
+      );
+      board.runningTimers = {};
+      for (const r of rt.rows) board.runningTimers[`${r.item_id}:${r.column_id}`] = r;
+    } catch (tErr) {
+      board.runningTimers = {};
+    }
+
     res.json(board);
   } catch (err) {
     console.error(err);
@@ -275,7 +313,10 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // ── POST create board — with default group, columns and items ─────────────────
 router.post('/', ...canWrite, async (req, res) => {
-  const { name, description, visibility = 'private' } = req.body;
+  const { name, description, visibility = 'private', template, spec } = req.body;
+  if (!name || !String(name).trim()) return res.status(400).json({ error: 'Board name cannot be empty' });
+  if (String(name).length > 255) return res.status(400).json({ error: 'Board name too long (max 255)' });
+  if (!['private', 'org_wide'].includes(visibility)) return res.status(400).json({ error: 'Invalid visibility' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -300,65 +341,95 @@ router.post('/', ...canWrite, async (req, res) => {
     const creatorRes = await client.query('SELECT name FROM users WHERE id=$1', [req.user.id]);
     const creatorName = creatorRes.rows[0]?.name || '';
 
-    // 4. Create three default columns: Status | Owner | Due Date
-    const columnsSpec = [
-      {
-        title: 'Status', type: 'status', position: 0,
-        settings: { options: DEFAULT_STATUS_OPTIONS },
-      },
-      {
-        title: 'Owner',
-        type: 'person',
-        position: 1,
-        settings: { options: [creatorName] },
-      },
-      { title: 'Due Date', type: 'date', position: 2, settings: {} },
-    ];
+    // 4. Resolve the spec — a curated template, or the default blank board.
+    //    item.values are keyed by COLUMN INDEX so a single builder handles both.
+    const tpl = (template && template !== 'blank') ? require('../services/boardTemplates').getTemplate(template) : null;
+    const { COLUMN_TYPES } = require('../services/columnValidate');
+    let columnsSpec, groupsSpec;
+    if (spec && Array.isArray(spec.columns) && spec.columns.length) {
+      // AI-generated spec — sanitise types + cap sizes.
+      columnsSpec = spec.columns
+        .filter(c => c && c.title && COLUMN_TYPES.has(c.type))
+        .slice(0, 30)
+        .map(c => ({
+          title: String(c.title).slice(0, 255), type: c.type,
+          settings: c.type === 'person' ? { ...(c.settings || {}), options: [creatorName] } : (c.settings || {}),
+        }));
+      groupsSpec = (Array.isArray(spec.groups) && spec.groups.length ? spec.groups : [{ name: 'Items', color: '#0073ea', items: [] }])
+        .slice(0, 15)
+        .map(g => ({
+          name: String(g.name || 'Group').slice(0, 255), color: g.color || '#0073ea',
+          items: (g.items || []).slice(0, 50).map(it => ({ name: String(it.name || 'Item').slice(0, 255), values: it.values || {} })),
+        }));
+    } else if (tpl) {
+      columnsSpec = tpl.columns.map(c => ({
+        title: c.title, type: c.type,
+        // person columns get the creator as a selectable option
+        settings: c.type === 'person' ? { ...(c.settings || {}), options: [creatorName] } : (c.settings || {}),
+      }));
+      groupsSpec = tpl.groups;
+    } else {
+      columnsSpec = [
+        { title: 'Status', type: 'status', settings: { options: DEFAULT_STATUS_OPTIONS } },
+        { title: 'Owner', type: 'person', settings: { options: [creatorName] } },
+        { title: 'Due Date', type: 'date', settings: {} },
+      ];
+      groupsSpec = [{ name: 'Group 1', color: '#0073ea', items: [
+        { name: 'Item 1', values: { 0: 'In Progress' } },
+        { name: 'Item 2', values: { 0: 'Done' } },
+        { name: 'Item 3', values: { 0: 'Stuck' } },
+      ] }];
+    }
 
+    // 5. Create the columns
     const createdCols = [];
-    for (const spec of columnsSpec) {
+    for (let i = 0; i < columnsSpec.length; i++) {
+      const spec = columnsSpec[i];
       const r = await client.query(
         'INSERT INTO columns (board_id, title, type, settings, position) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-        [board.id, spec.title, spec.type, JSON.stringify(spec.settings), spec.position]
+        [board.id, spec.title, spec.type, JSON.stringify(spec.settings || {}), i]
       );
       createdCols.push(r.rows[0]);
     }
 
-    // 5. Create default group
-    const groupRes = await client.query(
-      'INSERT INTO groups (board_id, name, color, position) VALUES ($1,$2,$3,$4) RETURNING *',
-      [board.id, 'Group 1', '#0073ea', 0]
-    );
-    const group = groupRes.rows[0];
-
-    // 6. Create 3 default items with preset status values
-    const DEFAULT_ITEM_STATUSES = ['In Progress', 'Done', 'Stuck'];
-    const statusCol = createdCols.find(c => c.title === 'Status');
-    const createdItems = [];
-    for (let i = 0; i < 3; i++) {
-      const itemRes = await client.query(
-        'INSERT INTO items (group_id, name, position) VALUES ($1,$2,$3) RETURNING *',
-        [group.id, `Item ${i + 1}`, i]
+    // 6. Create the groups + starter items (item values keyed by column index)
+    board.groups = [];
+    for (let gi = 0; gi < groupsSpec.length; gi++) {
+      const g = groupsSpec[gi];
+      const grpRes = await client.query(
+        'INSERT INTO groups (board_id, name, color, position) VALUES ($1,$2,$3,$4) RETURNING *',
+        [board.id, g.name, g.color || '#0073ea', gi]
       );
-      const item = itemRes.rows[0];
-      item.values = {};
-
-      for (const col of createdCols) {
-        const val = (col.id === statusCol?.id) ? DEFAULT_ITEM_STATUSES[i] : '';
-        await client.query(
-          'INSERT INTO column_values (item_id, column_id, value) VALUES ($1,$2,$3)',
-          [item.id, col.id, val]
+      const grp = grpRes.rows[0];
+      const items = [];
+      const grpItems = g.items || [];
+      for (let ii = 0; ii < grpItems.length; ii++) {
+        const it = grpItems[ii];
+        const itemRes = await client.query(
+          'INSERT INTO items (group_id, name, position, created_by_user_id, created_by_user_name) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+          [grp.id, it.name, ii, req.user.id, creatorName]
         );
-        item.values[col.id] = val;
+        const item = itemRes.rows[0];
+        item.values = {};
+        for (let ci = 0; ci < createdCols.length; ci++) {
+          const col = createdCols[ci];
+          const raw = it.values ? it.values[ci] : undefined;
+          const val = (raw !== undefined && raw !== null) ? String(raw) : '';
+          await client.query(
+            'INSERT INTO column_values (item_id, column_id, value) VALUES ($1,$2,$3)',
+            [item.id, col.id, val]
+          );
+          item.values[col.id] = val;
+        }
+        item.subitems = [];
+        items.push(item);
       }
-      createdItems.push(item);
+      board.groups.push({ ...grp, items });
     }
 
     await client.query('COMMIT');
 
-    // Build full response so the frontend can display immediately without a reload
     board.columns = createdCols;
-    board.groups = [{ ...group, items: createdItems }];
     board.members = [{ id: req.user.id, name: creatorName, added_at: new Date().toISOString() }];
 
     res.status(201).json(board);
@@ -375,6 +446,9 @@ router.post('/', ...canWrite, async (req, res) => {
 router.put('/:id', ...canWrite, async (req, res) => {
   const { id } = req.params;
   const { name, description, visibility, item_name, enforce_owner_visibility } = req.body;
+  if (name !== undefined && !String(name).trim()) return res.status(400).json({ error: 'Board name cannot be empty' });
+  if (visibility !== undefined && !['private', 'org_wide'].includes(visibility))
+    return res.status(400).json({ error: 'Invalid visibility' });
   try {
     if (!(await canAccessBoard(id, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });

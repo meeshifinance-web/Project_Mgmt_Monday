@@ -35,6 +35,8 @@ function buildLayout(widgets) {
 import {
   getDashboardWidgets, createDashboardWidget, updateDashboardWidget,
   deleteDashboardWidget, updateDashboard, getBoard,
+  getDashboardSchedule, setDashboardSchedule, sendDashboardNow,
+  getDashboardShareUsers, getDashboardShares, setDashboardShares,
 } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -183,10 +185,218 @@ function WidgetModal({ initial, boards, boardDataCache, onFetchBoard, onSave, on
   );
 }
 
+// ── Drill-through modal: the items behind a clicked chart segment ─────────────
+function DrillModal({ drill, onClose }) {
+  if (!drill) return null;
+  const { title, items = [], columns = [], boardId } = drill;
+  const statusCol = columns.find(c => c.type === 'status');
+  const personCol = columns.find(c => c.type === 'person');
+  const statusColor = (label) => {
+    const opt = (statusCol?.settings?.options || []).find(o => (typeof o === 'string' ? o : o.label) === label);
+    return (opt && typeof opt === 'object' ? opt.color : null) || '#c4c4c4';
+  };
+  return (
+    <div onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 560, maxHeight: '82vh', background: 'var(--card-bg,#fff)', borderRadius: 14, border: '1px solid var(--border-color,#e6e9ef)', boxShadow: '0 20px 60px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color,#e6e9ef)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary,#323338)' }}>{title}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted,#9699a6)' }}>{items.length} item{items.length !== 1 ? 's' : ''}</div>
+          </div>
+          {boardId && <a href={`/board/${boardId}`} style={{ fontSize: 12, fontWeight: 600, color: '#9b72f5', textDecoration: 'none' }}>Open board →</a>}
+          <button onClick={onClose} style={{ fontSize: 22, color: 'var(--text-muted,#9699a6)', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '8px 12px 14px' }}>
+          {items.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>No items.</div>}
+          {items.map(it => (
+            <a key={it.id} href={boardId ? `/board/${boardId}` : undefined} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, borderBottom: '1px solid var(--border-color,#f0f0f4)' }}>
+              {it._groupColor && <span style={{ width: 8, height: 8, borderRadius: '50%', background: it._groupColor, flexShrink: 0 }} />}
+              <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary,#323338)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</span>
+              {personCol && it.values?.[personCol.id] && <span style={{ fontSize: 11, color: 'var(--text-muted,#9699a6)' }}>{(() => { try { const a = JSON.parse(it.values[personCol.id]); return Array.isArray(a) ? a.join(', ') : it.values[personCol.id]; } catch { return it.values[personCol.id]; } })()}</span>}
+              {statusCol && it.values?.[statusCol.id] && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: statusColor(it.values[statusCol.id]), borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap' }}>{it.values[statusCol.id]}</span>}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Scheduled delivery config ─────────────────────────────────────────────────
+const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function ScheduleModal({ dashboardId, onClose, toast }) {
+  const [cfg, setCfg] = useState(null);
+  const [recipients, setRecipients] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    getDashboardSchedule(dashboardId).then(s => {
+      setCfg({ schedule_enabled: !!s.schedule_enabled, schedule_freq: s.schedule_freq || 'daily', schedule_dow: s.schedule_dow ?? 1, schedule_hour: s.schedule_hour ?? 9, last_sent_at: s.last_sent_at });
+      setRecipients((Array.isArray(s.recipients) ? s.recipients : []).join(', '));
+    }).catch(() => setCfg({ schedule_enabled: false, schedule_freq: 'daily', schedule_dow: 1, schedule_hour: 9 }));
+  }, [dashboardId]);
+  if (!cfg) return null;
+  const recipList = recipients.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+  const save = async () => {
+    setSaving(true);
+    try { await setDashboardSchedule(dashboardId, { ...cfg, recipients: recipList }); toast('Schedule saved', 'success'); onClose(); }
+    catch { toast('Failed to save schedule', 'error'); } finally { setSaving(false); }
+  };
+  const sendNow = async () => {
+    if (!recipList.length) { toast('Add at least one recipient first', 'error'); return; }
+    setSending(true);
+    try { await setDashboardSchedule(dashboardId, { ...cfg, recipients: recipList }); const r = await sendDashboardNow(dashboardId); toast(r.sent ? `Digest sent to ${r.sent}` : 'Digest queued (no SMTP configured)', 'success'); }
+    catch { toast('Failed to send', 'error'); } finally { setSending(false); }
+  };
+  const inp = { width: '100%', boxSizing: 'border-box', padding: '8px 10px', border: '1px solid var(--border-color,#e6e9ef)', borderRadius: 7, fontSize: 13, background: 'var(--input-bg,var(--bg-secondary))', color: 'var(--text-primary)' };
+  const lbl = { fontSize: 11, fontWeight: 700, color: 'var(--text-muted,#9699a6)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6, display: 'block' };
+  return (
+    <div onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 460, background: 'var(--card-bg,#fff)', borderRadius: 14, border: '1px solid var(--border-color,#e6e9ef)', boxShadow: '0 20px 60px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color,#e6e9ef)', display: 'flex', alignItems: 'center' }}>
+          <div style={{ flex: 1, fontSize: 15, fontWeight: 800, color: 'var(--text-primary,#323338)' }}>📧 Scheduled delivery</div>
+          <button onClick={onClose} style={{ fontSize: 22, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* On/off — scheduling is optional, never mandatory. */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={cfg.schedule_enabled} onChange={e => setCfg({ ...cfg, schedule_enabled: e.target.checked })} style={{ accentColor: '#9b72f5', width: 16, height: 16 }} />
+            Email this dashboard on a schedule
+          </label>
+
+          {cfg.schedule_enabled ? (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={lbl}>Frequency</label>
+                <select style={inp} value={cfg.schedule_freq} onChange={e => setCfg({ ...cfg, schedule_freq: e.target.value })}>
+                  <option value="daily">Daily</option><option value="weekly">Weekly</option>
+                </select>
+              </div>
+              {cfg.schedule_freq === 'weekly' && (
+                <div style={{ flex: 1 }}>
+                  <label style={lbl}>Day</label>
+                  <select style={inp} value={cfg.schedule_dow} onChange={e => setCfg({ ...cfg, schedule_dow: Number(e.target.value) })}>
+                    {DOW.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                  </select>
+                </div>
+              )}
+              <div style={{ width: 110 }}>
+                <label style={lbl}>Time</label>
+                <select style={inp} value={cfg.schedule_hour} onChange={e => setCfg({ ...cfg, schedule_hour: Number(e.target.value) })}>
+                  {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-secondary, #f7f8fc)', borderRadius: 8, padding: '10px 12px', lineHeight: 1.5 }}>
+              Automatic emails are <strong>off</strong> — this dashboard won't be emailed on a schedule. You can still use <strong>Send now</strong> for a one-off.
+            </div>
+          )}
+
+          {/* Recipients are used by both the schedule and "Send now". */}
+          <div>
+            <label style={lbl}>Recipients (comma-separated emails)</label>
+            <textarea style={{ ...inp, minHeight: 64, resize: 'vertical' }} value={recipients} onChange={e => setRecipients(e.target.value)} placeholder="alice@co.com, bob@co.com" />
+          </div>
+          {cfg.last_sent_at && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Last sent: {new Date(cfg.last_sent_at).toLocaleString()}</div>}
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>The digest summarises each board on this dashboard (item counts + status breakdown) with a link. Times are IST.</div>
+        </div>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color,#e6e9ef)', display: 'flex', gap: 10 }}>
+          <button onClick={sendNow} disabled={sending} style={{ padding: '8px 14px', borderRadius: 7, border: '1px solid var(--border-color,#e6e9ef)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{sending ? 'Sending…' : 'Send now'}</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 7, border: '1px solid var(--border-color,#e6e9ef)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: '#9b72f5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Share dashboard with specific people ──────────────────────────────────────
+function ShareModal({ dashboardId, dashboardName, currentUserId, onClose, toast }) {
+  const [users, setUsers] = useState(null);   // all shareable users
+  const [selected, setSelected] = useState(new Set()); // user_ids shared with
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    Promise.all([getDashboardShareUsers(), getDashboardShares(dashboardId)])
+      .then(([all, shares]) => {
+        setUsers(all.filter(u => u.id !== currentUserId)); // owner always has access
+        setSelected(new Set(shares.map(s => s.user_id)));
+      })
+      .catch(() => { toast('Failed to load sharing info', 'error'); setUsers([]); });
+  }, [dashboardId, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggle = (id) => setSelected(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await setDashboardShares(dashboardId, [...selected]);
+      toast(selected.size ? `Shared with ${selected.size} ${selected.size === 1 ? 'person' : 'people'}` : 'Dashboard is now private', 'success');
+      onClose();
+    } catch { toast('Failed to save sharing', 'error'); } finally { setSaving(false); }
+  };
+
+  const q = search.trim().toLowerCase();
+  const list = (users || []).filter(u => !q || u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+
+  return (
+    <div onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 460, maxHeight: '82vh', background: 'var(--card-bg,#fff)', borderRadius: 14, border: '1px solid var(--border-color,#e6e9ef)', boxShadow: '0 20px 60px rgba(0,0,0,0.35)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color,#e6e9ef)', display: 'flex', alignItems: 'center' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary,#323338)' }}>🔗 Share dashboard</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted,#9699a6)', marginTop: 2 }}>Only you and the people you pick can see “{dashboardName}”.</div>
+          </div>
+          <button onClick={onClose} style={{ fontSize: 22, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+        </div>
+
+        <div style={{ padding: '14px 20px 0' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Search people…"
+            style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', border: '1px solid var(--border-color,#e6e9ef)', borderRadius: 8, fontSize: 13, background: 'var(--input-bg,var(--bg-secondary))', color: 'var(--text-primary)', outline: 'none' }} />
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {users === null ? (
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '12px 0' }}>Loading…</div>
+          ) : list.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '12px 0' }}>No people found.</div>
+          ) : list.map(u => {
+            const checked = selected.has(u.id);
+            const initials = (u.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+            return (
+              <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', background: checked ? 'rgba(155,114,245,0.10)' : 'transparent', border: '1px solid', borderColor: checked ? 'rgba(155,114,245,0.30)' : 'transparent' }}>
+                <input type="checkbox" checked={checked} onChange={() => toggle(u.id)} style={{ accentColor: '#9b72f5', width: 16, height: 16, flexShrink: 0 }} />
+                <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#b58bff,#7f55d6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{initials}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color,#e6e9ef)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)' }}>{selected.size ? `${selected.size} selected` : 'Private to you'}</span>
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 7, border: '1px solid var(--border-color,#e6e9ef)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={save} disabled={saving || users === null} style={{ padding: '8px 18px', borderRadius: 7, border: 'none', background: '#9b72f5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main DashboardPage ───────────────────────────────────────────────────────
 export default function DashboardPage({ dashboardId, dashboard, boards, onDashboardUpdate }) {
   const toast = useToast();
-  const { isManager } = useAuth();
+  const { isManager, isAdmin, user } = useAuth();
+  // Only the dashboard's creator (or an admin) may rename, edit widgets, schedule, or share it.
+  const isOwner = isAdmin || (dashboard?.created_by != null && dashboard.created_by === user?.id);
 
   const [widgets, setWidgets] = useState([]);
   const [loadingWidgets, setLoadingWidgets] = useState(true);
@@ -196,6 +406,9 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingWidget, setEditingWidget] = useState(null);
   const [filters, setFilters] = useState({});
+  const [drill, setDrill] = useState(null);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   const [dashName, setDashName] = useState(dashboard?.name || '');
   const [editingName, setEditingName] = useState(false);
@@ -241,6 +454,61 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
   const handleFetchBoard = useCallback((boardId, data) => {
     setBoardDataCache(prev => ({ ...prev, [boardId]: data }));
   }, []);
+
+  // ── Auto-refresh (live data, no mismatch) ───────────────────────────────────
+  // Every board a widget references is re-fetched on an interval and whenever the
+  // tab regains focus, so charts always reflect the current board data.
+  const referencedBoardIds = useMemo(() => {
+    const s = new Set();
+    widgets.forEach(w => {
+      const c = w.config || {};
+      if (c.board_id) s.add(Number(c.board_id));
+      (c.metrics || []).forEach(m => { if (m.board_id) s.add(Number(m.board_id)); });
+      (c.board_ids || []).forEach(b => s.add(Number(b)));
+    });
+    return [...s];
+  }, [widgets]);
+  const boardIdsKey = referencedBoardIds.join(',');
+
+  const [refreshMs, setRefreshMs] = useState(() => Number(localStorage.getItem(`dash_refresh_${dashboardId}`)) || 60000);
+  const [lastUpdated, setLastUpdated] = useState(Date.now());
+  const [refreshing, setRefreshing] = useState(false);
+  const [, setAgoTick] = useState(0);
+  const refreshingRef = useRef(false);
+
+  const refreshAll = useCallback(async () => {
+    if (refreshingRef.current) return;
+    if (!referencedBoardIds.length) { setLastUpdated(Date.now()); return; }
+    refreshingRef.current = true; setRefreshing(true);
+    try {
+      const results = await Promise.all(referencedBoardIds.map(id => getBoard(id).then(r => [id, r.data]).catch(() => null)));
+      setBoardDataCache(prev => {
+        const next = { ...prev };
+        results.forEach(r => { if (r) next[r[0]] = r[1]; });
+        return next;
+      });
+      setLastUpdated(Date.now());
+    } finally { refreshingRef.current = false; setRefreshing(false); }
+  }, [boardIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { localStorage.setItem(`dash_refresh_${dashboardId}`, String(refreshMs)); }, [refreshMs, dashboardId]);
+  useEffect(() => {
+    if (!refreshMs) return;
+    const id = setInterval(() => refreshAll(), refreshMs);
+    return () => clearInterval(id);
+  }, [refreshMs, refreshAll]);
+  // Re-fetch on tab focus when data is older than 20s (avoids hammering on quick switches).
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === 'visible' && Date.now() - lastUpdated > 20000) refreshAll(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [refreshAll, lastUpdated]);
+  // Tick the "updated Xs ago" label.
+  useEffect(() => { const id = setInterval(() => setAgoTick(t => t + 1), 10000); return () => clearInterval(id); }, []);
+
+  const agoSec = Math.max(0, Math.round((Date.now() - lastUpdated) / 1000));
+  const agoText = agoSec < 5 ? 'just now' : agoSec < 60 ? `${agoSec}s ago` : `${Math.floor(agoSec / 60)}m ago`;
+  const REFRESH_OPTIONS = [[0, 'Off'], [15000, '15s'], [30000, '30s'], [60000, '1m'], [300000, '5m']];
 
   const handleSaveName = async () => {
     const trimmed = dashName.trim();
@@ -290,7 +558,7 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
   // Save the new positions / sizes after drag or resize. Skips noop layouts.
   const layoutSaveTimer = useRef(null);
   const handleLayoutChange = (layout) => {
-    if (!isManager) return;
+    if (!isOwner) return;
     if (layoutSaveTimer.current) clearTimeout(layoutSaveTimer.current);
     layoutSaveTimer.current = setTimeout(() => {
       const byId = new Map(widgets.map(w => [String(w.id), w]));
@@ -336,8 +604,9 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
         widget={widget}
         filters={filters}
         boardCache={boardDataCache}
-        isManager={isManager}
+        isManager={isOwner}
         onUpdate={(upd) => handleTextUpdate(widget.id, upd)}
+        onDrill={setDrill}
       />
     );
   };
@@ -352,17 +621,41 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
             onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setDashName(dashboard?.name || ''); setEditingName(false); } }}
             style={{ fontSize: 18, fontWeight: 700, border: '2px solid #9b72f5', borderRadius: 6, padding: '2px 8px', outline: 'none', background: 'transparent', color: 'var(--text-primary,#323338)', minWidth: 200 }} />
         ) : (
-          <h2 onClick={() => isManager && setEditingName(true)} title={isManager ? 'Click to rename' : undefined}
-            style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary,#323338)', margin: 0, cursor: isManager ? 'pointer' : 'default' }}>
+          <h2 onClick={() => isOwner && setEditingName(true)} title={isOwner ? 'Click to rename' : undefined}
+            style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary,#323338)', margin: 0, cursor: isOwner ? 'pointer' : 'default' }}>
             {dashName}
           </h2>
         )}
+
+        {/* Live data controls */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted,#9699a6)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: refreshMs ? '#00c875' : '#c5c7d0', boxShadow: refreshMs ? '0 0 0 3px rgba(0,200,117,0.18)' : 'none' }} />
+            Updated {agoText}
+          </span>
+          {isOwner && (
+            <button onClick={() => setShowShare(true)} title="Choose who can see this dashboard"
+              style={{ height: 30, padding: '0 12px', borderRadius: 7, border: 'none', background: '#9b72f5', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>🔗 Share</button>
+          )}
+          {isOwner && (
+            <button onClick={() => setShowSchedule(true)} title="Scheduled email delivery"
+              style={{ height: 30, padding: '0 10px', borderRadius: 7, border: '1px solid var(--border-color,#e6e9ef)', background: 'var(--card-bg,#fff)', color: 'var(--text-secondary,#676879)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📧 Schedule</button>
+          )}
+          <button onClick={() => refreshAll()} title="Refresh now" disabled={refreshing}
+            style={{ width: 30, height: 30, borderRadius: 7, border: '1px solid var(--border-color,#e6e9ef)', background: 'var(--card-bg,#fff)', color: 'var(--text-secondary,#676879)', cursor: refreshing ? 'default' : 'pointer', fontSize: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ display: 'inline-block', animation: refreshing ? 'dashspin 0.8s linear infinite' : 'none' }}>🔄</span>
+          </button>
+          <select value={refreshMs} onChange={e => setRefreshMs(Number(e.target.value))} title="Auto-refresh interval"
+            style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid var(--border-color,#e6e9ef)', background: 'var(--card-bg,#fff)', color: 'var(--text-secondary,#676879)', fontSize: 12, cursor: 'pointer' }}>
+            {REFRESH_OPTIONS.map(([v, l]) => <option key={v} value={v}>{v ? `Auto · ${l}` : 'Auto · Off'}</option>)}
+          </select>
+        </div>
       </div>
 
       <FiltersBar
         filters={filters} onChange={setFilters}
         boards={boards} onExport={handleExport}
-        isManager={isManager} onAdd={() => setShowAddModal(true)}
+        isManager={isOwner} onAdd={() => setShowAddModal(true)}
         widgetsCount={widgets.length}
       />
 
@@ -378,7 +671,7 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
             <span style={{ fontSize: 56 }}>📊</span>
             <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary,#323338)', margin: 0 }}>Your dashboard is empty</h3>
             <p style={{ fontSize: 13, color: 'var(--text-muted,#9699a6)', margin: 0 }}>Choose from {Object.keys(WIDGETS).length}+ widget types to visualize your data</p>
-            {isManager && <button onClick={() => setShowAddModal(true)} style={{ padding: '10px 24px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>+ Add Your First Widget</button>}
+            {isOwner && <button onClick={() => setShowAddModal(true)} style={{ padding: '10px 24px', background: '#9b72f5', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', marginTop: 8 }}>+ Add Your First Widget</button>}
           </div>
         ) : (
           <ResponsiveGridLayout
@@ -389,8 +682,8 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
             rowHeight={60}
             margin={[16, 16]}
             containerPadding={[0, 0]}
-            isDraggable={isManager}
-            isResizable={isManager}
+            isDraggable={isOwner}
+            isResizable={isOwner}
             draggableHandle=".widget-drag-handle"
             resizeHandles={['se']}
             onLayoutChange={handleLayoutChange}
@@ -404,7 +697,7 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
               <div key={String(widget.id)}>
                 <WidgetCard
                   widget={widget}
-                  isManager={isManager}
+                  isManager={isOwner}
                   onEdit={setEditingWidget}
                   onDelete={handleDeleteWidget}
                 >
@@ -422,9 +715,13 @@ export default function DashboardPage({ dashboardId, dashboard, boards, onDashbo
       {editingWidget && (
         <WidgetModal initial={editingWidget} boards={boards} boardDataCache={boardDataCache} onFetchBoard={handleFetchBoard} onSave={handleUpdateWidget} onClose={() => setEditingWidget(null)} />
       )}
+      {drill && <DrillModal drill={drill} onClose={() => setDrill(null)} />}
+      {showSchedule && <ScheduleModal dashboardId={dashboardId} onClose={() => setShowSchedule(false)} toast={toast} />}
+      {showShare && <ShareModal dashboardId={dashboardId} dashboardName={dashName} currentUserId={user?.id} onClose={() => setShowShare(false)} toast={toast} />}
 
       <style>{`
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes dashspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .dashboard-rgl .react-grid-placeholder { background: #9b72f5 !important; opacity: 0.18 !important; border-radius: 12px !important; }
         .dashboard-rgl .react-resizable-handle { background-image: none; }
         .dashboard-rgl .react-resizable-handle::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px; border-right: 2px solid #c5c7d0; border-bottom: 2px solid #c5c7d0; border-bottom-right-radius: 2px; }

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { getDashboardSnapshots } from '../../api';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, LineChart, Line, LabelList,
@@ -290,13 +291,24 @@ const GoalWidget = {
 const ChartWidget = {
   type: 'chart', label: 'Chart', icon: '📊', category: 'Charts',
   desc: 'Pie, donut, bar, horizontal bar, or line chart', defaultW: 6,
-  View({ boardData, config, filters }) {
+  View({ boardData, config, filters, onDrill }) {
     if (!boardData) return <SkeletonPulse height={200} />;
     const data = computeStatusDist(boardData, config, filters);
     if (!data.length) return <EmptyWidgetState text="No data — pick a status / dropdown column" />;
     const t = config.chart_type || 'donut';
     const showLabels = config.show_labels !== false;
     const { axisProps, chartHeight } = rotatedXAxisProps(data);
+
+    // Drill-through: clicking a segment opens the underlying items.
+    const drillTo = (label) => {
+      if (!onDrill || !config.column_id) return;
+      const target = label === 'Empty' ? '' : label;
+      const matched = getFilteredItems(boardData, config.group_ids, filters)
+        .filter(it => String(it.values?.[config.column_id] ?? '') === String(target));
+      const colTitle = (boardData.columns || []).find(c => String(c.id) === String(config.column_id))?.title || 'Items';
+      onDrill({ title: `${colTitle}: ${label || '(empty)'}`, items: matched, columns: boardData.columns, boardId: config.board_id });
+    };
+    const barClick = (d) => drillTo(d?.name ?? d?.payload?.name);
 
     if (t === 'bar') return (
       <ResponsiveContainer width="100%" height="100%" minHeight={200}>
@@ -305,7 +317,7 @@ const ChartWidget = {
           <XAxis dataKey="name" {...axisProps} />
           <YAxis tick={{ fontSize: 11, fill: '#9699a6' }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
-          <Bar dataKey="value" radius={[4,4,0,0]}>
+          <Bar dataKey="value" radius={[4,4,0,0]} onClick={barClick} cursor={onDrill ? 'pointer' : 'default'}>
             {showLabels && <LabelList dataKey="value" position="top" style={{ fontSize: 11, fontWeight: 700, fill: '#323338' }} />}
             {data.map((e, i) => <Cell key={i} fill={e.color || CHART_COLORS[i % CHART_COLORS.length]} />)}
           </Bar>
@@ -321,7 +333,7 @@ const ChartWidget = {
             <XAxis type="number" tick={{ fontSize: 11, fill: '#9699a6' }} axisLine={false} tickLine={false} allowDecimals={false} />
             <YAxis type="category" dataKey="name" width={120} interval={0} tick={{ fontSize: 11, fill: '#676879' }} tickFormatter={s => truncate(s, 16)} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
-            <Bar dataKey="value" radius={[0,4,4,0]}>
+            <Bar dataKey="value" radius={[0,4,4,0]} onClick={barClick} cursor={onDrill ? 'pointer' : 'default'}>
               {showLabels && <LabelList dataKey="value" position="right" style={{ fontSize: 11, fontWeight: 700, fill: '#323338' }} />}
               {data.map((e, i) => <Cell key={i} fill={e.color || CHART_COLORS[i % CHART_COLORS.length]} />)}
             </Bar>
@@ -348,7 +360,7 @@ const ChartWidget = {
     return (
       <ResponsiveContainer width="100%" height="100%" minHeight={200}>
         <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="78%" innerRadius={inner} paddingAngle={t === 'donut' ? 2 : 0} label={showLabels ? ({ value }) => value : false} labelLine={false}>
+          <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="78%" innerRadius={inner} paddingAngle={t === 'donut' ? 2 : 0} label={showLabels ? ({ value }) => value : false} labelLine={false} onClick={barClick} cursor={onDrill ? 'pointer' : 'default'}>
             {data.map((e, i) => <Cell key={i} fill={e.color || CHART_COLORS[i % CHART_COLORS.length]} />)}
           </Pie>
           <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
@@ -787,14 +799,19 @@ const GaugeWidget = {
     const data = [{ name: 'val', value: pct, fill: pct >= 100 ? '#00c875' : (config.color || '#9b72f5') }];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-        <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-          <RadialBarChart innerRadius="65%" outerRadius="95%" data={data} startAngle={210} endAngle={-30}>
-            <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-            <RadialBar dataKey="value" cornerRadius={8} background={{ fill: '#f0f0f0' }} />
-          </RadialBarChart>
-        </ResponsiveContainer>
-        <div style={{ marginTop: -50, fontSize: 24, fontWeight: 800, color: config.color || '#9b72f5' }}>{Math.round(pct)}%</div>
-        <div style={{ fontSize: 11, color: '#676879', marginTop: 30 }}>{value} / {target} {config.label || ''}</div>
+        {/* Relative wrapper + absolutely-centered % so the value sits in the dial
+            centre at any widget height (was a fragile negative margin that
+            overlapped the arc when the card was short). */}
+        <div style={{ position: 'relative', width: '100%', flex: 1, minHeight: 160 }}>
+          <ResponsiveContainer width="100%" height="100%" minHeight={160}>
+            <RadialBarChart innerRadius="65%" outerRadius="95%" data={data} startAngle={210} endAngle={-30}>
+              <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+              <RadialBar dataKey="value" cornerRadius={8} background={{ fill: '#f0f0f0' }} />
+            </RadialBarChart>
+          </ResponsiveContainer>
+          <div style={{ position: 'absolute', top: '60%', left: 0, right: 0, transform: 'translateY(-50%)', textAlign: 'center', fontSize: 24, fontWeight: 800, color: config.color || '#9b72f5', pointerEvents: 'none' }}>{Math.round(pct)}%</div>
+        </div>
+        <div style={{ fontSize: 11, color: '#676879', marginTop: 6 }}>{value} / {target} {config.label || ''}</div>
       </div>
     );
   },
@@ -1431,13 +1448,18 @@ const StatusGridWidget = {
     const total = data.reduce((s, d) => s + d.value, 0);
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
-        {data.map((d, i) => (
-          <div key={i} style={{ padding: 12, borderRadius: 10, background: `${(d.color || CHART_COLORS[i])}15`, borderLeft: `4px solid ${d.color || CHART_COLORS[i]}` }}>
+        {data.map((d, i) => {
+          // Wrap the palette — without the modulo, boards with more statuses than
+          // palette entries rendered undefined colours past the end.
+          const cc = d.color || CHART_COLORS[i % CHART_COLORS.length];
+          return (
+          <div key={i} style={{ padding: 12, borderRadius: 10, background: `${cc}15`, borderLeft: `4px solid ${cc}` }}>
             <div style={{ fontSize: 11, color: '#676879', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>{d.name}</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: d.color || CHART_COLORS[i] }}>{d.value}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: cc }}>{d.value}</div>
             <div style={{ fontSize: 10, color: '#9699a6' }}>{total ? Math.round(d.value / total * 100) : 0}% of total</div>
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   },
@@ -1665,12 +1687,141 @@ const CountdownWidget = {
   },
 };
 
+// ───── Widget: History (trend over time from daily snapshots) ────────────────
+const HistoryWidget = {
+  type: 'history', label: 'History', icon: '📈', category: 'Time',
+  desc: 'How a metric changed over time (daily snapshots)', defaultW: 6,
+  View({ config }) {
+    const [series, setSeries] = useState(null);
+    useEffect(() => {
+      if (!config.board_id) { setSeries([]); return; }
+      let cancelled = false;
+      getDashboardSnapshots(config.board_id, config.days || 30)
+        .then(rows => {
+          if (cancelled) return;
+          const metric = config.metric || 'items';
+          setSeries((rows || []).map(r => ({
+            name: String(r.date).slice(5),
+            value: metric === 'items' ? (r.items || 0) : ((r.statuses || {})[metric] || 0),
+          })));
+        })
+        .catch(() => { if (!cancelled) setSeries([]); });
+      return () => { cancelled = true; };
+    }, [config.board_id, config.metric, config.days]);
+
+    if (series === null) return <SkeletonPulse height={200} />;
+    if (!series.length) return <EmptyWidgetState text="No history yet — daily snapshots build up over time" />;
+    return (
+      <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+        <AreaChart data={series} margin={{ top: 16, right: 16, left: -10, bottom: 4 }}>
+          <defs><linearGradient id="histg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#9b72f5" stopOpacity={0.35} /><stop offset="100%" stopColor="#9b72f5" stopOpacity={0} /></linearGradient></defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e6e9ef" vertical={false} />
+          <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#9699a6' }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: '#9699a6' }} axisLine={false} tickLine={false} allowDecimals={false} />
+          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e6e9ef', fontSize: 12 }} />
+          <Area type="monotone" dataKey="value" stroke="#9b72f5" strokeWidth={2.5} fill="url(#histg)" />
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+  },
+  ConfigForm({ config, onChange, board, boards }) {
+    const statusCol = (board?.columns || []).find(c => c.type === 'status');
+    const opts = (statusCol?.settings?.options || []).map(o => (typeof o === 'string' ? o : o.label));
+    return (
+      <>
+        <BoardSelect boards={boards} value={config.board_id} onChange={v => onChange({ ...config, board_id: v, metric: 'items' })} />
+        <Field label="Metric">
+          <select style={selectStyle} value={config.metric || 'items'} onChange={e => onChange({ ...config, metric: e.target.value })}>
+            <option value="items">Total items</option>
+            {opts.map(o => <option key={o} value={o}>Status: {o}</option>)}
+          </select>
+        </Field>
+        <Field label="Range">
+          <select style={selectStyle} value={config.days || 30} onChange={e => onChange({ ...config, days: Number(e.target.value) })}>
+            {[7, 30, 90, 180].map(d => <option key={d} value={d}>Last {d} days</option>)}
+          </select>
+        </Field>
+      </>
+    );
+  },
+};
+
+// ───── Widget: Cross-board Rollup (one number across many boards) ────────────
+const CrossBoardRollupWidget = {
+  type: 'cross_rollup', label: 'Cross-board Rollup', icon: '🧮', category: 'KPI',
+  desc: 'Aggregate one metric across several boards into a single value', defaultW: 4,
+  View({ config, boardCache, onDrill }) {
+    const ids = (config.board_ids || []).map(Number);
+    if (!ids.length) return <EmptyWidgetState text="Pick boards to roll up" />;
+    const metric = config.metric || 'count';
+    let total = 0; const breakdown = [];
+    for (const id of ids) {
+      const bd = boardCache?.[id];
+      if (!bd) continue;
+      const items = (bd.groups || []).flatMap(g => (g.items || []).map(it => ({ ...it, _groupName: g.name, _groupColor: g.color })));
+      let v = 0;
+      if (metric === 'count') v = items.length;
+      else {
+        const col = (bd.columns || []).find(c => (c.title || '').toLowerCase() === String(config.column_title || '').toLowerCase() && ['number', 'rollup', 'formula'].includes(c.type));
+        if (col) v = items.reduce((s, it) => { const n = parseNumber(it.values?.[col.id]); return s + (isNaN(n) ? 0 : n); }, 0);
+      }
+      total += v;
+      breakdown.push({ id, name: bd.name, value: v, items });
+    }
+    const fmt = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 4 }}>
+        <div style={{ textAlign: 'center', padding: '10px 0 6px' }}>
+          <div style={{ fontSize: 38, fontWeight: 800, color: '#9b72f5', lineHeight: 1 }}>{fmt(total)}</div>
+          <div style={{ fontSize: 12, color: '#676879', marginTop: 4 }}>{config.label || (metric === 'sum' ? config.column_title : 'items')} · {ids.length} boards</div>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+          {breakdown.map(b => (
+            <div key={b.id} onClick={() => onDrill?.({ title: b.name, items: b.items, columns: boardCache?.[b.id]?.columns || [], boardId: b.id })}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', borderRadius: 7, background: '#f5f6f8', fontSize: 12, cursor: onDrill ? 'pointer' : 'default' }}>
+              <span style={{ color: '#323338', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
+              <b style={{ color: '#9b72f5' }}>{fmt(b.value)}</b>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  },
+  ConfigForm({ config, onChange, boards }) {
+    const sel = config.board_ids || [];
+    const toggle = (id) => { const s = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id]; onChange({ ...config, board_ids: s }); };
+    return (
+      <>
+        <Field label="Boards">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 180, overflowY: 'auto', border: '1px solid var(--border-color,#e6e9ef)', borderRadius: 8, padding: 8 }}>
+            {(boards || []).map(b => (
+              <label key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', color: 'var(--text-primary,#323338)' }}>
+                <input type="checkbox" checked={sel.includes(b.id)} onChange={() => toggle(b.id)} style={{ accentColor: '#9b72f5' }} />{b.name}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <Field label="Metric">
+          <ButtonGroup value={config.metric || 'count'} onChange={v => onChange({ ...config, metric: v })} options={[['count', 'Count items'], ['sum', 'Sum a column']]} />
+        </Field>
+        {config.metric === 'sum' && (
+          <Field label="Column title (matched by name across boards)">
+            <input style={selectStyle} value={config.column_title || ''} onChange={e => onChange({ ...config, column_title: e.target.value })} placeholder="e.g. Budget" />
+          </Field>
+        )}
+        <Field label="Label"><input style={selectStyle} value={config.label || ''} onChange={e => onChange({ ...config, label: e.target.value })} placeholder="optional" /></Field>
+      </>
+    );
+  },
+};
+
 // ───── Registry ─────────────────────────────────────────────────────────────
 export const WIDGETS = {
   kpi: KpiWidget,
   kpi_delta: KpiDeltaWidget,
   sparkline: SparklineKpiWidget,
   multi_kpi: MultiMetricWidget,
+  cross_rollup: CrossBoardRollupWidget,
   goal: GoalWidget,
   quick_stats: QuickStatsWidget,
   chart: ChartWidget,
@@ -1698,6 +1849,7 @@ export const WIDGETS = {
   calendar: CalendarWidget,
   timeline: TimelineWidget,
   burndown: BurndownWidget,
+  history: HistoryWidget,
   countdown: CountdownWidget,
   workload: WorkloadWidget,
   leaderboard: LeaderboardWidget,
@@ -1708,11 +1860,11 @@ export const WIDGETS = {
 };
 
 export const WIDGET_CATEGORIES = [
-  { name: 'KPI & Metrics', types: ['kpi','kpi_delta','sparkline','multi_kpi','goal','quick_stats'] },
+  { name: 'KPI & Metrics', types: ['kpi','kpi_delta','sparkline','multi_kpi','cross_rollup','goal','quick_stats'] },
   { name: 'Charts', types: ['chart','stacked_bar','grouped_bar','battery','trend','cumulative','combo','funnel','radar','scatter','treemap','heatmap','gauge','radial','histogram'] },
   { name: 'Status', types: ['status_grid'] },
   { name: 'Tables & Lists', types: ['summary','top_n','pivot','items_list','activity'] },
-  { name: 'Time', types: ['deadlines','calendar','timeline','burndown','countdown'] },
+  { name: 'Time', types: ['deadlines','calendar','timeline','burndown','history','countdown'] },
   { name: 'People', types: ['workload','leaderboard','capacity'] },
   { name: 'Content', types: ['text','image','iframe'] },
 ];

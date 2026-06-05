@@ -6,8 +6,10 @@ const { requireAuth } = require('../middleware/auth');
 // Parse multi-owner value — handles JSON array or legacy single-name string.
 function parseOwners(val) {
   if (!val) return [];
-  try { const p = JSON.parse(val); return Array.isArray(p) ? p : p ? [String(p)] : []; }
-  catch { return val.trim() ? [val.trim()] : []; }
+  let arr;
+  try { arr = JSON.parse(val); } catch { return String(val).trim() ? [String(val).trim()] : []; }
+  if (!Array.isArray(arr)) arr = arr ? [arr] : [];
+  return arr.map(e => (e && typeof e === 'object') ? (e.name || '') : String(e)).filter(Boolean);
 }
 
 // GET /api/search?q=<query>
@@ -32,8 +34,10 @@ router.get('/', requireAuth, async (req, res) => {
       : `SELECT b.id, b.name, b.enforce_owner_visibility,
                 COALESCE(bm.is_owner, false) AS is_board_owner
          FROM boards b
-         JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
-         WHERE b.deleted_at IS NULL ORDER BY b.name`;
+         LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
+         WHERE b.deleted_at IS NULL
+           AND (b.visibility = 'org_wide' OR bm.user_id IS NOT NULL)
+         ORDER BY b.name`;
     const boardsRes = await pool.query(boardsQuery, isAdmin ? [] : [userId]);
     const boardIds = boardsRes.rows.map(r => r.id);
     if (!boardIds.length) return res.json([]);
@@ -42,10 +46,11 @@ router.get('/', requireAuth, async (req, res) => {
 
     // Search items by name or column values
     const itemsRes = await pool.query(
-      `SELECT i.id, i.name, i.board_id, g.name AS group_name
+      `SELECT i.id, i.name, g.board_id AS board_id, g.name AS group_name
        FROM items i
        JOIN groups g ON g.id = i.group_id
-       WHERE i.board_id = ANY($1::int[])
+       WHERE g.board_id = ANY($1::int[])
+         AND i.parent_item_id IS NULL
          AND (
            LOWER(i.name) LIKE $2
            OR EXISTS (
@@ -53,7 +58,7 @@ router.get('/', requireAuth, async (req, res) => {
              WHERE cv.item_id = i.id AND LOWER(cv.value::text) LIKE $2
            )
          )
-       ORDER BY i.board_id, g.position, i.position
+       ORDER BY g.board_id, g.position, i.position
        LIMIT 200`,
       [boardIds, term]
     );

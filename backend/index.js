@@ -86,6 +86,9 @@ app.use('/api/cmdk-search', require('./routes/cmdkSearch'));
 app.use('/api/my-work', require('./routes/myWork'));
 app.use('/api/dashboards', require('./routes/dashboards'));
 app.use('/api/date-cascade', require('./routes/dateCascade'));
+app.use('/api/connections', require('./routes/connections'));
+app.use('/api/time', require('./routes/time'));
+app.use('/api/ai', require('./routes/ai'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -236,6 +239,38 @@ async function start() {
     await pool.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS parent_item_id INT REFERENCES items(id) ON DELETE CASCADE`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_items_parent ON items(parent_item_id)`);
 
+    // Indexes that make server-side filter / sort / pagination scale to
+    // thousands of rows (column-scoped lookups + group/board pagination).
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_cv_column      ON column_values(column_id)`);
+
+    // ── Time tracking ───────────────────────────────────────────────────────────
+    // Individual work sessions; a row with ended_at NULL is a live running timer.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS time_entries (
+        id               SERIAL PRIMARY KEY,
+        item_id          INTEGER NOT NULL REFERENCES items(id)   ON DELETE CASCADE,
+        column_id        INTEGER NOT NULL REFERENCES columns(id) ON DELETE CASCADE,
+        board_id         INTEGER REFERENCES boards(id) ON DELETE CASCADE,
+        user_id          INTEGER,
+        user_name        TEXT,
+        started_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ended_at         TIMESTAMPTZ,
+        duration_seconds INTEGER NOT NULL DEFAULT 0,
+        billable         BOOLEAN NOT NULL DEFAULT true,
+        note             TEXT DEFAULT '',
+        created_at       TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_time_cell    ON time_entries(item_id, column_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_time_user    ON time_entries(user_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_time_running ON time_entries(user_id) WHERE ended_at IS NULL`);
+    // Per-user billing rate + weekly capacity (hours) for timesheets.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS hourly_rate    NUMERIC(10,2) DEFAULT 0`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_capacity NUMERIC(6,2) DEFAULT 40`);
+    console.log('✅ time_entries table + billing columns ready');
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_cv_col_item    ON column_values(column_id, item_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_items_group    ON items(group_id)`);
+
     // Extend role CHECK constraint to include 'member'
     // Drop old constraint (if any) and recreate with all 4 roles
     await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
@@ -273,6 +308,33 @@ async function start() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_form_fields_form ON form_fields(form_id)`);
     await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS item_name_label TEXT DEFAULT 'Item Name'`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS closed_message TEXT DEFAULT 'This form is no longer accepting responses.'`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS opens_at TIMESTAMP NULL`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS closes_at TIMESTAMP NULL`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS response_limit INTEGER NULL`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS captcha_enabled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS hide_branding BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS progress_bar_enabled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS submit_button_text TEXT DEFAULT 'Submit'`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS thank_you_title TEXT DEFAULT 'Thank you!'`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS redirect_url TEXT DEFAULT ''`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS confirmation_email_enabled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS confirmation_email_column_id INTEGER NULL`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS confirmation_email_subject TEXT DEFAULT 'We received your response'`);
+    await pool.query(`ALTER TABLE forms ADD COLUMN IF NOT EXISTS confirmation_email_body TEXT DEFAULT 'Thanks for submitting the form. We have received your response.'`);
+    await pool.query(`ALTER TABLE form_fields ADD COLUMN IF NOT EXISTS help_text TEXT DEFAULT ''`);
+    await pool.query(`ALTER TABLE form_fields ADD COLUMN IF NOT EXISTS placeholder TEXT DEFAULT ''`);
+    await pool.query(`ALTER TABLE form_fields ADD COLUMN IF NOT EXISTS conditional_logic JSONB DEFAULT '[]'::jsonb`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS form_submissions (
+        id           SERIAL PRIMARY KEY,
+        form_id      INTEGER REFERENCES forms(id) ON DELETE CASCADE,
+        item_id      INTEGER REFERENCES items(id) ON DELETE SET NULL,
+        response     JSONB DEFAULT '{}'::jsonb,
+        submitted_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_form_submissions_form ON form_submissions(form_id)`);
 
     // API Keys table
     await pool.query(`
@@ -347,7 +409,36 @@ async function start() {
       )
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_dashboard_widgets ON dashboard_widgets(dashboard_id)`);
-    console.log('✅ dashboards tables ready');
+
+    // Historical snapshots — one row per board per day for trend-over-time widgets.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS board_snapshots (
+        board_id      INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+        snapshot_date DATE NOT NULL,
+        data          JSONB NOT NULL DEFAULT '{}',
+        created_at    TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (board_id, snapshot_date)
+      )
+    `);
+    // Scheduled delivery config on dashboards.
+    await pool.query(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS schedule_enabled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS schedule_freq    TEXT DEFAULT 'daily'`);
+    await pool.query(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS schedule_dow     INTEGER DEFAULT 1`);
+    await pool.query(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS schedule_hour    INTEGER DEFAULT 9`);
+    await pool.query(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS recipients       JSONB DEFAULT '[]'`);
+    await pool.query(`ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS last_sent_at     TIMESTAMPTZ`);
+    // Per-user sharing: a dashboard is visible to its creator + anyone listed here
+    // (admins always see all). This keeps each person's dashboards private by default.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dashboard_shares (
+        dashboard_id INTEGER NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+        user_id      INTEGER NOT NULL REFERENCES users(id)      ON DELETE CASCADE,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (dashboard_id, user_id)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_dashboard_shares_user ON dashboard_shares(user_id)`);
+    console.log('✅ dashboards tables ready (+ snapshots, schedule, shares)');
 
     // ── Date Cascade tables ────────────────────────────────────────────────────
     await pool.query(`
@@ -444,12 +535,26 @@ async function start() {
     } catch (err) {
       console.error('[emailPoller] failed to start:', err.message);
     }
+    // Inbound IMAP poller (email → task creation) is DISABLED. The feature was
+    // removed from the product; leaving the poller off ensures no items are
+    // ever created from incoming mail. (Service files remain on disk, dormant.)
+    // try {
+    //   require('./services/imapPoller').start();
+    // } catch (err) {
+    //   console.error('[imapPoller] failed to start:', err.message);
+    // }
     // Date-arrives automation engine — runs hourly, fires "When date arrives"
     // rules for any item whose date column hits the configured target.
     try {
       require('./services/dateArrivesEngine').startDateArrivesEngine();
     } catch (err) {
       console.error('[dateArrivesEngine] failed to start:', err.message);
+    }
+    // Dashboard engine — daily historical snapshots + scheduled digest emails.
+    try {
+      require('./services/dashboardEngine').start();
+    } catch (err) {
+      console.error('[dashboardEngine] failed to start:', err.message);
     }
   });
 }

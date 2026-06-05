@@ -3,23 +3,34 @@ import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import ManualCascadePopover from './automation/ManualCascadePopover';
-import ColumnCell, { parseOwners, getSoftStyle } from './ColumnCell';
+import ColumnCell, { parseOwners, getSoftStyle, LinkedItemsContext } from './ColumnCell';
 import AddColumnModal from './AddColumnModal';
 import StatusOptionsEditor from './StatusOptionsEditor';
 import TrashPanel from './TrashPanel';
+import TimesheetPanel from './TimesheetPanel';
 import BoardMembersPanel from './BoardMembersPanel';
 import DefaultValueEditor from './DefaultValueEditor';
 import ItemDetailPanel from './ItemDetailPanel';
+import KanbanView from './KanbanView';
+import BoardDashboardView from './BoardDashboardView';
+import CalendarView from './views/CalendarView';
+import TimelineView from './views/TimelineView';
+import WorkloadView from './views/WorkloadView';
+import ChartView from './views/ChartView';
+import CardsView from './views/CardsView';
+import MapView from './views/MapView';
 import FormulaEditor from './FormulaEditor';
+import ProgressSettingsEditor from './ProgressSettingsEditor';
 import { evaluateFormula, parseDate } from '../utils/formulaEngine';
 import {
-  createGroup, updateGroup, deleteGroup, reorderGroups,
+  createGroup, updateGroup, deleteGroup, reorderGroups, duplicateGroup, moveGroupItems,
   createItem, updateItem, deleteItem, copyItem, moveItem,
-  createColumn, updateColumn, deleteColumn, reorderColumns,
+  createColumn, updateColumn, deleteColumn, reorderColumns, duplicateColumn,
   upsertColumnValue, bulkUpsertColumnValue, updateBoard, updateBoardEmailSettings,
   getTrashItems, getAutomations,
   exportBoard, importBoardRows,
   getBoardViews, createView, updateView, deleteView, reorderViews,
+  getBoard,
 } from '../api';
 import { useToast } from './Toast';
 import { useAuth } from '../context/AuthContext';
@@ -648,14 +659,17 @@ const CHANGEABLE_TYPES = [
   { value: 'formula', label: 'Formula', icon: '🧮' },
 ];
 
-function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, onChangeType, onSetDefault, onToggleVisibility, isManager, sortConfig, onSort }) {
+function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, onEditProgress, onChangeType, onSetDefault, onToggleVisibility, isManager, sortConfig, onSort, onDuplicate, onAddColumn, onSaveSettings }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [descEdit, setDescEdit] = useState(false);
+  const [descDraft, setDescDraft] = useState('');
   const menuRef = useRef(null);
   const btnRef = useRef(null);
+  const hasDesc = !!(col.settings?.description && String(col.settings.description).trim());
 
   // Close menu on outside click
   useEffect(() => {
@@ -785,6 +799,11 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
         <span title="Owner column — drives Strict access mode" style={{ fontSize: 10, color: '#9b72f5', flexShrink: 0 }}>👤</span>
       )}
 
+      {/* Description indicator */}
+      {hasDesc && (
+        <span title={col.settings.description} style={{ fontSize: 11, color: '#9699a6', flexShrink: 0, cursor: 'help' }}>ⓘ</span>
+      )}
+
       {/* Options button — always visible so it's easy to click on narrow columns */}
       {showMenu && (
         <button
@@ -889,6 +908,7 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
           {col.type === 'status' && menuItem(handleEditStatus, '🏷️ Edit Labels')}
           {col.type === 'dropdown' && isManager && menuItem(handleEditStatus, '⚙️ Edit Options')}
           {col.type === 'formula' && isManager && menuItem(() => { setMenuOpen(false); onEditFormula?.(col); }, '🧮 Edit Formula')}
+          {col.type === 'progress' && isManager && menuItem(() => { setMenuOpen(false); onEditProgress?.(col); }, '📊 Progress Settings')}
           {col.type === 'person' && isManager && menuItem(
             handleToggleVisibility,
             <span title="When Strict access mode is on, items are visible only to people listed in this column.">
@@ -899,6 +919,38 @@ function ColumnHeader({ col, onRename, onDelete, onEditStatus, onEditFormula, on
             handleSetDefault,
             <>⚡ Default Value{(col.settings?.defaultValue !== undefined && col.settings?.defaultValue !== null && String(col.settings.defaultValue) !== '') ? <span style={{ color: '#9b72f5', marginLeft: 4 }}>✓</span> : null}</>
           )}
+
+          {/* Description */}
+          {isManager && (
+            <div>
+              <div
+                onClick={() => { setDescDraft(col.settings?.description || ''); setDescEdit(v => !v); }}
+                style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--menu-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}
+              >
+                <span>📝 {hasDesc ? 'Edit description' : 'Add description'}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{descEdit ? '▲' : '▼'}</span>
+              </div>
+              {descEdit && (
+                <div style={{ padding: '6px 10px 10px', borderTop: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+                  <textarea
+                    autoFocus value={descDraft} onChange={e => setDescDraft(e.target.value)}
+                    placeholder="What is this column for?"
+                    style={{ width: '100%', boxSizing: 'border-box', minHeight: 56, border: '1px solid var(--border-color)', borderRadius: 6, padding: '6px 8px', fontSize: 12, background: 'var(--card-bg)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical' }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    <button onClick={() => { onSaveSettings?.(col, { description: descDraft.trim() }); setDescEdit(false); setMenuOpen(false); }}
+                      style={{ flex: 1, padding: '5px 8px', background: '#9b72f5', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer' }}>Save</button>
+                    <button onClick={() => setDescEdit(false)} style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--border-color)', borderRadius: 5, fontSize: 12, color: 'var(--text-secondary)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {isManager && menuItem(() => { setMenuOpen(false); onDuplicate?.(col.id); }, '⧉ Duplicate column')}
+          {isManager && menuItem(() => { setMenuOpen(false); onAddColumn?.(col, 'left'); }, '⬅ Add column to the left')}
+          {isManager && menuItem(() => { setMenuOpen(false); onAddColumn?.(col, 'right'); }, '➡ Add column to the right')}
 
           <div style={{ borderTop: '1px solid var(--menu-divider)', margin: '4px 0' }} />
           {menuItem(() => { setMenuOpen(false); onSort(col.id, 'asc'); }, <><span style={{ fontSize: 12 }}>↑</span> Sort A → Z</>)}
@@ -951,6 +1003,9 @@ function colWidth(col) {
     case 'rating': return 120;
     case 'color_picker': return 110;
     case 'tags': return 160;
+    case 'connect_boards': case 'mirror': return 200;
+    case 'dependency': return 190;
+    case 'rollup': return 120;
     default: return 140;
   }
 }
@@ -1084,7 +1139,7 @@ const ItemRow = React.memo(function ItemRow({ item, group, columns, isFocused, o
             <ColumnCell
               column={col}
               value={item.values?.[col.id] || ''}
-              onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager)) ? undefined : val => onValueChange(item.id, col.id, val, col.title)}
+              onChange={(col.type === 'creation_log' || (col.type !== 'person' && !canEdit)) ? undefined : val => onValueChange(item.id, col.id, val, col.title)}
               onEditSettings={onEditSettings}
               item={item}
               columns={columns}
@@ -1167,11 +1222,12 @@ function SubitemRow({ subitem, group, columns, onUpdate, onDelete, onValueChange
           <ColumnCell
             column={col}
             value={subitem.values?.[col.id] || ''}
-            onChange={(col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager))
+            onChange={(col.type === 'creation_log' || (col.type !== 'person' && !canEdit))
               ? undefined
               : val => onValueChange(subitem.id, col.id, val)}
             onEditSettings={() => { }}
             item={subitem}
+            columns={columns}
           />
         </td>
       ))}
@@ -1980,12 +2036,13 @@ function MobileCardView({ group, columns, canEdit, isManager, onItemCreate, onIt
                   column={col}
                   value={item.values?.[col.id] || ''}
                   onChange={
-                    (col.type === 'creation_log' || !canEdit || (col.type === 'person' && !isManager))
+                    (col.type === 'creation_log' || (col.type !== 'person' && !canEdit))
                       ? undefined
                       : val => onValueChange(item.id, col.id, val, col.title)
                   }
                   onEditSettings={onEditSettings}
                   item={item}
+                  columns={columns}
                 />
               </div>
             </div>
@@ -2469,7 +2526,7 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
 
   return (
     <div style={{
-      height: 38, background: 'var(--viewbar-bg)',
+      height: 42, background: 'var(--viewbar-bg)',
       backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
       borderBottom: '1px solid var(--topbar-border)',
       display: 'flex', alignItems: 'center', padding: '0 16px',
@@ -2492,9 +2549,9 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
               display: 'flex', alignItems: 'center', height: '100%', gap: 4,
               borderBottom: isActive ? '2px solid #9b72f5' : '2px solid transparent',
               borderLeft: isDropTarget ? '2px solid #9b72f5' : '2px solid transparent',
-              padding: '0 4px 0 10px',
-              fontSize: 13, fontWeight: 500,
-              color: isActive ? '#9b72f5' : 'var(--text-secondary)',
+              padding: '0 4px 0 11px',
+              fontSize: 14.5, fontWeight: 600,
+              color: isActive ? '#9b72f5' : 'var(--text-primary)',
               cursor: isManager ? 'grab' : 'pointer', userSelect: 'none', flexShrink: 0,
               transition: 'color 0.12s, border-left-color 0.12s',
             }}
@@ -2502,14 +2559,14 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
             onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--hover-bg, #f5f6f8)'; }}
             onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = ''; }}
           >
-            <span style={{ fontSize: 13 }}>⊞</span>
+            <span style={{ fontSize: 14.5 }}>⊞</span>
             <InlineEdit
               value={view.name}
               onSave={name => onRename(view.id, name)}
-              style={{ fontSize: 13, fontWeight: 500, color: isActive ? '#9b72f5' : 'var(--text-secondary)', maxWidth: 140 }}
+              style={{ fontSize: 14.5, fontWeight: 600, color: isActive ? '#9b72f5' : 'var(--text-primary)', maxWidth: 140 }}
             />
             {isMain && (
-              <span title="Main Table — filters & hidden columns/groups cannot be applied here" style={{ fontSize: 11, color: isActive ? '#9b72f5' : '#9699a6', flexShrink: 0 }}>🔒</span>
+              <span title="Main Table — filters & hidden columns/groups cannot be applied here" style={{ fontSize: 12, color: isActive ? '#9b72f5' : '#9699a6', flexShrink: 0 }}>🔒</span>
             )}
             {showDot && (
               <span title="Unsaved changes" style={{ width: 7, height: 7, borderRadius: '50%', background: '#fdab3d', flexShrink: 0 }} />
@@ -2538,8 +2595,8 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
         <button
           onClick={onCreate}
           style={{
-            marginLeft: 6, padding: '4px 12px', fontSize: 12, fontWeight: 500,
-            color: 'var(--text-secondary)', border: '1px dashed var(--border-color)',
+            marginLeft: 6, padding: '5px 13px', fontSize: 13, fontWeight: 600,
+            color: 'var(--text-primary)', border: '1px dashed var(--border-color)',
             borderRadius: 6, background: 'transparent', cursor: 'pointer', flexShrink: 0,
           }}
           onMouseEnter={e => { e.currentTarget.style.color = '#9b72f5'; e.currentTarget.style.borderColor = '#9b72f5'; }}
@@ -2587,6 +2644,11 @@ function ViewTabBar({ views, activeViewId, mainViewId, unsavedChanges, onSwitch,
 // ── Condition options by column type ──────────────────────────────────────────
 function conditionsFor(colType) {
   switch (colType) {
+    case 'connect_boards':
+      return [
+        { value: 'is_empty', label: 'has no links' },
+        { value: 'is_not_empty', label: 'has links' },
+      ];
     case 'status':
     case 'priority':
     case 'dropdown':
@@ -3038,6 +3100,21 @@ function ViewFilterPanel({ cols, board, activeFilters, setActiveFilters, hiddenC
   );
 }
 
+// Flatten a server-resolved mirror value ({type, items:[{v}]}) into plain text
+// so it participates in filtering and sorting like any other column.
+function mirrorPlainText(raw) {
+  if (!raw) return '';
+  try {
+    const d = JSON.parse(raw);
+    if (!Array.isArray(d.items)) return '';
+    return d.items.map(e => {
+      let v = e.v;
+      try { const a = JSON.parse(v); if (Array.isArray(a)) v = a.join(' '); } catch { /* plain */ }
+      return v;
+    }).join(' ');
+  } catch { return ''; }
+}
+
 // ── Filter logic ──────────────────────────────────────────────────────────────
 function matchesFilter(item, rule) {
   const { column_id, column_type, condition, value } = rule;
@@ -3049,6 +3126,9 @@ function matchesFilter(item, rule) {
   } else {
     itemValue = item.values?.[column_id] || item.values?.[colIdStr] || '';
   }
+
+  // Mirror values are JSON; compare against their flattened display text.
+  if (column_type === 'mirror') itemValue = mirrorPlainText(itemValue);
 
   // Person columns store a JSON-encoded array (e.g. '["Alice","Bob"]').
   // Compare by parsing and checking set intersection instead of a raw string match.
@@ -3121,11 +3201,111 @@ function matchesFilter(item, rule) {
 }
 
 
+// ── CSV export for a group ────────────────────────────────────────────────────
+function flattenCsvValue(raw, col) {
+  if (raw == null || raw === '') return '';
+  if (col.type === 'mirror') {
+    try { const d = JSON.parse(raw); return (d.items || []).map(e => e.v).join('; '); } catch { return ''; }
+  }
+  if (['person', 'dropdown', 'connect_boards', 'dependency'].includes(col.type)) {
+    try { const a = JSON.parse(raw); if (Array.isArray(a)) return a.join('; '); } catch { /* plain */ }
+  }
+  return String(raw);
+}
+function csvEscape(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function exportGroupCsv(group, cols) {
+  const headers = ['Item', ...cols.map(c => c.title)];
+  const rows = (group.items || []).map(it => [it.name, ...cols.map(c => flattenCsvValue(it.values?.[c.id], c))]);
+  const csv = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(group.name || 'group').replace(/[^\w\- ]+/g, '')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── Group options menu (monday-style ⋯) ───────────────────────────────────────
+function GroupMenu({ group, groups, cols, collapsed, isManager,
+  onToggleCollapse, onCollapseAll, onExpandAll, onDuplicate, onAdd, onMoveItems, onExport, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [moveOpen, setMoveOpen] = useState(false);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => { if (menuRef.current && !menuRef.current.contains(e.target) && btnRef.current && !btnRef.current.contains(e.target)) { setOpen(false); setMoveOpen(false); } };
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); setMoveOpen(false); } };
+    document.addEventListener('mousedown', onDown); document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const openMenu = () => {
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 240) });
+    setOpen(o => !o);
+  };
+  const run = (fn) => () => { setOpen(false); setMoveOpen(false); fn && fn(); };
+  const Item = ({ onClick, children, danger, arrow }) => (
+    <div onClick={onClick} style={{ padding: '8px 14px', fontSize: 13, cursor: 'pointer', color: danger ? '#e2445c' : 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 9 }}
+      onMouseEnter={e => e.currentTarget.style.background = danger ? 'var(--menu-danger-hover)' : 'var(--menu-hover)'}
+      onMouseLeave={e => e.currentTarget.style.background = ''}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>{children}</span>{arrow && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>▸</span>}
+    </div>
+  );
+  const divider = <div style={{ height: 1, background: 'var(--menu-divider)', margin: '4px 0' }} />;
+  const otherGroups = (groups || []).filter(g => g.id !== group.id);
+
+  return (
+    <>
+      <button ref={btnRef} onClick={openMenu} title="Group options"
+        style={{ marginLeft: 4, color: open ? '#9b72f5' : '#9699a6', fontSize: 16, lineHeight: 1, padding: '2px 8px', borderRadius: 4, border: 'none', background: open ? 'var(--column-button-active-bg)' : 'transparent', cursor: 'pointer' }}>⋯</button>
+      {open && createPortal(
+        <div ref={menuRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, background: 'var(--menu-bg)', borderRadius: 10, boxShadow: 'var(--menu-shadow)', border: '1px solid var(--menu-border)', minWidth: 210, overflow: 'visible', backdropFilter: 'blur(18px)' }}>
+          <div style={{ padding: '9px 14px 7px', borderBottom: '1px solid var(--border-color)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: group.color }} />{group.name}
+          </div>
+          <Item onClick={run(onToggleCollapse)}>{collapsed ? '▸ Expand' : '▾ Collapse'}</Item>
+          <Item onClick={run(onCollapseAll)}>⊟ Collapse all</Item>
+          <Item onClick={run(onExpandAll)}>⊞ Expand all</Item>
+          {isManager && <>
+            {divider}
+            <Item onClick={run(onDuplicate)}>⧉ Duplicate group</Item>
+            <Item onClick={run(() => onAdd('above'))}>↑ Add group above</Item>
+            <Item onClick={run(() => onAdd('below'))}>↓ Add group below</Item>
+            {otherGroups.length > 0 && (group.items || []).length > 0 && (
+              <div style={{ position: 'relative' }} onMouseEnter={() => setMoveOpen(true)} onMouseLeave={() => setMoveOpen(false)}>
+                <Item arrow>➜ Move all items to</Item>
+                {moveOpen && (
+                  <div style={{ position: 'absolute', top: 0, left: '100%', background: 'var(--menu-bg)', border: '1px solid var(--menu-border)', borderRadius: 10, boxShadow: 'var(--menu-shadow)', minWidth: 170, maxHeight: 260, overflowY: 'auto', zIndex: 10000 }}>
+                    {otherGroups.map(g => (
+                      <Item key={g.id} onClick={run(() => onMoveItems(g.id))}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: g.color }} />{g.name}</span></Item>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>}
+          {divider}
+          <Item onClick={run(onExport)}>⬇ Export to CSV</Item>
+          {isManager && <>{divider}<Item onClick={run(onDelete)} danger>🗑 Delete group</Item></>}
+        </div>, document.body)}
+    </>
+  );
+}
+
 // ── VirtualisedGroups — renders all groups with row-level virtualisation ──────
 function VirtualisedGroups({
   filteredGroups, cols, allCols, isManager, canEdit, scrollContainerRef, selectedRowItemId,
   dropTarget, groupDragSrc, groupDropOver, selectedItems,
-  handleGroupUpdate, handleGroupDelete, handleItemCreate, handleItemUpdate,
+  handleGroupUpdate, handleGroupDelete, handleGroupDuplicate, handleGroupMoveItems, handleGroupAdd,
+  handleItemCreate, handleItemUpdate,
   handleItemDelete, handleItemCopy, handleValueChange, handleColumnSettingsSave,
   handleDragStart, handleDragEnd, handleDragOver, handleDrop, setDetailItemId,
   handleGroupDragStart, handleGroupDragEnd, handleGroupDragOver, handleGroupDrop,
@@ -3251,14 +3431,21 @@ function VirtualisedGroups({
                     placeholder="Group name"
                   />
                   <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: group.color, borderRadius: 10, padding: '1px 7px', opacity: 0.85 }}>{group.items?.length || 0}</span>
-                  {isManager && (
-                    <button
-                      onClick={() => { if (confirm('Delete this group and all its items?')) handleGroupDelete(group.id); }}
-                      style={{ marginLeft: 8, color: '#c5c7d0', fontSize: 12, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = '#e2445c'; e.currentTarget.style.borderColor = '#e2445c'; }}
-                      onMouseLeave={e => { e.currentTarget.style.color = '#c5c7d0'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-                    >Delete group</button>
-                  )}
+                  <GroupMenu
+                    group={group}
+                    groups={filteredGroups}
+                    cols={cols}
+                    collapsed={collapsed}
+                    isManager={isManager}
+                    onToggleCollapse={() => toggleGroup(group.id)}
+                    onCollapseAll={() => setCollapsedGroups(new Set(filteredGroups.map(g => g.id)))}
+                    onExpandAll={() => setCollapsedGroups(new Set())}
+                    onDuplicate={() => handleGroupDuplicate(group.id)}
+                    onAdd={(where) => handleGroupAdd(group.id, where)}
+                    onMoveItems={(targetId) => handleGroupMoveItems(group.id, targetId)}
+                    onExport={() => exportGroupCsv(group, cols)}
+                    onDelete={() => { if (confirm('Delete this group and all its items?')) handleGroupDelete(group.id); }}
+                  />
                 </div>
               </td>
             </tr>
@@ -3482,9 +3669,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   const [showForms, setShowForms] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [showTimesheet, setShowTimesheet] = useState(false);
   const [trashCount, setTrashCount] = useState(0);
   const [editingStatusCol, setEditingStatusCol] = useState(null);
   const [editingFormulaCol, setEditingFormulaCol] = useState(null);
+  const [editingProgressCol, setEditingProgressCol] = useState(null);
   const [defaultEditor, setDefaultEditor] = useState(null); // { col, anchorRect }
   const toast = useToast();
   const { isManager, canEdit } = useAuth();
@@ -3744,6 +3933,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     onBoardChange(prev => ({ ...prev, ...updater(prev) }));
   }, [onBoardChange]);
 
+  // Latest columns, readable from stable callbacks without stale closures.
+  const boardColsRef = useRef([]);
+  boardColsRef.current = board.columns || [];
+  // Where to insert the next column created via the Add Column modal (null = append).
+  const pendingColInsertRef = useRef(null);
+
+  // Re-fetch the whole board (used after a connection changes so the server can
+  // recompute mirror / rollup values that depend on linked-item data).
+  const reloadBoardData = useCallback(async () => {
+    try { const r = await getBoard(board.id); onBoardChange(() => r.data); } catch { /* keep current */ }
+  }, [board.id, onBoardChange]);
+
   // ── View helpers ──────────────────────────────────────────────────────────
   // Handles old array format (just filter rules) and new object format
   const parseViewFilters = (raw) => {
@@ -3762,6 +3963,20 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   // stays locked (no filters, no hidden columns/groups, can't be deleted).
   const mainViewId = views.find(v => v.is_main)?.id ?? views[0]?.id ?? null;
   const isMainView = activeViewId !== null && activeViewId === mainViewId;
+  const activeView = views.find(v => v.id === activeViewId) || null;
+  const activeViewType = activeView?.type || 'table';
+
+  // Switch the active view between table and kanban layouts (persisted).
+  const handleViewTypeChange = useCallback(async (nextType) => {
+    if (!activeViewId || nextType === activeViewType) return;
+    setViews(prev => prev.map(v => v.id === activeViewId ? { ...v, type: nextType } : v)); // optimistic
+    try {
+      await updateView(activeViewId, { type: nextType });
+    } catch {
+      setViews(prev => prev.map(v => v.id === activeViewId ? { ...v, type: activeViewType } : v)); // rollback
+      toast('Failed to switch view', 'error');
+    }
+  }, [activeViewId, activeViewType, toast]);
 
   const handleSwitchView = (view) => {
     const isMain = view.id === mainViewId;
@@ -4097,6 +4312,46 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     } catch { toast('Failed to delete group', 'error'); }
   }, [updateLocalBoard, toast]);
 
+  const handleGroupDuplicate = useCallback(async (id) => {
+    try {
+      const ng = await duplicateGroup(id);
+      updateLocalBoard(b => {
+        const idx = b.groups.findIndex(g => g.id === id);
+        const groups = [...b.groups];
+        groups.splice(idx < 0 ? groups.length : idx + 1, 0, ng);
+        return { groups };
+      });
+      toast('Group duplicated', 'success');
+    } catch { toast('Failed to duplicate group', 'error'); }
+  }, [updateLocalBoard, toast]);
+
+  const handleGroupMoveItems = useCallback(async (srcId, targetId) => {
+    try {
+      await moveGroupItems(srcId, targetId);
+      await reloadBoardData();
+      toast('Items moved', 'success');
+    } catch { toast('Failed to move items', 'error'); }
+  }, [reloadBoardData, toast]);
+
+  // Add a new group above/below a reference group, then persist the order.
+  const handleGroupAdd = useCallback(async (referenceGroupId, where) => {
+    try {
+      const r = await createGroup({ board_id: board.id, name: 'New Group', color: GROUP_COLORS[board.groups.length % GROUP_COLORS.length] });
+      const newG = { ...r.data, items: [] };
+      let ordered = null;
+      updateLocalBoard(b => {
+        const idx = b.groups.findIndex(g => g.id === referenceGroupId);
+        const insertAt = idx < 0 ? b.groups.length : (where === 'above' ? idx : idx + 1);
+        const groups = [...b.groups];
+        groups.splice(insertAt, 0, newG);
+        ordered = groups.map(g => g.id);
+        return { groups };
+      });
+      if (ordered) await reorderGroups(board.id, ordered).catch(() => {});
+      toast('Group added', 'success');
+    } catch { toast('Failed to add group', 'error'); }
+  }, [board.id, board.groups, updateLocalBoard, toast]);
+
   // ── Items ─────────────────────────────────────────────────────────────────
   const handleItemCreate = useCallback(async (groupId, name) => {
     const r = await createItem({ group_id: groupId, name });
@@ -4232,7 +4487,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           ),
         })),
       }));
-    } catch { toast('Failed to save value', 'error'); }
+    } catch (err) { toast(err.response?.data?.error || 'Failed to save value', 'error'); }
   }, [updateLocalBoard, toast]);
 
   // ── Column values ─────────────────────────────────────────────────────────
@@ -4279,6 +4534,34 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       if (r.data.triggeredAutomations?.length) fireAutomations(r.data.triggeredAutomations, toast);
       if (r.data.movedItem) toast('Item moved by automation', 'success');
 
+      // Editing a connection can change mirror/rollup values elsewhere on the
+      // board — those are computed server-side, so refetch to pull fresh values.
+      const changedCol = boardColsRef.current.find(c => c.id === columnId);
+      if (changedCol?.type === 'connect_boards' &&
+          boardColsRef.current.some(c => c.type === 'mirror' || c.type === 'rollup')) {
+        reloadBoardData();
+      }
+
+      // Dependency auto-shift: apply the server's rescheduled timelines, then
+      // refetch so the critical-path highlight reflects the new schedule.
+      const shifts = r.data.dependencyShifts || [];
+      if (shifts.length) {
+        updateLocalBoard(b => ({
+          groups: b.groups.map(g => ({
+            ...g,
+            items: g.items.map(i => {
+              const s = shifts.find(x => x.item_id === i.id);
+              return s ? { ...i, values: { ...i.values, [s.column_id]: s.value } } : i;
+            }),
+          })),
+        }));
+        toast(`⚡ ${shifts.length} dependent task${shifts.length > 1 ? 's' : ''} rescheduled`, 'success');
+        reloadBoardData();
+      } else if (changedCol?.type === 'timeline' && boardColsRef.current.some(c => c.type === 'dependency')) {
+        // duration/date change with no shift can still alter the critical path
+        reloadBoardData();
+      }
+
       // ── Date Cascade result ────────────────────────────────────────────────
       if (r.data.cascadeResult?.success) {
         const { datesCalculated, stepsUpdated } = r.data.cascadeResult;
@@ -4294,35 +4577,82 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         }));
         toast(`⚡ ${stepsUpdated} step date${stepsUpdated !== 1 ? 's' : ''} auto-filled`, 'success');
       }
-    } catch { toast('Failed to save value', 'error'); }
+    } catch (err) { toast(err.response?.data?.error || 'Failed to save value', 'error'); }
   }, [updateLocalBoard, toast]);
 
   // ── Columns ───────────────────────────────────────────────────────────────
-  const handleColumnAdd = async ({ title, type }) => {
+  const handleColumnAdd = async ({ title, type, settings: providedSettings }) => {
     const finalType = type;
-    let settings = {};
+    let settings = providedSettings || {};
     if (type === 'person') {
       // Always keep as person type — multi-select avatars work for all board visibilities
       settings = { options: (board.members || []).map(m => m.name) };
     }
+    const insertAt = pendingColInsertRef.current;
+    pendingColInsertRef.current = null;
     try {
       const r = await createColumn({ board_id: board.id, title, type: finalType, settings });
       const newCol = r.data;
-      updateLocalBoard(b => ({
-        columns: [...b.columns, newCol],
-        groups: b.groups.map(g => ({
-          ...g,
-          items: g.items.map(item => ({
-            ...item,
-            values: { ...item.values, [newCol.id]: '' },
-            subitems: (item.subitems || []).map(sub => ({ ...sub, values: { ...sub.values, [newCol.id]: '' } })),
+      let ordered = null;
+      updateLocalBoard(b => {
+        const columns = [...b.columns];
+        if (insertAt != null && insertAt >= 0 && insertAt < columns.length) {
+          columns.splice(insertAt, 0, newCol);
+          ordered = columns.map(c => c.id);
+        } else {
+          columns.push(newCol);
+        }
+        return {
+          columns,
+          groups: b.groups.map(g => ({
+            ...g,
+            items: g.items.map(item => ({
+              ...item,
+              values: { ...item.values, [newCol.id]: '' },
+              subitems: (item.subitems || []).map(sub => ({ ...sub, values: { ...sub.values, [newCol.id]: '' } })),
+            })),
           })),
-        })),
-      }));
+        };
+      });
+      // Persist the new position when inserted (not appended).
+      if (ordered) await reorderColumns(board.id, ordered).catch(() => {});
       setShowAddColumn(false);
       toast(`Column "${title}" added`, 'success');
     } catch (err) { toast(err.response?.data?.error || 'Failed to add column', 'error'); }
   };
+
+  // Persist a partial settings change on a column (description, lock, formatting…).
+  const handleColumnSettingsUpdate = useCallback(async (col, partial) => {
+    try {
+      const newSettings = { ...(col.settings || {}), ...partial };
+      const r = await updateColumn(col.id, { title: col.title, settings: newSettings });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === col.id ? r.data : c) }));
+    } catch { toast('Failed to update column', 'error'); }
+  }, [updateLocalBoard, toast]);
+
+  const handleColumnDuplicate = useCallback(async (colId) => {
+    try {
+      const { column, values } = await duplicateColumn(colId);
+      updateLocalBoard(b => {
+        const idx = b.columns.findIndex(c => c.id === colId);
+        const columns = [...b.columns];
+        columns.splice(idx < 0 ? columns.length : idx + 1, 0, column);
+        const groups = b.groups.map(g => ({
+          ...g,
+          items: (g.items || []).map(it => ({ ...it, values: { ...it.values, [column.id]: values[it.id] ?? '' } })),
+        }));
+        return { columns, groups };
+      });
+      toast('Column duplicated', 'success');
+    } catch { toast('Failed to duplicate column', 'error'); }
+  }, [updateLocalBoard, toast]);
+
+  // Open the Add Column modal, remembering where to insert the new column.
+  const handleColumnAddBeside = useCallback((col, side) => {
+    const idx = board.columns.findIndex(c => c.id === col.id);
+    pendingColInsertRef.current = side === 'left' ? idx : idx + 1;
+    setShowAddColumn(true);
+  }, [board.columns]);
 
   const handleColumnRename = async (id, title) => {
     try {
@@ -4383,6 +4713,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       setEditingFormulaCol(null);
       toast('Formula saved', 'success');
     } catch { toast('Failed to save formula', 'error'); }
+  };
+
+  const handleProgressSave = async (newSettings) => {
+    if (!editingProgressCol) return;
+    try {
+      const r = await updateColumn(editingProgressCol.id, { title: editingProgressCol.title, settings: newSettings });
+      updateLocalBoard(b => ({ columns: b.columns.map(c => c.id === editingProgressCol.id ? r.data : c) }));
+      setEditingProgressCol(null);
+      toast('Progress settings saved', 'success');
+    } catch { toast('Failed to save progress settings', 'error'); }
   };
 
   // Called by StatusCell inline editor after a successful PUT /api/columns/:id
@@ -4585,11 +4925,14 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
     });
   };
 
-  // Enrich person columns with board members as fallback options
-  const memberNames = (board.members || []).map(m => m.name).filter(Boolean);
+  // Person columns get the full board-member roster as {id, name, avatar_url}
+  // options, so the cell can store stable user IDs and render avatar photos.
+  const memberObjs = (board.members || [])
+    .map(m => ({ id: m.id ?? m.user_id, name: m.name, avatar_url: m.avatar_url || null }))
+    .filter(m => m.name);
   const allCols = (board.columns || []).map(col =>
-    col.type === 'person' && memberNames.length && !col.settings?.options?.length
-      ? { ...col, settings: { ...(col.settings || {}), options: memberNames } }
+    col.type === 'person' && memberObjs.length
+      ? { ...col, settings: { ...(col.settings || {}), options: memberObjs } }
       : col
   );
   // cols excludes columns hidden in the active view
@@ -4651,6 +4994,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       const formula = (sortCol.settings && (sortCol.settings.formula || sortCol.settings.expression)) || '';
       return evaluateFormula(formula, item, allCols);
     }
+    if (sortCol?.type === 'mirror') return mirrorPlainText(item.values?.[sortConfig.colId]);
     return item.values?.[sortConfig.colId] ?? '';
   };
 
@@ -4723,6 +5067,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   }, [allVisibleSelected, allVisibleItemIds.join(',')]); // join for stable dep
 
   return (
+    <LinkedItemsContext.Provider value={{ items: board.linkedItems || {}, reload: reloadBoardData, runningTimers: board.runningTimers || {} }}>
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--workspace-bg, var(--bg-primary))', color: 'var(--text-primary)', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
 
       {/* ── Toolbar ── */}
@@ -4754,8 +5099,8 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
       ) : (
         /* Desktop toolbar: full button row */
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 20px', background: 'var(--board-toolbar-bg)',
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 24px', background: 'var(--board-toolbar-bg)',
           backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           borderBottom: 'none', flexShrink: 0, flexWrap: 'wrap',
           position: 'relative', // anchor for the filter popover below
@@ -4764,12 +5109,12 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           {isManager && (
             <>
               <button onClick={handleGroupCreate} style={{
-                padding: '6px 14px', background: 'linear-gradient(90deg,#c9b4ff 0%,#d99fe0 60%,#f5c89a 100%)', color: '#fff',
-                borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none',
+                padding: '7px 17px', background: 'linear-gradient(90deg,#c9b4ff 0%,#d99fe0 60%,#f5c89a 100%)', color: '#fff',
+                borderRadius: 7, fontWeight: 700, fontSize: 15.5, border: 'none',
               }}>+ Add Group</button>
               <button onClick={() => setShowForms(true)} style={{
-                padding: '5px 12px', border: '1.5px solid var(--forms-button-border, #9b72f5)', color: 'var(--forms-button-color, #9b72f5)',
-                borderRadius: 6, fontWeight: 600, fontSize: 12,
+                padding: '6px 15px', border: '1.5px solid var(--forms-button-border, #9b72f5)', color: 'var(--forms-button-color, #9b72f5)',
+                borderRadius: 7, fontWeight: 700, fontSize: 14.5,
               }}>
                 📋 Forms
               </button>
@@ -4782,11 +5127,11 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             const isActive = filterPanelOpen || totalCount > 0;
             return (
               <button onClick={() => setFilterPanelOpen(f => !f)} style={{
-                padding: '5px 12px', border: `1.5px solid ${isActive ? '#9b72f5' : 'var(--border-color)'}`,
-                borderRadius: 6, fontSize: 12, fontWeight: 600,
-                color: isActive ? '#9b72f5' : '#676879',
+                padding: '6px 15px', border: `1.5px solid ${isActive ? '#9b72f5' : 'var(--border-color)'}`,
+                borderRadius: 7, fontSize: 14.5, fontWeight: 700,
+                color: isActive ? '#9b72f5' : 'var(--text-primary)',
                 background: isActive ? '#ede8ff' : 'var(--bg-primary)',
-                display: 'flex', alignItems: 'center', gap: 5,
+                display: 'flex', alignItems: 'center', gap: 6,
               }}>
                 🔽 Filter{totalCount > 0 ? ` (${totalCount})` : ''}
               </button>
@@ -4795,7 +5140,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
 
           {/* Board Search */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <span style={{ position: 'absolute', left: 8, fontSize: 12, color: '#9699a6', pointerEvents: 'none' }}>🔍</span>
+            <span style={{ position: 'absolute', left: 10, fontSize: 14.5, color: '#9699a6', pointerEvents: 'none' }}>🔍</span>
             <input
               ref={boardSearchRef}
               type="text"
@@ -4803,16 +5148,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               onChange={e => setBoardSearch(e.target.value)}
               placeholder="Search board…"
               style={{
-                paddingLeft: 26, paddingRight: boardSearch ? 22 : 8,
-                paddingTop: 5, paddingBottom: 5,
+                paddingLeft: 32, paddingRight: boardSearch ? 26 : 10,
+                paddingTop: 6, paddingBottom: 6,
                 border: `1.5px solid ${boardSearch ? '#9b72f5' : '#e6e9ef'}`,
-                borderRadius: 6, fontSize: 12, fontWeight: 500,
+                borderRadius: 7, fontSize: 14.5, fontWeight: 600,
                 color: 'var(--text-primary)', background: 'var(--bg-primary)',
-                outline: 'none', width: 180, transition: 'border-color 0.15s, width 0.2s',
+                outline: 'none', width: 216, transition: 'border-color 0.15s, width 0.2s',
                 fontFamily: 'inherit',
               }}
-              onFocus={e => e.target.style.width = '240px'}
-              onBlur={e => e.target.style.width = '180px'}
+              onFocus={e => e.target.style.width = '288px'}
+              onBlur={e => e.target.style.width = '216px'}
             />
             {boardSearch && (
               <span
@@ -4826,9 +5171,9 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             <button
               onClick={() => setSortConfig(null)}
               style={{
-                padding: '5px 10px', border: '1.5px solid #9b72f5', borderRadius: 6,
-                fontSize: 12, fontWeight: 600, color: '#9b72f5', background: '#ede8ff',
-                display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                padding: '6px 13px', border: '1.5px solid #9b72f5', borderRadius: 7,
+                fontSize: 14.5, fontWeight: 700, color: '#9b72f5', background: '#ede8ff',
+                display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
               }}
               title="Clear sort"
             >
@@ -4844,9 +5189,9 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
             onClick={toggleMoreMenu}
             title="More actions"
             style={{
-              padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
-              fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
-              display: 'flex', alignItems: 'center', gap: 5, lineHeight: 1, minWidth: 38, justifyContent: 'center',
+              padding: '6px 15px', border: '1.5px solid var(--border-color)', borderRadius: 7,
+              fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', background: 'var(--bg-primary)',
+              display: 'flex', alignItems: 'center', gap: 6, lineHeight: 1, minWidth: 46, justifyContent: 'center',
             }}
           >⋯</button>
           <input
@@ -4905,23 +5250,23 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             {isManager && (
               <button onClick={() => setShowAutomations(true)} style={{
-                padding: '5px 12px', border: '1.5px solid var(--automation-button-border, #a25ddc)', color: 'var(--automation-button-color, #a25ddc)',
-                borderRadius: 6, fontWeight: 600, fontSize: 12,
-                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 15px', border: '1.5px solid var(--automation-button-border, #a25ddc)', color: 'var(--automation-button-color, #a25ddc)',
+                borderRadius: 7, fontWeight: 700, fontSize: 14.5,
+                display: 'flex', alignItems: 'center', gap: 6,
               }}>
                 ⚡ Automations
                 {activeAutoCount > 0 && (
                   <span style={{
                     background: '#a25ddc', color: '#fff', borderRadius: 10,
-                    padding: '0px 6px', fontSize: 11, fontWeight: 700,
+                    padding: '1px 7px', fontSize: 13, fontWeight: 700,
                   }}>{activeAutoCount}</span>
                 )}
               </button>
             )}
             <button onClick={() => setShowMembers(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 12px', border: '1.5px solid var(--border-color)', borderRadius: 6,
-              fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-primary)',
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 15px', border: '1.5px solid var(--border-color)', borderRadius: 7,
+              fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)', background: 'var(--bg-primary)',
             }}>👥 {board.members?.length || 0} Members</button>
           </div>
 
@@ -4967,6 +5312,49 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         />
       )}
 
+      {/* ── Layout switch: Table / Kanban (desktop, applies to active view) ── */}
+      {!isMobile && groups.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderBottom: '1px solid var(--border-color, #e6e9ef)', overflowX: 'auto' }}>
+          {[
+            ['table', '☰ Table', 'Spreadsheet view'],
+            ['kanban', '▦ Kanban', 'Group cards by status'],
+            ['cards', '🗂️ Cards', 'Gallery of item cards'],
+            ['calendar', '📅 Calendar', 'Items on a monthly calendar'],
+            ['timeline', '📊 Timeline', 'Roadmap of dated items on a time axis'],
+            ['gantt', '📐 Gantt', 'Gantt chart with dependencies & critical path'],
+            ['workload', '👥 Workload', 'Capacity per person over time'],
+            ['chart', '📈 Chart', 'Configurable chart'],
+            ['map', '🗺️ Map', 'Items by location'],
+            ['dashboard', '📋 Dashboard', 'Board summary & charts'],
+          ].map(([t, label, title]) => {
+            const isActiveType = activeViewType === t;
+            return (
+              <button
+                key={t}
+                onClick={() => handleViewTypeChange(t)}
+                title={title}
+                style={{
+                  padding: '6px 14px', fontSize: 13.5, fontWeight: 700, borderRadius: 8,
+                  cursor: 'pointer', border: '1px solid transparent', flexShrink: 0, whiteSpace: 'nowrap',
+                  background: isActiveType ? 'rgba(155,114,245,0.16)' : 'transparent',
+                  color: isActiveType ? '#9b72f5' : 'var(--text-primary, #323338)',
+                  transition: 'background 0.12s, color 0.12s',
+                }}
+                onMouseEnter={e => { if (!isActiveType) e.currentTarget.style.background = 'var(--hover-bg, #f5f6f8)'; }}
+                onMouseLeave={e => { if (!isActiveType) e.currentTarget.style.background = 'transparent'; }}
+              >{label}</button>
+            );
+          })}
+          {cols.some(c => c.type === 'time_tracking') && (
+            <button
+              onClick={() => setShowTimesheet(true)}
+              title="Open timesheets — hours, billing & capacity"
+              style={{ marginLeft: 'auto', padding: '6px 14px', fontSize: 13.5, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-primary)', flexShrink: 0, whiteSpace: 'nowrap' }}
+            >⏱ Timesheets</button>
+          )}
+        </div>
+      )}
+
 
       {/* ── Filter bar (mobile / old text-search — kept for MoreBottomSheet) ── */}
       {showFilters && (
@@ -5000,6 +5388,37 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               />
             ))}
           </div>
+        ) : activeViewType === 'dashboard' ? (
+          /* ── Desktop Dashboard view (board-scoped summary & charts) ── */
+          <BoardDashboardView
+            groups={filteredGroups}
+            columns={cols}
+            boardName={board.name}
+          />
+        ) : activeViewType === 'kanban' ? (
+          /* ── Desktop Kanban view ── */
+          <KanbanView
+            groups={filteredGroups}
+            columns={cols}
+            onValueChange={handleValueChange}
+            onItemCreate={handleItemCreate}
+            onItemDelete={handleItemDelete}
+            isManager={isManager}
+          />
+        ) : activeViewType === 'calendar' ? (
+          <CalendarView groups={filteredGroups} columns={cols} onOpenDetail={setDetailItemId} />
+        ) : activeViewType === 'timeline' ? (
+          <TimelineView groups={filteredGroups} columns={cols} onOpenDetail={setDetailItemId} showDependencies={false} />
+        ) : activeViewType === 'gantt' ? (
+          <TimelineView groups={filteredGroups} columns={cols} onOpenDetail={setDetailItemId} criticalPath={board.criticalPath || []} showDependencies={true} />
+        ) : activeViewType === 'workload' ? (
+          <WorkloadView groups={filteredGroups} columns={cols} onOpenDetail={setDetailItemId} />
+        ) : activeViewType === 'chart' ? (
+          <ChartView groups={filteredGroups} columns={cols} />
+        ) : activeViewType === 'cards' ? (
+          <CardsView groups={filteredGroups} columns={cols} onOpenDetail={setDetailItemId} />
+        ) : activeViewType === 'map' ? (
+          <MapView groups={filteredGroups} columns={cols} onOpenDetail={setDetailItemId} />
         ) : (
           /* ── Desktop table view ── */
           <table style={{
@@ -5086,12 +5505,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
                       onDelete={handleColumnDelete}
                       onEditStatus={setEditingStatusCol}
                       onEditFormula={setEditingFormulaCol}
+                      onEditProgress={setEditingProgressCol}
                       onChangeType={handleColumnTypeChange}
                       onSetDefault={(c, anchorRect) => setDefaultEditor({ col: c, anchorRect })}
                       onToggleVisibility={handleColumnToggleVisibility}
                       isManager={isManager}
                       sortConfig={sortConfig}
                       onSort={(colId, dir) => colId ? setSortConfig({ colId, dir }) : setSortConfig(null)}
+                      onDuplicate={handleColumnDuplicate}
+                      onAddColumn={handleColumnAddBeside}
+                      onSaveSettings={handleColumnSettingsUpdate}
                     />
                     <ResizeHandle onMouseDown={e => startResize(e, col.id, getColWidth(col))} />
                   </th>
@@ -5130,6 +5553,9 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
               selectedItems={selectedItems}
               handleGroupUpdate={handleGroupUpdate}
               handleGroupDelete={handleGroupDelete}
+              handleGroupDuplicate={handleGroupDuplicate}
+              handleGroupMoveItems={handleGroupMoveItems}
+              handleGroupAdd={handleGroupAdd}
               handleItemCreate={handleItemCreate}
               handleItemUpdate={handleItemUpdate}
               handleItemDelete={handleItemDelete}
@@ -5225,7 +5651,18 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         );
       })()}
 
-      {showAddColumn && <AddColumnModal onAdd={handleColumnAdd} onClose={() => setShowAddColumn(false)} />}
+      {showTimesheet && (
+        <TimesheetPanel boardId={board.id} boardName={board.name} onClose={() => setShowTimesheet(false)} />
+      )}
+
+      {showAddColumn && (
+        <AddColumnModal
+          onAdd={handleColumnAdd}
+          onClose={() => setShowAddColumn(false)}
+          currentBoardId={board.id}
+          currentColumns={board.columns || []}
+        />
+      )}
 
       {showTrash && (
         <TrashPanel
@@ -5251,6 +5688,16 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
           previewItem={board.groups?.[0]?.items?.[0] || null}
           onSave={handleFormulaSave}
           onClose={() => setEditingFormulaCol(null)}
+        />
+      )}
+
+      {editingProgressCol && (
+        <ProgressSettingsEditor
+          column={editingProgressCol}
+          columns={board.columns || []}
+          previewItem={board.groups?.[0]?.items?.[0] || null}
+          onSave={handleProgressSave}
+          onClose={() => setEditingProgressCol(null)}
         />
       )}
 
@@ -5330,6 +5777,7 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
         />
       )}
     </div>
+    </LinkedItemsContext.Provider>
   );
 }
 

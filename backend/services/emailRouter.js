@@ -12,8 +12,26 @@
  */
 
 const pool = require('../db');
+const { validateColumnValue } = require('./columnValidate');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// Resolve a human-friendly sender name. Prefers the email's display name
+// ("John Doe" <john@x.com>); when the sender sent no display name, derive a
+// readable name from the address local-part ("john.doe42@x.com" → "John Doe").
+function deriveSenderName(from) {
+  const name = String(from?.name || '').trim();
+  if (name) return name;
+  const local = String(from?.address || '').trim().split('@')[0] || '';
+  if (!local) return '';
+  return local
+    .replace(/\+.*$/, '')          // drop "+tag" sub-addressing
+    .replace(/[._-]+/g, ' ')       // dots/underscores/dashes → spaces
+    .replace(/\d+/g, ' ')          // strip digits
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase()); // Title Case
+}
 
 function cleanSubject(raw) {
   if (!raw) return '(No subject)';
@@ -111,10 +129,15 @@ async function createItemFromEmail({ automation, email, systemUser }) {
   const groupId = cfg.group_id;
   if (!groupId) throw new Error(`automation ${automation.id} has no group_id in action_config`);
 
-  // Verify group belongs to this automation's board
+  // Verify the target group exists AND belongs to this automation's own board.
+  // Without the board match, a rule could be pointed at another board's group
+  // and silently inject inbound-email items there (cross-board write).
   const gRes = await pool.query('SELECT board_id FROM groups WHERE id=$1', [groupId]);
   if (!gRes.rows.length) throw new Error(`group ${groupId} not found`);
   const boardId = gRes.rows[0].board_id;
+  if (automation.board_id != null && String(boardId) !== String(automation.board_id)) {
+    throw new Error(`group ${groupId} (board ${boardId}) does not belong to automation ${automation.id}'s board ${automation.board_id}`);
+  }
 
   const itemName = cleanSubject(email.subject);
 
@@ -152,6 +175,43 @@ async function createItemFromEmail({ automation, email, systemUser }) {
             [item.id, cfg.owner_column_id, JSON.stringify(names)]
           );
         }
+      }
+    }
+
+    // ── Capture the SENDER into columns ──────────────────────────────────────
+    // from_email_column_id → the sender's email address
+    // from_name_column_id  → the sender's display name (derived if absent)
+    // Each is validated/normalised against its column's real type, so it works
+    // whether the target is an email/text/long_text column, and a malformed
+    // value is skipped (never aborts item creation).
+    const senderAddress = String(email.from?.address || '').trim().toLowerCase();
+    const senderName    = deriveSenderName(email.from);
+    const captureMap = [
+      [cfg.from_email_column_id, senderAddress],
+      [cfg.from_name_column_id,  senderName],
+    ].filter(([colId, val]) => colId && val);
+
+    if (captureMap.length) {
+      const colIds = captureMap.map(([colId]) => Number(colId)).filter(Number.isInteger);
+      const typeRes = await client.query(
+        'SELECT id, type, settings FROM columns WHERE id = ANY($1) AND board_id = $2',
+        [colIds, boardId]
+      );
+      const colMeta = new Map(typeRes.rows.map(r => [String(r.id), r]));
+      for (const [colId, rawVal] of captureMap) {
+        const meta = colMeta.get(String(colId));
+        if (!meta) continue; // column not on this board — ignore stale config
+        const settings = typeof meta.settings === 'string'
+          ? (() => { try { return JSON.parse(meta.settings); } catch { return {}; } })()
+          : (meta.settings || {});
+        const v = validateColumnValue(meta.type, rawVal, settings);
+        if (!v.ok || v.value === '') continue; // skip invalid silently
+        await client.query(
+          `INSERT INTO column_values (item_id, column_id, value)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (item_id, column_id) DO UPDATE SET value = EXCLUDED.value`,
+          [item.id, meta.id, v.value]
+        );
       }
     }
 

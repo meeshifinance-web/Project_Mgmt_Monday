@@ -349,6 +349,15 @@ class Parser {
         d.setMonth(d.getMonth() + toNum(a[1]));
         return d.toISOString().slice(0, 10);
       }
+      case 'NETWORKDAYS': {
+        // Business days between two dates, inclusive, excluding Sat/Sun.
+        let d1 = parseDate(a[0]), d2 = parseDate(a[1]);
+        if (isNaN(d1) || isNaN(d2)) return '#VALUE!';
+        if (d1 > d2) { const t = d1; d1 = d2; d2 = t; }
+        let count = 0; const cur = new Date(d1);
+        while (cur <= d2) { const dow = cur.getDay(); if (dow !== 0 && dow !== 6) count++; cur.setDate(cur.getDate() + 1); }
+        return count;
+      }
 
       // ── Type checks ──────────────────────────────────────────────────────
       case 'ISNUMBER': {
@@ -407,7 +416,10 @@ export function evaluateFormula(formula, item, columns) {
     if (typeof result === 'boolean') return result ? 'TRUE' : 'FALSE';
     if (typeof result === 'number') {
       if (isNaN(result)) return '#NUM!';
-      if (!isFinite(result)) return '#DIV/0!';
+      // Real division-by-zero is already short-circuited to the '#DIV/0!' string
+      // upstream (parseFactor), so a non-finite NUMBER here is an arithmetic
+      // overflow (e.g. POWER(10,1000)) — Excel reports that as #NUM!, not #DIV/0!.
+      if (!isFinite(result)) return '#NUM!';
       // Show up to 10 significant digits, strip trailing zeros
       return Number.isInteger(result) ? String(result) : parseFloat(result.toPrecision(10)).toString();
     }

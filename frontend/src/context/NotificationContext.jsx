@@ -15,11 +15,15 @@ export function NotificationProvider({ children }) {
       .catch(() => {});
   }, [user]);
 
-  // Poll every 30 s
+  // Poll the unread badge every 15 s, and refresh immediately when the tab
+  // regains focus so the count stays current without a manual page refresh.
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 30000);
-    return () => clearInterval(id);
+    const id = setInterval(() => { if (!document.hidden) refresh(); }, 15000);
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { clearInterval(id); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
   }, [refresh]);
 
   const markAllRead = useCallback(async () => {

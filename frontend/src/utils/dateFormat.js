@@ -35,3 +35,11 @@ export function toISODateTime(d) {
   if (!date) return '';
   return `${DATE_FMT.format(date)} ${TIME_FMT.format(date)}`;
 }
+
+// HH:mm in IST (24-hour). Use this instead of Date#getHours/getMinutes so the
+// time matches the rest of the app regardless of the viewer's browser timezone.
+export function toISTTime(d) {
+  const date = _toDate(d);
+  if (!date) return '';
+  return TIME_FMT.format(date);
+}

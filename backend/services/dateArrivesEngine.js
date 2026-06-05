@@ -52,6 +52,7 @@
 const pool = require('../db');
 const { sendAutomationEmail } = require('./automationEmail');
 const { computeRelativeDate } = require('./relativeDate');
+const { getConditions, getActions, evaluateConditions, executeActions, runDeferred } = require('./automationEngine');
 
 function todayISO() {
   const d = new Date();
@@ -86,76 +87,23 @@ function valueMatchesDate(rawValue, targetISO) {
   return false;
 }
 
-// ── Action dispatchers ──────────────────────────────────────────────────────
+// ── Action dispatcher ─────────────────────────────────────────────────────────
+// Delegates to the shared automation engine so date-arrives rules honour the
+// same "only if" CONDITIONS and run the same ordered, multi-ACTION list as the
+// status-change / item-created triggers. Returns true only when the rule's
+// conditions passed and its actions ran (so the caller dedups correctly —
+// a rule whose conditions aren't met yet stays eligible to fire later).
 async function dispatchAction({ automation, item, board }) {
-  const acfg = parseJSONField(automation.action_config);
-  const type = automation.action_type;
+  const conditions = getConditions(automation);
+  if (!(await evaluateConditions(pool, item.id, conditions))) return false;
 
-  switch (type) {
-    case 'send_email': {
-      // Fire-and-forget; the function logs its own outcome.
-      setImmediate(() => sendAutomationEmail({
-        boardId:    board.id,
-        itemId:     item.id,
-        to:         acfg.to || '',
-        toType:     acfg.to_type || 'specific',
-        toColumnId: acfg.to_column_id || null,
-        subject:    acfg.subject || '',
-        body:       acfg.body || '',
-      }).catch(err => console.error('[dateArrivesEngine] send_email failed:', err.message)));
-      return;
-    }
-
-    case 'set_status': {
-      const { column_id, value } = acfg;
-      if (!column_id || !value) return;
-      await pool.query(
-        `INSERT INTO column_values (item_id, column_id, value)
-         VALUES ($1,$2,$3)
-         ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-        [item.id, column_id, value]
-      );
-      return;
-    }
-
-    case 'set_due_date': {
-      const { column_id, weekday, weeks_ahead } = acfg;
-      if (!column_id || weekday === undefined || weekday === null || weekday === '') return;
-      const dateStr = computeRelativeDate({ weekday, weeks_ahead });
-      await pool.query(
-        `INSERT INTO column_values (item_id, column_id, value)
-         VALUES ($1,$2,$3)
-         ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-        [item.id, column_id, dateStr]
-      );
-      return;
-    }
-
-    case 'notify': {
-      // Fan out to each member of the board so the bell lights up for
-      // anyone who can act on the item. Owners specifically get the
-      // existing assignment-style notification path elsewhere; this is
-      // the broader "FYI" notify.
-      const message = acfg.message || `Date arrived for "${item.name}"`;
-      const members = await pool.query(
-        `SELECT u.id FROM board_members bm
-           JOIN users u ON u.id = bm.user_id
-          WHERE bm.board_id = $1`,
-        [board.id]
-      );
-      for (const m of members.rows) {
-        await pool.query(
-          `INSERT INTO notifications (user_id, message, board_id, item_id)
-           VALUES ($1, $2, $3, $4)`,
-          [m.id, message, board.id, item.id]
-        );
-      }
-      return;
-    }
-
-    default:
-      console.warn(`[dateArrivesEngine] unsupported action_type: ${type}`);
-  }
+  const r = await executeActions(pool, {
+    actions: getActions(automation), auto: automation,
+    itemId: item.id, boardId: board.id, itemName: item.name,
+    actor: null, // engine-driven (no human actor) — notify fans out to all members
+  });
+  runDeferred(r.deferred);
+  return true;
 }
 
 // ── Main loop ───────────────────────────────────────────────────────────────
@@ -256,11 +204,14 @@ async function runDateArrivesEngine() {
       if (seen.rows.length) continue;
 
       try {
-        await dispatchAction({
+        const ran = await dispatchAction({
           automation: auto,
           item:       { id: row.id, name: row.name },
           board:      { id: row.board_id, name: row.board_name },
         });
+        // Only dedup-record a fire when the rule actually ran. If its "only if"
+        // conditions weren't met, leave it eligible to fire on a later tick.
+        if (!ran) continue;
         await pool.query(
           `INSERT INTO date_arrives_fired (automation_id, item_id, fire_date)
            VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,

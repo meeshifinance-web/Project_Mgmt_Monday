@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.2.0"
+  },
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
   }
 }

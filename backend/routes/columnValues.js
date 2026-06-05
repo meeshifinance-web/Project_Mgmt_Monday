@@ -6,6 +6,53 @@ const { sendAutomationEmail } = require('../services/automationEmail');
 const { notifyNewAssignees } = require('../services/assignmentEmail');
 const { runDateCascade } = require('../services/dateCascadeEngine');
 const { computeRelativeDate } = require('../services/relativeDate');
+const { validateColumnValue } = require('../services/columnValidate');
+const { getConditions, getActions, evaluateConditions, executeActions, runDeferred } = require('../services/automationEngine');
+
+// Parse a person-column value (JSON array of names or legacy single string)
+function parseOwnerEntries(val) {
+  if (!val) return [];
+  let arr;
+  try { arr = JSON.parse(val); } catch { return String(val).trim() ? [{ id: null, name: String(val).trim() }] : []; }
+  if (!Array.isArray(arr)) arr = arr ? [arr] : [];
+  return arr.map(e => (e && typeof e === 'object') ? { id: e.id ?? null, name: e.name || '' } : { id: null, name: String(e) })
+            .filter(e => e.name || e.id != null);
+}
+function parseOwners(val) { return parseOwnerEntries(val).map(e => e.name).filter(Boolean); }
+function ownerIds(val) { return parseOwnerEntries(val).map(e => e.id).filter(id => id != null); }
+
+// ── Two-way connect sync helpers ──────────────────────────────────────────────
+function parseLinkIds(raw) {
+  try { const a = JSON.parse(raw || '[]'); return Array.isArray(a) ? a.filter(Number.isInteger) : []; }
+  catch { return []; }
+}
+async function writeLinks(client, itemId, columnId, ids) {
+  await client.query(
+    `INSERT INTO column_values (item_id, column_id, value) VALUES ($1,$2,$3)
+     ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
+    [itemId, columnId, ids.length ? JSON.stringify(ids) : '']
+  );
+}
+async function addReciprocalLink(client, itemId, columnId, addId) {
+  // Skip dangling targets (e.g. a since-deleted item) so a bad link can never
+  // break the primary save with a foreign-key error.
+  const exists = await client.query('SELECT 1 FROM items WHERE id=$1', [itemId]);
+  if (!exists.rows.length) return;
+  const r = await client.query('SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2', [itemId, columnId]);
+  const ids = parseLinkIds(r.rows[0]?.value);
+  if (!ids.includes(addId)) { ids.push(addId); await writeLinks(client, itemId, columnId, ids); }
+}
+async function removeReciprocalLink(client, itemId, columnId, removeId) {
+  const r = await client.query('SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2', [itemId, columnId]);
+  const ids = parseLinkIds(r.rows[0]?.value);
+  if (ids.includes(removeId)) await writeLinks(client, itemId, columnId, ids.filter(x => x !== removeId));
+}
+
+async function columnTitle(client, columnId) {
+  if (!columnId) return null;
+  const r = await client.query('SELECT title FROM columns WHERE id=$1', [columnId]);
+  return r.rows[0]?.title || null;
+}
 
 async function logActivity(client, data) {
   try {
@@ -19,10 +66,12 @@ async function logActivity(client, data) {
 }
 
 router.post('/upsert', requireAuth, async (req, res) => {
-  if (req.user.role === 'user')
-    return res.status(403).json({ error: 'Read-only access — you cannot edit values' });
+  // Read-only users normally can't edit, but they MAY self-assign — add/remove
+  // only themselves on a person column. Enforced precisely below once we know
+  // the column type and the before/after owner ids.
+  const isReadOnlyUser = req.user.role === 'user';
 
-  const { item_id, column_id, value } = req.body;
+  let { item_id, column_id, value } = req.body;
 
   // Resolve board from item and verify membership BEFORE opening a transaction
   try {
@@ -33,6 +82,28 @@ router.post('/upsert', requireAuth, async (req, res) => {
     if (!boardRes.rows.length) return res.status(404).json({ error: 'Item not found' });
     if (!(await canAccessBoard(boardRes.rows[0].board_id, req.user, pool)))
       return res.status(403).json({ error: 'Access denied' });
+
+    // Validate + normalise against the column type (clamps progress/rating,
+    // rejects bad numbers/dates/emails, sanitises links, de-dupes tags).
+    const colMetaRes = await pool.query('SELECT type, settings FROM columns WHERE id=$1', [column_id]);
+    if (!colMetaRes.rows.length) return res.status(404).json({ error: 'Column not found' });
+    const v = validateColumnValue(colMetaRes.rows[0].type, value, colMetaRes.rows[0].settings || {});
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    value = v.value;
+
+    // ── Self-assign permission for read-only users ──────────────────────────
+    if (isReadOnlyUser) {
+      if (colMetaRes.rows[0].type !== 'person')
+        return res.status(403).json({ error: 'Read-only access — you cannot edit values' });
+      const curRes = await pool.query('SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2', [item_id, column_id]);
+      const before = new Set(ownerIds(curRes.rows[0]?.value));
+      const after = new Set(ownerIds(value));
+      const changed = [...new Set([...before, ...after])].filter(id => before.has(id) !== after.has(id));
+      const onlySelf = changed.length >= 1 && changed.every(id => id === req.user.id);
+      const addsNamelessOwner = parseOwnerEntries(value).some(e => e.id == null); // can't inject legacy/foreign names
+      if (!onlySelf || addsNamelessOwner)
+        return res.status(403).json({ error: 'You can only assign or unassign yourself' });
+    }
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -42,6 +113,7 @@ router.post('/upsert', requireAuth, async (req, res) => {
   // Variables captured for post-transaction cascade check
   let savedRow, triggeredAutomations, movedItem, setValues;
   let board_id, colType, old_value;
+  let deferredEffects = []; // automation side-effects (emails) to run after commit
 
   try {
     await client.query('BEGIN');
@@ -92,6 +164,23 @@ router.post('/upsert', requireAuth, async (req, res) => {
     board_id = bId;
     colType  = colRes.rows[0].type;
 
+    // ── Two-way connect sync ─────────────────────────────────────────────────
+    // When a connect cell with a reciprocal column changes, mirror the link on
+    // the items at the other end (add the source item to newly-linked targets,
+    // remove it from unlinked ones). Done directly (not via this route) so it
+    // never recurses.
+    if (colType === 'connect_boards') {
+      const stRow = await client.query('SELECT settings FROM columns WHERE id=$1', [column_id]);
+      const st = typeof stRow.rows[0]?.settings === 'string' ? JSON.parse(stRow.rows[0].settings || '{}') : (stRow.rows[0]?.settings || {});
+      if (st.reciprocalColumnId) {
+        const oldIds = parseLinkIds(old_value);
+        const newIds = parseLinkIds(value);
+        const srcId = parseInt(item_id, 10);
+        for (const tid of newIds.filter(x => !oldIds.includes(x))) await addReciprocalLink(client, tid, st.reciprocalColumnId, srcId);
+        for (const tid of oldIds.filter(x => !newIds.includes(x))) await removeReciprocalLink(client, tid, st.reciprocalColumnId, srcId);
+      }
+    }
+
     // Fetch item name for log
     const itemRes2 = await client.query('SELECT name FROM items WHERE id=$1', [item_id]);
     const item_name = itemRes2.rows[0]?.name || '';
@@ -107,96 +196,27 @@ router.post('/upsert', requireAuth, async (req, res) => {
       return colMatch && cfg.to_value === value;
     });
 
-    // 4. Execute each matching automation
+    // 4. Execute each matching automation — evaluate "only if" CONDITIONS
+    //    (all must pass), then run the full ordered ACTION list via the shared
+    //    engine. Legacy single-action rules fall back transparently.
     triggeredAutomations = [];
     movedItem = null;
     setValues = [];
 
     for (const auto of matching) {
-      const acfg = typeof auto.action_config === 'string' ? JSON.parse(auto.action_config) : auto.action_config;
-      if (auto.action_type === 'move_to_group') {
-        const targetGroupId = acfg.target_group_id;
-        if (targetGroupId) {
-          const itemRes = await client.query('SELECT group_id FROM items WHERE id=$1', [item_id]);
-          const oldGroupId = itemRes.rows[0]?.group_id;
-          await client.query('UPDATE items SET group_id=$1 WHERE id=$2', [targetGroupId, item_id]);
-          movedItem = { id: parseInt(item_id), old_group_id: oldGroupId, group_id: parseInt(targetGroupId) };
-        }
-      } else if (auto.action_type === 'set_status') {
-        const { column_id: targetColId, value: targetVal } = acfg;
-        if (targetColId && targetVal) {
-          await client.query(
-            `INSERT INTO column_values (item_id, column_id, value)
-             VALUES ($1,$2,$3)
-             ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-            [item_id, targetColId, targetVal]
-          );
-          setValues.push({ column_id: parseInt(targetColId), value: targetVal });
-        }
-      } else if (auto.action_type === 'assign_person') {
-        // Auto-assign the task to a specific board member when status flips.
-        // Same data shape as the item_created variant — column_id targets a
-        // person column, user_name is the assignee's name as stored on board.
-        const { column_id: targetColId, user_name: userName } = acfg;
-        if (targetColId && userName) {
-          // Capture pre-existing assignees so notifyNewAssignees can diff
-          // and only email people who weren't already on the item.
-          const oldRes = await client.query(
-            'SELECT value FROM column_values WHERE item_id=$1 AND column_id=$2',
-            [item_id, targetColId]
-          );
-          const oldAssignees = oldRes.rows[0]?.value || null;
-
-          await client.query(
-            `INSERT INTO column_values (item_id, column_id, value)
-             VALUES ($1,$2,$3)
-             ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-            [item_id, targetColId, userName]
-          );
-          setValues.push({ column_id: parseInt(targetColId), value: userName });
-
-          // Fire-and-forget assignment email after the transaction.
-          if (oldAssignees !== userName) {
-            setImmediate(() => notifyNewAssignees({
-              oldValue: oldAssignees,
-              newValue: userName,
-              itemId:   parseInt(item_id),
-              boardId:  parseInt(board_id),
-              actor:    { id: req.user?.id, name: req.user?.name },
-            }).catch(err => console.error('[AssignEmail] automation async error:', err.message)));
-          }
-        }
-      } else if (auto.action_type === 'send_email') {
-        sendAutomationEmail({
-          boardId:    board_id,
-          itemId:     parseInt(item_id),
-          to:         acfg.to || '',
-          toType:     acfg.to_type || 'specific',
-          toColumnId: acfg.to_column_id || null,
-          subject:    acfg.subject || '',
-          body:       acfg.body || '',
-        }).catch(err => console.error('[AutomationEmail] async error:', err.message));
-      } else if (auto.action_type === 'set_due_date') {
-        // Same logic as the item_created variant — when status flips to the
-        // configured trigger value, auto-fill the chosen date column with the
-        // next occurrence of weekday + N weeks ahead.
-        const { column_id: targetColId, weekday, weeks_ahead } = acfg;
-        if (targetColId && weekday !== undefined && weekday !== '' && weekday !== null) {
-          try {
-            const dateStr = computeRelativeDate({ weekday, weeks_ahead });
-            await client.query(
-              `INSERT INTO column_values (item_id, column_id, value)
-               VALUES ($1,$2,$3)
-               ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,
-              [item_id, targetColId, dateStr]
-            );
-            setValues.push({ column_id: parseInt(targetColId), value: dateStr });
-          } catch (e) {
-            console.error('[Automation set_due_date] failed:', e.message);
-          }
-        }
-      } else {
-        triggeredAutomations.push(auto);
+      if (!(await evaluateConditions(client, item_id, getConditions(auto)))) continue;
+      const r = await executeActions(client, {
+        actions: getActions(auto), auto,
+        itemId: item_id, boardId: board_id, itemName: item_name,
+        actor: { id: req.user.id, name: req.user.name },
+      });
+      if (r.setValues.length) setValues.push(...r.setValues);
+      if (r.movedItem) movedItem = r.movedItem;
+      deferredEffects.push(...r.deferred);
+      // Surface notify / passthrough actions to the client toast in the legacy
+      // shape fireAutomations() expects (action_type + action_config.message).
+      for (const n of r.notifies) {
+        triggeredAutomations.push({ id: auto.id, name: auto.name, action_type: 'notify', action_config: { message: n.message } });
       }
     }
 
@@ -224,6 +244,10 @@ router.post('/upsert', requireAuth, async (req, res) => {
   }
   // Release BEFORE cascade so cascade gets a fresh pool connection
   client.release();
+
+  // Run automation side-effects (emails, assignment notifications) now that the
+  // transaction is committed and the rows are durable.
+  runDeferred(deferredEffects);
 
   // ── Person-assignment Email Hook ─────────────────────────────────────────────
   // Fire-and-forget — never blocks the response. Only fires for person columns
@@ -293,7 +317,19 @@ router.post('/upsert', requireAuth, async (req, res) => {
     // do not fail the main request
   }
 
-  res.json({ value: savedRow, triggeredAutomations, movedItem, setValues, cascadeResult });
+  // ── Dependency auto-shift ────────────────────────────────────────────────────
+  // When a task's timeline (schedule) column changes, push any dependent tasks
+  // forward so they still start after their predecessors finish.
+  let dependencyShifts = [];
+  if (colType === 'timeline' && board_id) {
+    try {
+      dependencyShifts = await require('../services/dependencyEngine').runAutoShift(pool, parseInt(board_id), parseInt(column_id));
+    } catch (depErr) {
+      console.error('[dependencies] auto-shift hook error:', depErr.message);
+    }
+  }
+
+  res.json({ value: savedRow, triggeredAutomations, movedItem, setValues, cascadeResult, dependencyShifts });
 });
 
 // ── POST /bulk-upsert ─────────────────────────────────────────────────────────
@@ -307,19 +343,26 @@ router.post('/bulk-upsert', requireAuth, async (req, res) => {
   if (req.user.role === 'user')
     return res.status(403).json({ error: 'Read-only access — you cannot edit values' });
 
-  const { item_ids, column_id, value } = req.body;
+  let { item_ids, column_id, value } = req.body;
   if (!Array.isArray(item_ids) || item_ids.length === 0 || !column_id)
     return res.status(400).json({ error: 'item_ids (array) and column_id are required' });
   if (item_ids.length > BULK_LIMIT)
     return res.status(400).json({ error: `Too many items — limit is ${BULK_LIMIT} per bulk update` });
 
   // Resolve column + board
-  const colRes = await pool.query('SELECT board_id, title, type FROM columns WHERE id=$1', [column_id]);
+  const colRes = await pool.query('SELECT board_id, title, type, settings FROM columns WHERE id=$1', [column_id]);
   if (!colRes.rows.length) return res.status(404).json({ error: 'Column not found' });
   const { board_id, title, type: colType } = colRes.rows[0];
 
   if (!(await canAccessBoard(board_id, req.user, pool)))
     return res.status(403).json({ error: 'Access denied' });
+
+  // Validate + normalise the shared value against the column type
+  {
+    const v = validateColumnValue(colType, value, colRes.rows[0].settings || {});
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    value = v.value;
+  }
 
   // Verify every item belongs to this board — reject silently if any don't.
   // (Protects against a crafted payload spanning boards the user can't see.)

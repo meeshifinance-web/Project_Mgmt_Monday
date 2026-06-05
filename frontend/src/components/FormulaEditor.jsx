@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { evaluateFormula, FORMULA_FUNCTIONS } from '../utils/formulaEngine';
+import { aiFormula } from '../api';
 
 const SECTION = { fontSize: 11, fontWeight: 700, color: '#676879', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 };
 
@@ -7,7 +8,22 @@ export default function FormulaEditor({ column, columns, previewItem, onSave, on
   const [formula, setFormula]   = useState(column?.settings?.formula || '');
   const [fnSearch, setFnSearch] = useState('');
   const [showFns, setShowFns]   = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiBusy, setAiBusy]     = useState(false);
+  const [aiMsg, setAiMsg]       = useState(null); // { error } | { ok }
   const textareaRef = useRef(null);
+
+  const generateFromWords = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiBusy(true); setAiMsg(null);
+    try {
+      const cols = (columns || []).filter(c => c.id !== column?.id).map(c => ({ title: c.title, type: c.type }));
+      const r = await aiFormula(aiPrompt.trim(), cols);
+      if (r.formula) setFormula(r.formula);
+      setAiMsg(r.valid ? { ok: r.explanation || 'Generated.' } : { error: r.error || 'Could not interpret that.' });
+    } catch { setAiMsg({ error: 'Failed to generate.' }); }
+    finally { setAiBusy(false); }
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -80,6 +96,26 @@ export default function FormulaEditor({ column, columns, previewItem, onSave, on
 
           {/* Left: formula input + preview */}
           <div style={{ flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', borderRight: '1px solid var(--border-color)' }}>
+
+            {/* AI: describe in words */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={SECTION}>✨ Describe in words</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  value={aiPrompt}
+                  onChange={e => setAiPrompt(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); generateFromWords(); } }}
+                  placeholder='e.g. "days between Start and End excluding weekends"'
+                  style={{ flex: 1, boxSizing: 'border-box', border: '1.5px solid rgba(155,114,245,0.5)', borderRadius: 8, padding: '8px 11px', outline: 'none', fontSize: 13, background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+                />
+                <button type="button" onClick={generateFromWords} disabled={aiBusy}
+                  style={{ padding: '0 16px', borderRadius: 8, border: 'none', background: 'linear-gradient(90deg,#9b72f5,#b86cff)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: aiBusy ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                  {aiBusy ? '…' : '✨ Generate'}
+                </button>
+              </div>
+              {aiMsg?.error && <div style={{ fontSize: 11, color: '#e2445c', marginTop: 5 }}>⚠ {aiMsg.error}</div>}
+              {aiMsg?.ok && <div style={{ fontSize: 11, color: '#00a152', marginTop: 5 }}>✓ {aiMsg.ok}</div>}
+            </div>
 
             {/* Formula textarea */}
             <div>

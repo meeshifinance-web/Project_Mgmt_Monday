@@ -75,7 +75,10 @@ router.post('/', ...canWrite, async (req, res) => {
 // ── PUT update view name and/or filters ───────────────────────────────────────
 router.put('/:id', ...canWrite, async (req, res) => {
   const { id } = req.params;
-  const { name, filters } = req.body;
+  const { name, filters, type } = req.body;
+  const VIEW_TYPES = ['table', 'kanban', 'dashboard', 'calendar', 'timeline', 'gantt', 'workload', 'chart', 'cards', 'map'];
+  if (type !== undefined && !VIEW_TYPES.includes(type))
+    return res.status(400).json({ error: `Unknown view type: ${type}` });
 
   try {
     // Fetch view first so we can verify board membership
@@ -97,6 +100,10 @@ router.put('/:id', ...canWrite, async (req, res) => {
     if (filters !== undefined) {
       setClauses.push(`filters = $${idx++}`);
       values.push(JSON.stringify(filters));
+    }
+    if (type !== undefined) {
+      setClauses.push(`type = $${idx++}`);
+      values.push(type);
     }
 
     values.push(id); // last param = WHERE id

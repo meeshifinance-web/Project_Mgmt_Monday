@@ -83,14 +83,22 @@ router.get('/:boardId/export', requireAuth, async (req, res) => {
       cvMap[cv.item_id][cv.column_id] = cv.value;
     }
 
+    // Neutralise spreadsheet formula injection: a cell whose text starts with
+    // = + - @ (or a control char) is treated as a formula by Excel/Sheets and
+    // can run on open. Prefix those with an apostrophe so they stay literal text.
+    const antiFormula = (v) => {
+      const s = v == null ? '' : String(v);
+      return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+    };
+
     // Build rows: header + data
-    const headers = ['Group', 'Item Name', ...columns.map(c => c.title)];
+    const headers = ['Group', 'Item Name', ...columns.map(c => c.title)].map(antiFormula);
     const rows = [headers];
     for (const item of itemRes.rows) {
       rows.push([
-        groupMap[item.group_id] || '',
-        item.name,
-        ...columns.map(c => cvMap[item.id]?.[c.id] || ''),
+        antiFormula(groupMap[item.group_id] || ''),
+        antiFormula(item.name),
+        ...columns.map(c => antiFormula(cvMap[item.id]?.[c.id] || '')),
       ]);
     }
 

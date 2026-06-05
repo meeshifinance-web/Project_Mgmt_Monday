@@ -1,278 +1,331 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { getForms, createForm, getForm, updateForm, deleteForm, saveFormFields } from '../api';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { getForms, createForm, getForm, updateForm, deleteForm, saveFormFields, shareForm, getFormQr } from '../api';
 import { useToast } from './Toast';
 import { useThemeContext } from '../context/ThemeContext';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
 const SKIP_TYPES = ['formula', 'creation_log', 'time_tracking'];
-const BASE_URL   = window.location.origin;
+const BASE_URL = window.location.origin;
+const ACCENT_PRESETS = ['#9b72f5', '#0073ea', '#00c875', '#e2445c', '#fdab3d', '#a25ddc', '#0086c0', '#ff642e', '#333333'];
+const CHOICE_TYPES = ['status', 'priority', 'dropdown', 'checkbox'];
 
-const ACCENT_PRESETS = [
-  // Vibrant
-  '#9b72f5','#00c875','#e2445c','#fdab3d','#a25ddc','#037f4c','#ff5ac4','#0086c0','#ff642e','#333333',
-  // Light / muted
-  'var(--text-secondary)','#a8b8c8','#b0c4b1','#c9b8d8','#f4a96a','#f9c6c6','#b2d8d8','#c8daf4','#d4c5a9','#d9d9d9',
-];
+const DEFAULT_STATUS_OPTIONS = ['Not Started', 'In Progress', 'Done', 'Stuck'];
+const DEFAULT_PRIORITY_OPTIONS = ['Critical', 'High', 'Medium', 'Low'];
 
-const TYPE_META = {
-  text:         { icon: 'Aa', color: '#6366f1' },
-  long_text:    { icon: '¶',  color: '#8b5cf6' },
-  number:       { icon: '#',  color: '#06b6d4' },
-  email:        { icon: '@',  color: '#3b82f6' },
-  phone:        { icon: '✆',  color: '#10b981' },
-  date:         { icon: '📅', color: '#f59e0b' },
-  status:       { icon: '◉',  color: '#9b72f5' },
-  priority:     { icon: '▲',  color: '#e2445c' },
-  dropdown:     { icon: '▾',  color: '#7c3aed' },
-  rating:       { icon: '★',  color: '#f59e0b' },
-  checkbox:     { icon: '✓',  color: '#00c875' },
-  progress:     { icon: '%',  color: '#9b72f5' },
-  link:         { icon: '🔗', color: '#3b82f6' },
-  timeline:     { icon: '⟷', color: '#f59e0b' },
-  tags:         { icon: '🏷', color: '#8b5cf6' },
-  location:     { icon: '📍', color: '#ef4444' },
-  person:       { icon: '👤', color: 'var(--text-secondary)' },
-  color_picker: { icon: '🎨', color: '#ec4899' },
-  file:         { icon: '📎', color: 'var(--text-secondary)' },
-};
+function parseSettings(raw) {
+  try { return typeof raw === 'string' ? JSON.parse(raw) : (raw || {}); }
+  catch { return {}; }
+}
 
-function getTypeMeta(t) { return TYPE_META[t] || { icon: '—', color: 'var(--text-secondary)' }; }
+function parseLogic(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
-// ── Clipboard helper ──────────────────────────────────────────────────────────
+function toDateTimeLocal(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function choiceOptions(field) {
+  if (!field) return [];
+  if (field.column_type === 'checkbox') return ['true', 'false'];
+  if (field.column_type === 'priority') return DEFAULT_PRIORITY_OPTIONS;
+  const s = parseSettings(field.column_settings);
+  if (Array.isArray(s.options)) return s.options.map(o => typeof o === 'string' ? o : o.label).filter(Boolean);
+  if (field.column_type === 'status') return DEFAULT_STATUS_OPTIONS;
+  return [];
+}
+
 function copyTextToClipboard(text) {
   if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
   return new Promise((resolve, reject) => {
     const el = Object.assign(document.createElement('textarea'), { value: text, style: 'position:fixed;top:-9999px;opacity:0' });
-    document.body.appendChild(el); el.focus(); el.select();
-    try { document.execCommand('copy') ? resolve() : reject(); } catch (e) { reject(e); } finally { document.body.removeChild(el); }
+    document.body.appendChild(el);
+    el.focus();
+    el.select();
+    try { document.execCommand('copy') ? resolve() : reject(); } catch (e) { reject(e); }
+    finally { document.body.removeChild(el); }
   });
 }
 
-// ── Toggle switch ─────────────────────────────────────────────────────────────
-function Toggle({ on, onChange, color = '#9b72f5', size = 'md' }) {
-  const w = size === 'sm' ? 32 : 40, h = size === 'sm' ? 18 : 22, d = size === 'sm' ? 12 : 16;
+function Toggle({ on, onChange, color = '#9b72f5' }) {
   return (
-    <div onClick={e => { e.stopPropagation(); onChange(); }}
-      title={on ? 'Visible — click to hide' : 'Hidden — click to show'}
+    <button
+      type="button"
+      onClick={onChange}
       style={{
-        width: w, height: h, borderRadius: h / 2,
-        // Off-track: translucent slate visible on both themes (var(--border-color)
-        // collapses to near-invisible in dark mode, so we use a fixed value).
-        background: on ? color : 'rgba(148,163,184,0.55)',
-        position: 'relative', cursor: 'pointer', flexShrink: 0,
-        transition: 'background 0.2s, box-shadow 0.2s',
-        boxShadow: on ? `0 0 0 3px ${color}28` : 'none',
-      }}>
-      <div style={{
-        position: 'absolute', top: (h - d) / 2, left: on ? w - d - (h - d) / 2 : (h - d) / 2,
-        // Thumb stays white in both themes so it contrasts against any track color.
-        width: d, height: d, borderRadius: '50%', background: '#fff',
-        transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
-      }} />
+        width: 38, height: 22, borderRadius: 999, border: 'none', padding: 3,
+        background: on ? color : 'rgba(148,163,184,0.55)', cursor: 'pointer',
+        display: 'flex', justifyContent: on ? 'flex-end' : 'flex-start', alignItems: 'center',
+      }}
+    >
+      <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', display: 'block', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
+    </button>
+  );
+}
+
+function Field({ label, children, hint }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</label>
+      {children}
+      {hint && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 5, lineHeight: 1.4 }}>{hint}</div>}
     </div>
   );
 }
 
-// ── Type badge ────────────────────────────────────────────────────────────────
-function TypeBadge({ type }) {
-  const m = getTypeMeta(type);
+const inp = {
+  width: '100%', border: '1.5px solid var(--border-color)', borderRadius: 8, padding: '9px 12px',
+  fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'var(--card-bg)', color: 'var(--text-primary)',
+};
+
+const smallBtn = (primary, color = '#9b72f5') => ({
+  padding: '7px 12px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+  border: `1.5px solid ${primary ? color : 'var(--border-color)'}`,
+  background: primary ? color : 'var(--bg-secondary)', color: primary ? '#fff' : 'var(--text-secondary)',
+});
+
+function SettingRow({ title, description, checked, onChange, children }) {
   return (
-    <div style={{
-      width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-      background: `${m.color}18`, color: m.color,
-      fontSize: 11, fontWeight: 800,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>{m.icon}</div>
+    <div style={{ border: '1.5px solid var(--border-color)', borderRadius: 8, padding: 12, background: 'var(--bg-secondary)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>{title}</div>
+          {description && <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.4 }}>{description}</div>}
+        </div>
+        <Toggle on={checked} onChange={onChange} />
+      </div>
+      {checked && children && <div style={{ marginTop: 12 }}>{children}</div>}
+    </div>
   );
 }
 
-// ── Preview: single field ─────────────────────────────────────────────────────
-function PreviewField({ field, color }) {
-  const label    = field.label || field.column_title;
-  const required = field.is_required;
-  const type     = field.column_type;
-  const settings = (() => {
-    try { return typeof field.column_settings === 'string' ? JSON.parse(field.column_settings) : (field.column_settings || {}); }
-    catch { return {}; }
-  })();
-
-  const inputBase = {
-    width: '100%', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 8,
-    padding: '10px 13px', fontSize: 13, outline: 'none',
-    boxSizing: 'border-box', background: 'var(--input-bg, #f8fafc)', color: 'var(--text-secondary, #94a3b8)',
-    opacity: 0.9,
-  };
-
-  let input;
+function previewControl(field) {
+  const type = field.column_type;
+  const placeholder = field.placeholder || 'Type your answer...';
   switch (type) {
     case 'long_text':
-      input = <textarea rows={2} disabled placeholder="Long text…" style={{ ...inputBase, resize: 'none' }} />;
-      break;
-    case 'number': case 'progress':
-      input = <input type="number" disabled placeholder="0" style={inputBase} />;
-      break;
-    case 'email':
-      input = <input type="email" disabled placeholder="email@example.com" style={inputBase} />;
-      break;
-    case 'phone':
-      input = <input type="tel" disabled placeholder="+91 98765 43210" style={inputBase} />;
-      break;
+      return <textarea disabled rows={3} placeholder={placeholder} style={{ ...previewInput, resize: 'none' }} />;
     case 'date':
-      input = <input type="date" disabled style={inputBase} />;
-      break;
-    case 'link':
-      input = <input type="url" disabled placeholder="https://" style={inputBase} />;
-      break;
-    case 'checkbox':
-      input = (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: 0.6 }}>
-          <div style={{ width: 18, height: 18, borderRadius: 5, border: '2px solid #cbd5e1', background: 'var(--card-bg)' }} />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Click to check</span>
-        </div>
-      );
-      break;
-    case 'rating':
-      input = (
-        <div style={{ display: 'flex', gap: 4, opacity: 0.6 }}>
-          {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: 20, color: 'var(--text-muted)' }}>☆</span>)}
-        </div>
-      );
-      break;
-    case 'status': case 'priority': case 'dropdown': {
-      const opts = settings.options || (type === 'priority' ? ['Critical','High','Medium','Low'] : type === 'status' ? ['Not Started','In Progress','Done','Stuck'] : []);
-      if (type === 'dropdown') {
-        input = <select disabled style={{ ...inputBase }}><option>— Select —</option></select>;
-      } else {
-        input = (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, opacity: 0.75 }}>
-            {opts.slice(0, 4).map(o => {
-              const lbl = typeof o === 'string' ? o : o.label;
-              return <div key={lbl} style={{ padding: '4px 12px', borderRadius: 99, background: 'var(--bg-secondary)', border: '1.5px solid var(--border-color)', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>{lbl}</div>;
-            })}
-          </div>
-        );
-      }
-      break;
-    }
+      return <input disabled type="date" style={previewInput} />;
     case 'timeline':
-      input = (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', opacity: 0.7 }}>
-          <input type="date" disabled style={{ ...inputBase, flex: 1 }} />
-          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>→</span>
-          <input type="date" disabled style={{ ...inputBase, flex: 1 }} />
+      return (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <input disabled type="date" style={{ ...previewInput, flex: 1 }} />
+          <span style={{ color: '#888', fontSize: 13 }}>to</span>
+          <input disabled type="date" style={{ ...previewInput, flex: 1 }} />
         </div>
       );
-      break;
+    case 'file':
+      return <div style={{ ...previewInput, color: '#676879' }}>Attach files</div>;
+    case 'rating':
+      return <div style={{ display: 'flex', gap: 6, fontSize: 26, color: '#c4c4c4' }}>{[1, 2, 3, 4, 5].map(i => <span key={i}>o</span>)}</div>;
+    case 'color_picker':
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 40, height: 32, borderRadius: 8, border: '1px solid #d0d4e4', background: '#9b72f5', display: 'block' }} />
+          <span style={{ fontSize: 12, color: '#676879', fontFamily: 'monospace' }}>#9b72f5</span>
+        </div>
+      );
+    case 'progress':
+      return (
+        <div>
+          <input disabled type="range" min="0" max="100" defaultValue={40} style={{ width: '100%', accentColor: '#9b72f5', margin: '6px 0 4px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, background: '#e0e0e0', borderRadius: 4, height: 8, overflow: 'hidden' }}><div style={{ width: '40%', height: '100%', background: '#9b72f5' }} /></div>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#9b72f5', minWidth: 34 }}>40%</span>
+          </div>
+        </div>
+      );
     default:
-      input = <input type="text" disabled placeholder="Type your answer…" style={inputBase} />;
+      break;
   }
+  if (CHOICE_TYPES.includes(type)) {
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {choiceOptions(field).slice(0, 4).map(o => <span key={o} style={{ border: '1px solid #d0d4e4', borderRadius: 999, padding: '5px 10px', fontSize: 12, color: '#676879' }}>{o === 'true' ? 'Yes' : o === 'false' ? 'No' : o}</span>)}
+      </div>
+    );
+  }
+  return <input disabled placeholder={placeholder} style={previewInput} />;
+}
 
+function PreviewField({ field }) {
+  const label = field.label || field.column_title;
+  const control = previewControl(field);
   return (
     <div style={{ marginBottom: 18 }}>
-      <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-primary, #334155)' }}>
-        {label}{required && <span style={{ color: '#dc2626', marginLeft: 3 }}>*</span>}
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700, color: '#323338' }}>
+        {label}{field.is_required && <span style={{ color: '#e2445c', marginLeft: 3 }}>*</span>}
       </label>
-      {input}
+      {field.help_text && <div style={{ fontSize: 12, color: '#676879', marginBottom: 6 }}>{field.help_text}</div>}
+      {control}
     </div>
   );
 }
 
-// ── Live preview panel ────────────────────────────────────────────────────────
-function FormPreview({ form, fields, itemNameLabel, accentColor }) {
-  const color = accentColor || form.cover_color || '#9b72f5';
+const previewInput = {
+  width: '100%', border: '1.5px solid #e0e0e0', borderRadius: 8, padding: '10px 12px',
+  fontSize: 13, boxSizing: 'border-box', background: '#fff', color: '#323338',
+};
+
+function FormPreview({ form, fields, itemNameLabel }) {
+  const color = form.cover_color || '#9b72f5';
   const visible = fields.filter(f => f.is_visible);
+  return (
+    <div className="simplix-form-light" style={{ background: '#f0f2f5', borderRadius: 12, overflow: 'hidden', boxShadow: '0 8px 28px rgba(0,0,0,0.12)' }}>
+      <div style={{ background: color, padding: '28px 26px 24px' }}>
+        <div style={{ color: '#fff', fontWeight: 800, fontSize: 22, lineHeight: 1.3 }}>{form.title || 'Untitled Form'}</div>
+        {form.description && <div style={{ color: 'rgba(255,255,255,0.86)', fontSize: 13, marginTop: 7, lineHeight: 1.5 }}>{form.description}</div>}
+      </div>
+      {form.progress_bar_enabled && <div style={{ height: 5, background: '#dfe3ee' }}><div style={{ width: '35%', height: '100%', background: color }} /></div>}
+      <div style={{ background: '#fff', margin: 16, padding: 22, borderRadius: 10 }}>
+        <PreviewField field={{ label: itemNameLabel || 'Item Name', is_required: true, column_type: 'text' }} />
+        {visible.map(f => <PreviewField key={f.column_id} field={f} />)}
+        <button disabled style={{ width: '100%', border: 'none', borderRadius: 8, background: color, color: '#fff', padding: '12px 0', fontWeight: 800, fontSize: 14 }}>
+          {form.submit_button_text || 'Submit'}
+        </button>
+      </div>
+      {!form.hide_branding && <div style={{ textAlign: 'center', padding: '0 0 14px', fontSize: 11, color: '#999' }}>Powered by Simplix</div>}
+    </div>
+  );
+}
+
+const LOAD_SENTINEL = Symbol('form-unloaded');
+
+// ── Share tab: public link, email-the-form, QR code, embed ────────────────────
+function ShareSection({ formId, slug, publicUrl, embedCode }) {
+  const toast = useToast();
+  const [qr, setQr] = useState(null);
+  const [emails, setEmails] = useState('');
+  const [includeMembers, setIncludeMembers] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    if (formId) getFormQr(formId).then(r => { if (alive) setQr(r.data.data_url); }).catch(() => {});
+    return () => { alive = false; };
+  }, [formId]);
+
+  const downloadQr = () => {
+    if (!qr) return;
+    const a = Object.assign(document.createElement('a'), { href: qr, download: `form-${slug}-qr.png` });
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  const handleShare = async () => {
+    const list = emails.split(',').map(e => e.trim()).filter(Boolean);
+    if (!list.length && !includeMembers) { toast('Add an email address or tick board members', 'error'); return; }
+    setSending(true);
+    try {
+      const r = await shareForm(formId, { emails: list, include_members: includeMembers });
+      toast(`Form sent to ${r.data.sent} recipient${r.data.sent === 1 ? '' : 's'}`, 'success');
+      setEmails('');
+    } catch (e) {
+      toast(e.response?.data?.error || 'Failed to send', 'error');
+    } finally { setSending(false); }
+  };
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif" }}>
-      {/* Browser chrome mockup */}
-      <div style={{ background: 'var(--bg-secondary, #e2e8f0)', borderRadius: '12px 12px 0 0', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ display: 'flex', gap: 5 }}>
-          {['#f87171','#fbbf24','#34d399'].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />)}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Field label="Public URL">
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input readOnly value={publicUrl} style={{ ...inp, flex: 1, background: 'var(--bg-secondary)' }} />
+          <button onClick={() => copyTextToClipboard(publicUrl).then(() => toast('Link copied', 'success'))} style={smallBtn(true)}>Copy</button>
         </div>
-        <div style={{ flex: 1, background: 'var(--input-bg, #fff)', borderRadius: 6, height: 22, padding: '0 10px', display: 'flex', alignItems: 'center', fontSize: 10, color: 'var(--text-secondary, #94a3b8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {BASE_URL}/form/…
-        </div>
-      </div>
+      </Field>
 
-      {/* Page chrome */}
-      <div style={{ background: 'var(--bg-secondary, linear-gradient(150deg,#f8fafc,#eef2f7))', border: '1px solid var(--border-color, #e2e8f0)', borderTop: 'none', borderRadius: '0 0 12px 12px', overflow: 'hidden', maxHeight: 520, overflowY: 'auto' }}>
-        {/* Cover */}
-        <div style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)`, padding: '24px 20px 32px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{form.title || 'Untitled Form'}</div>
-          {form.description && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 5 }}>{form.description}</div>}
-        </div>
+      <Field label="Share by email" hint="Emails the public link. Recipients are BCC'd, so external addresses never see each other.">
+        <textarea value={emails} onChange={e => setEmails(e.target.value)} rows={2}
+          placeholder="Comma-separated emails — e.g. a@example.com, b@example.com" style={{ ...inp, resize: 'vertical' }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--text-secondary)', margin: '8px 0' }}>
+          <input type="checkbox" checked={includeMembers} onChange={e => setIncludeMembers(e.target.checked)} />
+          Also send to all board members
+        </label>
+        <button onClick={handleShare} disabled={sending} style={{ ...smallBtn(true), width: '100%', opacity: sending ? 0.7 : 1 }}>
+          {sending ? 'Sending…' : 'Send form link'}
+        </button>
+      </Field>
 
-        {/* Form body */}
-        <div style={{ background: 'var(--card-bg, #fff)', margin: '0 12px', borderRadius: '0 0 10px 10px', padding: '20px 18px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)', marginBottom: 14 }}>
-          {/* Item name */}
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 5, fontSize: 12, fontWeight: 600, color: 'var(--text-primary, #334155)' }}>
-              {itemNameLabel || 'Item Name'} <span style={{ color: '#dc2626' }}>*</span>
-            </label>
-            <input type="text" disabled placeholder="Enter a name…" style={{ width: '100%', border: '1.5px solid var(--border-color, #e2e8f0)', borderRadius: 7, padding: '8px 11px', fontSize: 12, outline: 'none', boxSizing: 'border-box', background: 'var(--input-bg, #f8fafc)', color: 'var(--text-primary, #334155)', opacity: 0.9 }} />
-          </div>
-
-          {visible.map(f => <PreviewField key={f.id || f.column_id} field={f} color={color} />)}
-
-          {visible.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
-              No fields selected yet
+      <Field label="QR code">
+        {qr ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <img src={qr} alt="Form QR code" width={120} height={120} style={{ borderRadius: 8, border: '1px solid var(--border-color)', background: '#fff' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>Point a phone camera here to open the form.</div>
+              <button onClick={downloadQr} style={smallBtn(false)}>Download PNG</button>
             </div>
-          )}
+          </div>
+        ) : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Generating QR…</div>}
+      </Field>
 
-          <button disabled style={{ width: '100%', padding: '10px 0', background: color, color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, marginTop: 6, opacity: 0.9, cursor: 'default' }}>Submit response →</button>
-        </div>
+      <Field label="Embed code">
+        <textarea readOnly value={embedCode} rows={4} style={{ ...inp, resize: 'none', fontFamily: 'monospace', fontSize: 11, background: 'var(--bg-secondary)' }} />
+        <button onClick={() => copyTextToClipboard(embedCode).then(() => toast('Embed copied', 'success'))} style={{ ...smallBtn(false), marginTop: 8, width: '100%' }}>Copy embed</button>
+      </Field>
 
-        <div style={{ textAlign: 'center', padding: '8px 0 14px', fontSize: 10, color: 'var(--text-secondary)' }}>Powered by Simplix</div>
-      </div>
+      <button onClick={() => window.open(`/form/${slug}`, '_blank')} style={smallBtn(false)}>Open preview</button>
     </div>
   );
 }
 
-// ── Form builder ──────────────────────────────────────────────────────────────
 function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [activeSection, setSection] = useState('basic');
+  const [slug, setSlug] = useState('');
+  const [fields, setFields] = useState([]);
+  const [form, setForm] = useState({
+    title: 'Untitled Form',
+    description: '',
+    cover_color: '#9b72f5',
+    target_group_id: '',
+    thank_you_message: 'Your response has been submitted.',
+    thank_you_title: 'Thank you!',
+    closed_message: 'This form is no longer accepting responses.',
+    is_active: true,
+    item_name_label: 'Item Name',
+    opens_at: '',
+    closes_at: '',
+    response_limit: '',
+    captcha_enabled: false,
+    hide_branding: false,
+    progress_bar_enabled: false,
+    submit_button_text: 'Submit',
+    redirect_url: '',
+    confirmation_email_enabled: false,
+    confirmation_email_column_id: '',
+    confirmation_email_subject: 'We received your response',
+    confirmation_email_body: 'Thanks for submitting the form. We have received your response.',
+    notify_on_submission: false,
+  });
 
-  const [title,       setTitle]       = useState('Untitled Form');
-  const [description, setDesc]        = useState('');
-  const [coverColor,  setColor]       = useState('#9b72f5');
-  const [targetGroup, setGroup]       = useState('');
-  const [thankYou,    setThankYou]    = useState('Thank you! Your response has been submitted.');
-  const [isActive,    setActive]      = useState(true);
-  const [slug,        setSlug]        = useState('');
-  const [itemNameLabel, setItemNameLabel] = useState('Item Name');
-  const [fields,      setFields]      = useState([]);
-  const [activeSection, setSection]   = useState('basic');
-
-  // Load existing form
-  useEffect(() => {
-    if (!formId) return;
-    getForm(formId).then(r => {
-      const f = r.data;
-      setTitle(f.title || '');
-      setDesc(f.description || '');
-      setColor(f.cover_color || '#9b72f5');
-      setGroup(f.target_group_id ? String(f.target_group_id) : '');
-      setThankYou(f.thank_you_message || '');
-      setActive(f.is_active !== false);
-      setSlug(f.slug || '');
-      setItemNameLabel(f.item_name_label || 'Item Name');
-      buildFieldsList(f.fields || []);
-    }).catch(() => toast('Failed to load form', 'error'));
-  }, [formId]);
+  const setFormValue = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
   const buildFieldsList = useCallback((savedFields) => {
-    const usable   = columns.filter(c => !SKIP_TYPES.includes(c.type));
+    const usable = columns.filter(c => !SKIP_TYPES.includes(c.type));
     const savedMap = {};
     savedFields.forEach(f => { savedMap[f.column_id] = f; });
     const list = usable.map((col, idx) => {
       const saved = savedMap[col.id];
       return {
-        column_id: col.id, column_title: col.title,
-        column_type: col.type, column_settings: col.settings,
+        column_id: col.id,
+        column_title: col.title,
+        column_type: col.type,
+        column_settings: col.settings,
         label: saved?.label || col.title,
+        help_text: saved?.help_text || '',
+        placeholder: saved?.placeholder || '',
+        conditional_logic: parseLogic(saved?.conditional_logic),
         is_required: saved?.is_required || false,
         is_visible: saved ? saved.is_visible : false,
         position: saved?.position ?? idx,
@@ -285,312 +338,313 @@ function FormBuilder({ boardId, formId, groups, columns, onBack, onSaved }) {
     setFields(list);
   }, [columns]);
 
+  // Load the form + build the field list ONCE per formId. Previously this
+  // effect also depended on buildFieldsList/groups.length, so any parent
+  // re-render that changed the `columns` reference (e.g. the real-time board
+  // poll, or switching builder tabs) re-ran it and rebuilt `fields` from the
+  // saved state — silently wiping the user's in-progress field selections.
+  const loadedFormRef = useRef(LOAD_SENTINEL); // distinct from any real/undefined formId
   useEffect(() => {
+    if (loadedFormRef.current === formId) return; // already loaded this form
+    loadedFormRef.current = formId;
     if (!formId) {
       buildFieldsList([]);
-      if (groups.length > 0) setGroup(String(groups[0].id));
+      if (groups.length > 0) setFormValue('target_group_id', String(groups[0].id));
+      return;
     }
-  }, [formId, groups, buildFieldsList]);
+    getForm(formId).then(r => {
+      const f = r.data;
+      setSlug(f.slug || '');
+      setForm({
+        title: f.title || '',
+        description: f.description || '',
+        cover_color: f.cover_color || '#9b72f5',
+        target_group_id: f.target_group_id ? String(f.target_group_id) : '',
+        thank_you_message: f.thank_you_message || 'Your response has been submitted.',
+        thank_you_title: f.thank_you_title || 'Thank you!',
+        closed_message: f.closed_message || 'This form is no longer accepting responses.',
+        is_active: f.is_active !== false,
+        item_name_label: f.item_name_label || 'Item Name',
+        opens_at: toDateTimeLocal(f.opens_at),
+        closes_at: toDateTimeLocal(f.closes_at),
+        response_limit: f.response_limit || '',
+        captcha_enabled: !!f.captcha_enabled,
+        hide_branding: !!f.hide_branding,
+        progress_bar_enabled: !!f.progress_bar_enabled,
+        submit_button_text: f.submit_button_text || 'Submit',
+        redirect_url: f.redirect_url || '',
+        confirmation_email_enabled: !!f.confirmation_email_enabled,
+        confirmation_email_column_id: f.confirmation_email_column_id ? String(f.confirmation_email_column_id) : '',
+        confirmation_email_subject: f.confirmation_email_subject || 'We received your response',
+        confirmation_email_body: f.confirmation_email_body || 'Thanks for submitting the form. We have received your response.',
+        notify_on_submission: !!f.notify_on_submission,
+      });
+      buildFieldsList(f.fields || []);
+    }).catch(() => toast('Failed to load form', 'error'));
+  }, [formId, buildFieldsList, groups.length]);
 
-  const toggleField    = id => setFields(p => p.map(f => f.column_id === id ? { ...f, is_visible: !f.is_visible } : f));
-  const toggleRequired = id => setFields(p => p.map(f => f.column_id === id ? { ...f, is_required: !f.is_required } : f));
-  const updateLabel    = (id, lbl) => setFields(p => p.map(f => f.column_id === id ? { ...f, label: lbl } : f));
+  const updateField = (id, patch) => setFields(p => p.map(f => f.column_id === id ? { ...f, ...patch } : f));
+  const visibleFields = fields.filter(f => f.is_visible);
+  const choiceFields = visibleFields.filter(f => CHOICE_TYPES.includes(f.column_type));
+  const emailFields = visibleFields.filter(f => f.column_type === 'email');
+
+  const payload = (activeOverride) => ({
+    ...form,
+    title: form.title.trim() || 'Untitled Form',
+    target_group_id: form.target_group_id ? parseInt(form.target_group_id) : null,
+    response_limit: form.response_limit ? parseInt(form.response_limit) : null,
+    confirmation_email_column_id: form.confirmation_email_column_id ? parseInt(form.confirmation_email_column_id) : null,
+    item_name_label: form.item_name_label.trim() || 'Item Name',
+    is_active: activeOverride ?? form.is_active,
+  });
+
+  const handleToggleActive = async () => {
+    const next = !form.is_active;
+    setFormValue('is_active', next);
+    if (!formId) return;
+    try {
+      await updateForm(formId, payload(next));
+      toast(next ? 'Form activated' : 'Form deactivated', 'success');
+    } catch {
+      setFormValue('is_active', !next);
+      toast('Failed to update form status', 'error');
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = {
-        title: title.trim() || 'Untitled Form', description,
-        cover_color: coverColor,
-        target_group_id: targetGroup ? parseInt(targetGroup) : null,
-        thank_you_message: thankYou, is_active: isActive,
-        item_name_label: itemNameLabel.trim() || 'Item Name',
-      };
       let saved;
-      if (formId) { const r = await updateForm(formId, payload); saved = r.data; }
-      else { const r = await createForm(boardId, payload); saved = r.data; setSlug(saved.slug); }
-
-      const visibleFields = fields.filter(f => f.is_visible).map((f, i) => ({
-        column_id: f.column_id, label: f.label || f.column_title,
-        is_required: f.is_required, position: i, is_visible: true,
+      if (formId) saved = (await updateForm(formId, payload())).data;
+      else {
+        saved = (await createForm(boardId, payload())).data;
+        setSlug(saved.slug);
+      }
+      const selected = visibleFields.map((f, i) => ({
+        column_id: f.column_id,
+        label: f.label || f.column_title,
+        help_text: f.help_text || '',
+        placeholder: f.placeholder || '',
+        conditional_logic: parseLogic(f.conditional_logic),
+        is_required: f.is_required,
+        position: i,
+        is_visible: true,
       }));
-      await saveFormFields(saved.id, visibleFields);
+      await saveFormFields(saved.id, selected);
       toast('Form saved', 'success');
       onSaved(saved);
-    } catch { toast('Failed to save form', 'error'); }
-    finally { setSaving(false); }
+    } catch (err) {
+      toast('Failed to save form', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const publicUrl = slug ? `${BASE_URL}/form/${slug}` : '';
   const embedCode = slug ? `<iframe src="${BASE_URL}/form/${slug}" width="100%" height="700" frameborder="0" style="border-radius:12px;border:none"></iframe>` : '';
-  const copyToClipboard = (text, lbl) => copyTextToClipboard(text).then(() => toast(`${lbl} copied!`, 'success')).catch(() => toast('Copy failed', 'error'));
-  const previewFields = fields.filter(f => f.is_visible);
-
-  const SECTIONS = [
-    { key: 'basic', icon: '⚙', label: 'Basic Info' },
-    { key: 'fields', icon: '📋', label: 'Fields' },
-    ...(slug ? [{ key: 'share', icon: '🔗', label: 'Share' }] : []),
+  const sections = [
+    ['basic', 'Basic'],
+    ['fields', `Fields${visibleFields.length ? ` (${visibleFields.length})` : ''}`],
+    ['logic', 'Logic'],
+    ['behavior', 'Settings'],
+    ...(slug ? [['share', 'Share']] : []),
   ];
-
-  const visibleCount = fields.filter(f => f.is_visible).length;
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', fontFamily: "'Inter', -apple-system, sans-serif" }}>
-
-      {/* ── Left: builder panel ── */}
-      <div className="forms-builder-editor" style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--card-bg, #fff)', borderRight: '1px solid var(--border-color, #e2e8f0)', overflow: 'hidden' }}>
-
-        {/* Header */}
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-color, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
-          <button onClick={onBack}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#9b72f5', fontWeight: 600, padding: '5px 0', background: 'none', border: 'none', cursor: 'pointer' }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="#9b72f5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            Back
-          </button>
-
+      <div className="forms-builder-editor" style={{ width: 430, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--card-bg)', borderRight: '1px solid var(--border-color)', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <button onClick={onBack} style={{ ...smallBtn(false), background: 'transparent', border: 'none', color: '#9b72f5' }}>Back</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Active toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Toggle on={isActive} onChange={() => setActive(a => !a)} color="#00c875" size="sm" />
-              <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? '#059669' : 'var(--text-secondary)' }}>
-                {isActive ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-            <button onClick={handleSave} disabled={saving}
-              style={{
-                padding: '7px 18px', background: '#9b72f5', color: '#fff', borderRadius: 8,
-                fontWeight: 700, fontSize: 13, cursor: saving ? 'wait' : 'pointer',
-                opacity: saving ? 0.7 : 1, border: 'none',
-                boxShadow: '0 2px 8px rgba(0,115,234,0.3)',
-              }}>
-              {saving ? 'Saving…' : formId ? 'Save Changes' : 'Create Form'}
-            </button>
+            <Toggle on={form.is_active} onChange={handleToggleActive} color="#00c875" />
+            <span style={{ fontSize: 12, fontWeight: 800, color: form.is_active ? '#00a25f' : 'var(--text-secondary)' }}>{form.is_active ? 'Active' : 'Inactive'}</span>
+            <button onClick={handleSave} disabled={saving} style={{ ...smallBtn(true), opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : formId ? 'Save' : 'Create'}</button>
           </div>
         </div>
 
-        {/* Section tabs */}
-        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-color, #f1f5f9)', display: 'flex', gap: 4, flexShrink: 0 }}>
-          {SECTIONS.map(s => (
-            <button key={s.key} onClick={() => setSection(s.key)}
-              style={{
-                padding: '7px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: activeSection === s.key ? 700 : 500,
-                border: `1.5px solid ${activeSection === s.key ? '#9b72f5' : 'var(--border-color, #e2e8f0)'}`,
-                background: activeSection === s.key ? 'rgba(155,114,245,0.18)' : 'var(--bg-primary, #fff)',
-                color: activeSection === s.key ? '#9b72f5' : 'var(--text-secondary, #64748b)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                transition: 'all 0.15s',
-              }}>
-              <span>{s.icon}</span> {s.label}
-              {s.key === 'fields' && visibleCount > 0 && (
-                <span style={{ background: '#9b72f5', color: '#fff', borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 800, marginLeft: 2 }}>{visibleCount}</span>
-              )}
-            </button>
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+          {sections.map(([key, label]) => (
+            <button key={key} onClick={() => setSection(key)} style={{
+              ...smallBtn(activeSection === key),
+              padding: '7px 10px',
+              fontSize: 12,
+            }}>{label}</button>
           ))}
         </div>
 
-        {/* Section body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-
-          {/* ── Basic Info ── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
           {activeSection === 'basic' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <Field label="Form Title">
-                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. IT Onboarding Form"
-                  style={inp} onFocus={foc} onBlur={blr} />
-              </Field>
-
-              <Field label="Description">
-                <textarea value={description} onChange={e => setDesc(e.target.value)} rows={3}
-                  placeholder="Brief description shown to respondents…"
-                  style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} onFocus={foc} onBlur={blr} />
-              </Field>
-
-              <Field label="Cover Color">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <input type="color" value={coverColor} onChange={e => setColor(e.target.value)}
-                    style={{ width: 44, height: 44, borderRadius: 8, border: '2px solid #e2e8f0', cursor: 'pointer', padding: 3, boxSizing: 'border-box' }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace', fontWeight: 600 }}>{coverColor}</span>
-                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    {ACCENT_PRESETS.map(c => (
-                      <div key={c} onClick={() => setColor(c)}
-                        style={{
-                          width: 22, height: 22, borderRadius: '50%', background: c, cursor: 'pointer',
-                          border: c === coverColor ? '3px solid #0f172a' : '1.5px solid #d1d5db',
-                          boxShadow: c === coverColor ? '0 0 0 1px #fff inset' : 'none',
-                          transition: 'transform 0.15s',
-                        }}
-                        onMouseEnter={e => e.target.style.transform = 'scale(1.2)'}
-                        onMouseLeave={e => e.target.style.transform = 'scale(1)'}
-                      />
-                    ))}
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <Field label="Form title"><input value={form.title} onChange={e => setFormValue('title', e.target.value)} style={inp} /></Field>
+              <Field label="Description"><textarea value={form.description} onChange={e => setFormValue('description', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} /></Field>
+              <Field label="Item name label"><input value={form.item_name_label} onChange={e => setFormValue('item_name_label', e.target.value)} style={inp} /></Field>
+              <Field label="Cover color">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <input type="color" value={form.cover_color} onChange={e => setFormValue('cover_color', e.target.value)} style={{ width: 42, height: 38, border: '1px solid var(--border-color)', borderRadius: 8, padding: 3 }} />
+                  {ACCENT_PRESETS.map(c => <button key={c} type="button" onClick={() => setFormValue('cover_color', c)} style={{ width: 22, height: 22, borderRadius: '50%', border: c === form.cover_color ? '3px solid var(--text-primary)' : '1px solid var(--border-color)', background: c, cursor: 'pointer' }} />)}
                 </div>
               </Field>
-
-              <Field label="Target Group">
-                <select value={targetGroup} onChange={e => setGroup(e.target.value)} style={{ ...inp, cursor: 'pointer' }} onFocus={foc} onBlur={blr}>
-                  <option value="">— First group (default) —</option>
+              <Field label="Target group">
+                <select value={form.target_group_id} onChange={e => setFormValue('target_group_id', e.target.value)} style={inp}>
+                  <option value="">First group</option>
                   {groups.map(g => <option key={g.id} value={String(g.id)}>{g.name}</option>)}
                 </select>
               </Field>
-
-              <Field label="Thank-you Message">
-                <textarea value={thankYou} onChange={e => setThankYou(e.target.value)} rows={3}
-                  style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} onFocus={foc} onBlur={blr} />
-              </Field>
             </div>
           )}
 
-          {/* ── Fields ── */}
           {activeSection === 'fields' && (
             <div>
-              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
-                Toggle fields on/off and rename them for your respondents. <strong style={{ color: 'var(--text-secondary)' }}>Item Name</strong> is always included.
-              </p>
-
-              {/* Item Name — always on */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(155,114,245,0.10)', marginBottom: 10, border: '1.5px solid rgba(155,114,245,0.32)' }}>
-                <Toggle on size="sm" onChange={() => {}} color="#9b72f5" />
-                <div style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(155,114,245,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#9b72f5', fontWeight: 800, flexShrink: 0 }}>Aa</div>
-                <input
-                  value={itemNameLabel}
-                  onChange={e => setItemNameLabel(e.target.value)}
-                  style={{ flex: 1, border: '1.5px solid rgba(155,114,245,0.32)', borderRadius: 6, padding: '4px 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', background: 'var(--card-bg)', outline: 'none', minWidth: 0 }}
-                  onFocus={e => e.target.style.borderColor = '#9b72f5'}
-                  onBlur={e => e.target.style.borderColor = 'rgba(155,114,245,0.32)'}
-                />
-                <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 700, letterSpacing: 0.3, flexShrink: 0 }}>REQUIRED</span>
-              </div>
-
-              {/* Field list */}
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 14 }}>Turn board columns into form questions, then add helper text, placeholders, and required validation.</div>
               {fields.map(f => (
                 <div key={f.column_id} style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
-                  borderRadius: 10, marginBottom: 7,
-                  background: f.is_visible ? 'var(--card-bg)' : 'var(--bg-secondary)',
-                  border: '1.5px solid var(--border-color)',
-                  transition: 'all 0.15s',
-                  opacity: f.is_visible ? 1 : 0.55,
+                  border: f.is_visible ? '1.5px solid #9b72f5' : '1.5px solid var(--border-color)',
+                  borderRadius: 8, padding: 12, marginBottom: 10,
+                  background: f.is_visible ? 'rgba(155,114,245,0.08)' : 'var(--bg-secondary)',
                 }}>
-                  <Toggle on={f.is_visible} onChange={() => toggleField(f.column_id)} color="#9b72f5" size="sm" />
-                  <TypeBadge type={f.column_type} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <input
-                      value={f.label}
-                      onChange={e => updateLabel(f.column_id, e.target.value)}
-                      disabled={!f.is_visible}
-                      style={{
-                        border: 'none', background: 'transparent', fontSize: 13, fontWeight: 600,
-                        color: f.is_visible ? 'var(--text-primary)' : 'var(--text-secondary)', width: '100%',
-                        outline: 'none', padding: '1px 0',
-                      }}
-                      onFocus={e => { e.target.style.borderBottom = '1.5px solid #9b72f5'; }}
-                      onBlur={e => { e.target.style.borderBottom = 'none'; }}
-                    />
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1, fontWeight: 500, letterSpacing: 0.3 }}>{f.column_type}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Toggle on={f.is_visible} onChange={() => updateField(f.column_id, { is_visible: !f.is_visible })} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {f.is_visible ? (
+                        // Editable question label when the field is included on the form
+                        <input value={f.label} onChange={e => updateField(f.column_id, { label: e.target.value })} style={{ ...inp, padding: '7px 9px', fontWeight: 700 }} />
+                      ) : (
+                        // Toggled-off: show the column name as plain, readable text
+                        // (a disabled input greyed it out so you couldn't tell what it was)
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.label || f.column_title}</div>
+                      )}
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{f.column_type}</div>
+                    </div>
+                    {f.is_visible ? (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, color: f.is_required ? '#e2445c' : 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={f.is_required} onChange={() => updateField(f.column_id, { is_required: !f.is_required })} />
+                        Required
+                      </label>
+                    ) : (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Off</span>
+                    )}
                   </div>
                   {f.is_visible && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', flexShrink: 0 }}>
-                      <input type="checkbox" checked={f.is_required} onChange={() => toggleRequired(f.column_id)}
-                        style={{ cursor: 'pointer', accentColor: '#dc2626', width: 13, height: 13 }} />
-                      <span style={{ fontSize: 10, color: f.is_required ? '#dc2626' : 'var(--text-muted)', fontWeight: 700, letterSpacing: 0.3 }}>REQ</span>
-                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+                      <input value={f.placeholder || ''} onChange={e => updateField(f.column_id, { placeholder: e.target.value })} placeholder="Placeholder" style={inp} />
+                      <input value={f.help_text || ''} onChange={e => updateField(f.column_id, { help_text: e.target.value })} placeholder="Helper text" style={inp} />
+                    </div>
                   )}
                 </div>
               ))}
-
-              {fields.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 13 }}>
-                  No columns found on this board.
-                </div>
-              )}
             </div>
           )}
 
-          {/* ── Share ── */}
-          {activeSection === 'share' && slug && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {/* Status badge */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: isActive ? 'rgba(0,200,117,0.12)' : 'var(--bg-secondary)', border: `1.5px solid ${isActive ? 'rgba(0,200,117,0.32)' : 'var(--border-color)'}` }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? '#22c55e' : 'var(--text-secondary)', animation: isActive ? 'pulse 2s infinite' : 'none' }} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: isActive ? '#22c55e' : 'var(--text-secondary)' }}>
-                  {isActive ? 'Form is active and accepting responses' : 'Form is inactive — toggle Active to enable'}
-                </span>
+          {activeSection === 'logic' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>Show follow-up questions only when a previous choice question has a matching answer. Multiple rules use OR logic.</div>
+              {visibleFields.map(target => {
+                const rules = parseLogic(target.conditional_logic);
+                return (
+                  <div key={target.column_id} style={{ border: '1.5px solid var(--border-color)', borderRadius: 8, padding: 12, background: 'var(--bg-secondary)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>{target.label || target.column_title}</div>
+                    {rules.length === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const source = choiceFields.find(f => f.column_id !== target.column_id);
+                          if (!source) return toast('Add a status, dropdown, priority, or checkbox field first', 'error');
+                          updateField(target.column_id, { conditional_logic: [{ source_column_id: source.column_id, operator: 'equals', value: choiceOptions(source)[0] || '' }] });
+                        }}
+                        style={smallBtn(false)}
+                      >Add logic</button>
+                    ) : rules.map((rule, idx) => {
+                      const source = fields.find(f => String(f.column_id) === String(rule.source_column_id));
+                      const options = choiceOptions(source);
+                      return (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 92px 1fr auto', gap: 6, alignItems: 'center', marginBottom: 7 }}>
+                          <select value={rule.source_column_id || ''} onChange={e => {
+                            const nextSource = fields.find(f => String(f.column_id) === e.target.value);
+                            const next = rules.map((r, i) => i === idx ? { ...r, source_column_id: e.target.value, value: choiceOptions(nextSource)[0] || '' } : r);
+                            updateField(target.column_id, { conditional_logic: next });
+                          }} style={inp}>
+                            {choiceFields.filter(f => f.column_id !== target.column_id).map(f => <option key={f.column_id} value={f.column_id}>{f.label || f.column_title}</option>)}
+                          </select>
+                          <select value={rule.operator || 'equals'} onChange={e => {
+                            const next = rules.map((r, i) => i === idx ? { ...r, operator: e.target.value } : r);
+                            updateField(target.column_id, { conditional_logic: next });
+                          }} style={inp}>
+                            <option value="equals">is</option>
+                            <option value="not_equals">is not</option>
+                            <option value="contains">contains</option>
+                          </select>
+                          <select value={rule.value || ''} onChange={e => {
+                            const next = rules.map((r, i) => i === idx ? { ...r, value: e.target.value } : r);
+                            updateField(target.column_id, { conditional_logic: next });
+                          }} style={inp}>
+                            {options.map(o => <option key={o} value={o}>{o === 'true' ? 'Checked' : o === 'false' ? 'Unchecked' : o}</option>)}
+                          </select>
+                          <button type="button" onClick={() => updateField(target.column_id, { conditional_logic: rules.filter((_, i) => i !== idx) })} style={{ ...smallBtn(false), color: '#e2445c' }}>Remove</button>
+                        </div>
+                      );
+                    })}
+                    {rules.length > 0 && (
+                      <button type="button" onClick={() => {
+                        const source = choiceFields.find(f => f.column_id !== target.column_id);
+                        updateField(target.column_id, { conditional_logic: [...rules, { source_column_id: source?.column_id || '', operator: 'equals', value: choiceOptions(source)[0] || '' }] });
+                      }} style={smallBtn(false)}>Add OR rule</button>
+                    )}
+                  </div>
+                );
+              })}
+              {visibleFields.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Choose fields first.</div>}
+            </div>
+          )}
+
+          {activeSection === 'behavior' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <Field label="Submit button text"><input value={form.submit_button_text} onChange={e => setFormValue('submit_button_text', e.target.value)} style={inp} /></Field>
+              <Field label="Thank-you title"><input value={form.thank_you_title} onChange={e => setFormValue('thank_you_title', e.target.value)} style={inp} /></Field>
+              <Field label="Thank-you message"><textarea value={form.thank_you_message} onChange={e => setFormValue('thank_you_message', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></Field>
+              <Field label="Closed message"><textarea value={form.closed_message} onChange={e => setFormValue('closed_message', e.target.value)} rows={3} style={{ ...inp, resize: 'vertical' }} /></Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Field label="Open date"><input type="datetime-local" value={form.opens_at} onChange={e => setFormValue('opens_at', e.target.value)} style={inp} /></Field>
+                <Field label="Close date"><input type="datetime-local" value={form.closes_at} onChange={e => setFormValue('closes_at', e.target.value)} style={inp} /></Field>
               </div>
-
-              <Field label="Public URL">
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input readOnly value={publicUrl} style={{ ...inp, flex: 1, background: 'var(--bg-secondary)', fontSize: 12, color: 'var(--text-secondary)', cursor: 'text' }} />
-                  <button onClick={() => copyToClipboard(publicUrl, 'URL')} style={shareBtn('#9b72f5')}>Copy</button>
-                  <button onClick={() => window.open(`/form/${slug}`, '_blank')} style={shareBtn('var(--text-secondary)')} title="Open in new tab">↗</button>
+              <Field label="Response limit"><input type="number" min="1" value={form.response_limit} onChange={e => setFormValue('response_limit', e.target.value)} placeholder="Unlimited" style={inp} /></Field>
+              <SettingRow title="CAPTCHA" description="Ask a simple challenge before public submission." checked={form.captcha_enabled} onChange={() => setFormValue('captcha_enabled', !form.captcha_enabled)} />
+              <SettingRow title="Progress bar" description="Show a progress bar above the form body." checked={form.progress_bar_enabled} onChange={() => setFormValue('progress_bar_enabled', !form.progress_bar_enabled)} />
+              <SettingRow title="Hide branding" description="Remove the Simplix footer from the public form." checked={form.hide_branding} onChange={() => setFormValue('hide_branding', !form.hide_branding)} />
+              <SettingRow title="Redirect after submit" checked={!!form.redirect_url} onChange={() => setFormValue('redirect_url', form.redirect_url ? '' : 'https://')}>
+                <input value={form.redirect_url} onChange={e => setFormValue('redirect_url', e.target.value)} placeholder="https://example.com/thanks" style={inp} />
+              </SettingRow>
+              <SettingRow title="Confirmation email" description="Send a receipt to the respondent using an email question." checked={form.confirmation_email_enabled} onChange={() => setFormValue('confirmation_email_enabled', !form.confirmation_email_enabled)}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <select value={form.confirmation_email_column_id} onChange={e => setFormValue('confirmation_email_column_id', e.target.value)} style={inp}>
+                    <option value="">First email field</option>
+                    {emailFields.map(f => <option key={f.column_id} value={String(f.column_id)}>{f.label || f.column_title}</option>)}
+                  </select>
+                  <input value={form.confirmation_email_subject} onChange={e => setFormValue('confirmation_email_subject', e.target.value)} placeholder="Subject" style={inp} />
+                  <textarea value={form.confirmation_email_body} onChange={e => setFormValue('confirmation_email_body', e.target.value)} rows={3} placeholder="Email body" style={{ ...inp, resize: 'vertical' }} />
                 </div>
-              </Field>
-
-              <Field label="Embed Code">
-                <textarea readOnly value={embedCode} rows={4}
-                  style={{ ...inp, background: 'var(--bg-secondary)', fontSize: 11, fontFamily: 'monospace', resize: 'none', color: 'var(--text-secondary)', cursor: 'text', lineHeight: 1.6 }} />
-                <button onClick={() => copyToClipboard(embedCode, 'Embed code')} style={{ ...shareBtn('var(--text-secondary)'), marginTop: 8, width: '100%', justifyContent: 'center' }}>Copy Embed Code</button>
-              </Field>
-
-              {window.location.hostname === 'localhost' && (
-                <div style={{ background: 'rgba(253,186,116,0.12)', border: '1px solid rgba(253,186,116,0.32)', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: '#fdab3d', lineHeight: 1.55, display: 'flex', gap: 8 }}>
-                  <span style={{ flexShrink: 0 }}>💡</span>
-                  <span>Replace <code style={{ background: 'rgba(253,186,116,0.22)', padding: '1px 4px', borderRadius: 4 }}>localhost</code> with your production domain when deploying.</span>
-                </div>
-              )}
+              </SettingRow>
+              <SettingRow title="Notify team on new response" description="Every submission notifies all board members in-app, and emails them a link to the new item." checked={form.notify_on_submission} onChange={() => setFormValue('notify_on_submission', !form.notify_on_submission)} />
             </div>
+          )}
+
+          {activeSection === 'share' && slug && (
+            <ShareSection formId={formId} slug={slug} publicUrl={publicUrl} embedCode={embedCode} />
           )}
         </div>
       </div>
 
-      {/* ── Right: live preview ── */}
-      <div className="forms-live-preview-pane" style={{ flex: 1, background: 'var(--bg-secondary, #f1f5f9)', overflowY: 'auto', padding: '28px 32px' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, justifyContent: 'center' }}>
-            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-            <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>Live Preview</span>
-            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-          </div>
-          <FormPreview
-            form={{ title, description, cover_color: coverColor, thank_you_message: thankYou }}
-            fields={previewFields}
-            itemNameLabel={itemNameLabel}
-            accentColor={coverColor}
-          />
+      <div className="forms-live-preview-pane" style={{ flex: 1, background: 'var(--bg-secondary)', overflowY: 'auto', padding: '28px 32px' }}>
+        <div style={{ maxWidth: 500, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 14 }}>Live preview</div>
+          <FormPreview form={form} fields={fields} itemNameLabel={form.item_name_label} />
         </div>
       </div>
     </div>
   );
 }
 
-// ── Shared input helpers ──────────────────────────────────────────────────────
-const inp = {
-  width: '100%', border: '1.5px solid var(--border-color)', borderRadius: 8, padding: '9px 12px',
-  fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'var(--card-bg)', color: 'var(--text-primary)',
-  transition: 'border-color 0.15s, box-shadow 0.15s',
-};
-const foc = e => { e.target.style.borderColor = '#9b72f5'; e.target.style.boxShadow = '0 0 0 3px rgba(0,115,234,0.12)'; };
-const blr = e => { e.target.style.borderColor = 'var(--border-color)'; e.target.style.boxShadow = 'none'; };
-
-const shareBtn = (color) => ({
-  padding: '8px 14px', background: color === '#9b72f5' ? 'rgba(155,114,245,0.12)' : 'var(--bg-secondary)',
-  color, border: `1.5px solid ${color === '#9b72f5' ? 'rgba(155,114,245,0.32)' : 'var(--border-color)'}`,
-  borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
-  whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
-});
-
-function Field({ label, children }) {
-  return (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-// ── Forms list ────────────────────────────────────────────────────────────────
 function FormsList({ boardId, onOpenBuilder }) {
-  const [forms, setForms]   = useState([]);
+  const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
@@ -603,165 +657,92 @@ function FormsList({ boardId, onOpenBuilder }) {
 
   const handleDelete = async id => {
     if (!confirm('Delete this form? This cannot be undone.')) return;
-    try { await deleteForm(id); setForms(f => f.filter(x => x.id !== id)); toast('Form deleted'); }
-    catch { toast('Failed to delete form', 'error'); }
+    try {
+      await deleteForm(id);
+      setForms(f => f.filter(x => x.id !== id));
+      toast('Form deleted');
+    } catch {
+      toast('Failed to delete form', 'error');
+    }
   };
-
-  const copyLink  = slug => { const url = `${BASE_URL}/form/${slug}`; copyTextToClipboard(url).then(() => toast('Link copied!', 'success')).catch(() => toast('Copy failed', 'error')); };
-  const copyEmbed = slug => { const code = `<iframe src="${BASE_URL}/form/${slug}" width="100%" height="700" frameborder="0" style="border-radius:12px;border:none"></iframe>`; copyTextToClipboard(code).then(() => toast('Embed copied!', 'success')).catch(() => toast('Copy failed', 'error')); };
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      {/* Header */}
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          Create shareable forms that add items directly to your board
-        </div>
-        <button onClick={() => onOpenBuilder(null)}
-          style={{ padding: '8px 18px', background: '#9b72f5', color: '#fff', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', boxShadow: '0 2px 8px rgba(0,115,234,0.3)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span> Create Form
-        </button>
+      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Create shareable forms that add items directly to your board</div>
+        <button onClick={() => onOpenBuilder(null)} style={smallBtn(true)}>Create Form</button>
       </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--border-color)', borderTopColor: '#9b72f5', animation: 'spin 0.7s linear infinite', margin: '0 auto 12px' }} />
-            Loading forms…
-          </div>
+          <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-secondary)' }}>Loading forms...</div>
         ) : forms.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)', maxWidth: 360, margin: '0 auto' }}>
-            <div style={{ fontSize: 56, marginBottom: 16 }}>📋</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>No forms yet</div>
-            <div style={{ fontSize: 13, marginBottom: 28, lineHeight: 1.6 }}>Create a form to collect submissions directly into this board — no account needed for respondents.</div>
-            <button onClick={() => onOpenBuilder(null)}
-              style={{ padding: '11px 28px', background: '#9b72f5', color: '#fff', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', border: 'none', boxShadow: '0 4px 14px rgba(0,115,234,0.35)' }}>
-              + Create Your First Form
-            </button>
+            <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>No forms yet</div>
+            <div style={{ fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>Create a form to collect submissions directly into this board.</div>
+            <button onClick={() => onOpenBuilder(null)} style={smallBtn(true)}>Create your first form</button>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-            {forms.map(form => (
-              <FormCard key={form.id} form={form}
-                onEdit={() => onOpenBuilder(form.id)}
-                onCopyLink={() => copyLink(form.slug)}
-                onCopyEmbed={() => copyEmbed(form.slug)}
-                onPreview={() => window.open(`/form/${form.slug}`, '_blank')}
-                onDelete={() => handleDelete(form.id)}
-              />
-            ))}
+            {forms.map(form => {
+              const url = `${BASE_URL}/form/${form.slug}`;
+              return (
+                <div key={form.id} style={{ background: 'var(--card-bg)', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-color)', boxShadow: '0 2px 16px rgba(0,0,0,0.07)' }}>
+                  <div style={{ height: 6, background: form.cover_color || '#9b72f5' }} />
+                  <div style={{ padding: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>{form.target_group_name || 'First group'} · {form.response_count || 0} responses</div>
+                      </div>
+                      <span style={{ padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 800, background: form.is_active ? 'rgba(0,200,117,0.12)' : 'var(--bg-secondary)', color: form.is_active ? '#00a25f' : 'var(--text-secondary)' }}>
+                        {form.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 14 }}>
+                      <button onClick={() => onOpenBuilder(form.id)} style={smallBtn(true, form.cover_color || '#9b72f5')}>Builder</button>
+                      <button onClick={() => copyTextToClipboard(url).then(() => toast('Link copied', 'success'))} style={smallBtn(false)}>Copy link</button>
+                      <button onClick={() => window.open(`/form/${form.slug}`, '_blank')} style={smallBtn(false)}>Preview</button>
+                      <button onClick={() => handleDelete(form.id)} style={{ ...smallBtn(false), color: '#e2445c', marginLeft: 'auto' }}>Delete</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
     </div>
   );
 }
 
-function FormCard({ form, onEdit, onCopyLink, onCopyEmbed, onPreview, onDelete }) {
-  const color = form.cover_color || '#9b72f5';
-  return (
-    <div style={{ background: 'var(--card-bg)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 16px rgba(0,0,0,0.07)', border: '1px solid var(--border-color)', transition: 'transform 0.2s, box-shadow 0.2s' }}
-      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.11)'; }}
-      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 16px rgba(0,0,0,0.07)'; }}
-    >
-      {/* Color bar */}
-      <div style={{ height: 6, background: `linear-gradient(90deg, ${color}, ${color}99)` }} />
-      <div style={{ padding: '14px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
-              {form.title}
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span>→</span> {form.target_group_name || 'First group'}
-            </div>
-          </div>
-          <span style={{
-            padding: '3px 10px', borderRadius: 99, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
-            background: form.is_active ? 'rgba(0,200,117,0.12)' : 'var(--bg-secondary)',
-            color: form.is_active ? '#22c55e' : 'var(--text-secondary)',
-            border: `1px solid ${form.is_active ? 'rgba(0,200,117,0.32)' : 'var(--border-color)'}`,
-          }}>
-            {form.is_active ? '● Active' : '○ Inactive'}
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
-          <button onClick={onEdit} style={cardBtn(color, true)}>Open Builder</button>
-          <button onClick={onCopyLink} style={cardBtn()}>🔗 Copy Link</button>
-          <button onClick={onCopyEmbed} style={cardBtn()}>&lt;/&gt; Embed</button>
-          <button onClick={onPreview} style={cardBtn()}>↗ Preview</button>
-          <button onClick={onDelete} style={{ ...cardBtn(), color: '#dc2626', borderColor: 'rgba(226,68,92,0.32)', marginLeft: 'auto' }}>Delete</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function cardBtn(color, primary) {
-  return {
-    padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-    background: primary ? color : 'var(--bg-secondary)',
-    color: primary ? '#fff' : 'var(--text-secondary)',
-    border: `1.5px solid ${primary ? color : 'var(--border-color)'}`,
-    transition: 'all 0.15s',
-  };
-}
-
-// ── Main panel wrapper ────────────────────────────────────────────────────────
 export default function FormsPanel({ boardId, groups, columns, onClose }) {
-  const [view, setView]               = useState('list');
+  const [view, setView] = useState('list');
   const [editingFormId, setEditingId] = useState(null);
-  const [savedFormId, setSavedId]     = useState(null);
   const { resolvedTheme } = useThemeContext();
   const isDark = resolvedTheme === 'dark';
 
-  const openBuilder = id => { setEditingId(id); setSavedId(id); setView('builder'); };
-  const handleSaved = f  => { setSavedId(f.id); setEditingId(f.id); };
-  const handleBack  = () => { setView('list'); setEditingId(null); setSavedId(null); };
+  const openBuilder = id => { setEditingId(id); setView('builder'); };
+  const handleBack = () => { setView('list'); setEditingId(null); };
   const closeBg = isDark ? 'rgba(255,255,255,0.14)' : '#f1f5f9';
-  const closeHoverBg = isDark ? 'rgba(255,255,255,0.22)' : 'var(--border-color)';
   const closeColor = isDark ? '#E6EAF6' : 'var(--text-secondary)';
 
   return (
-    <div className="wb-side-panel-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 400, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }}
-      onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
-        className="wb-side-panel"
-        style={{ width: view === 'builder' ? '90vw' : 720, maxWidth: '100vw', background: 'var(--bg-primary, #f8fafc)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 48px rgba(0,0,0,0.18)', overflow: 'hidden', fontFamily: "'Inter', sans-serif" }}>
-
-        {/* Panel header */}
-        <div className="forms-panel-header" style={{ background: 'var(--card-bg, #fff)', borderBottom: '1px solid var(--border-color, #e2e8f0)', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+    <div className="wb-side-panel-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 400, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="wb-side-panel" style={{ width: view === 'builder' ? '90vw' : 720, maxWidth: '100vw', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 48px rgba(0,0,0,0.18)', overflow: 'hidden', fontFamily: "'Inter', sans-serif" }}>
+        <div className="forms-panel-header" style={{ background: 'var(--card-bg)', borderBottom: '1px solid var(--border-color)', padding: '14px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
-            <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: 'var(--text-primary, #0f172a)', display: 'flex', alignItems: 'center', gap: 7, letterSpacing: -0.2 }}>
-              <span style={{ fontSize: 18 }}>📋</span> Forms
-            </h2>
+            <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>Forms</h2>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0', fontWeight: 500 }}>
-              {view === 'builder' ? 'Design your form and manage fields' : 'Collect data from anyone — no account needed'}
+              {view === 'builder' ? 'Design, logic, publishing, and response settings' : 'Collect data from anyone'}
             </p>
           </div>
-          <button onClick={onClose}
-            style={{ width: 32, height: 32, borderRadius: '50%', background: closeBg, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: closeColor, transition: 'background 0.15s, color 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.background = closeHoverBg}
-            onMouseLeave={e => e.currentTarget.style.background = closeBg}>
-            ×
-          </button>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: '50%', background: closeBg, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: closeColor }}>x</button>
         </div>
-
-        {/* Content */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {view === 'list' ? (
             <FormsList boardId={boardId} onOpenBuilder={openBuilder} />
           ) : (
-            <FormBuilder
-              boardId={boardId}
-              formId={editingFormId || savedFormId}
-              groups={groups}
-              columns={columns}
-              onBack={handleBack}
-              onSaved={handleSaved}
-            />
+            <FormBuilder boardId={boardId} formId={editingFormId} groups={groups} columns={columns} onBack={handleBack} onSaved={f => setEditingId(f.id)} />
           )}
         </div>
       </div>

@@ -137,4 +137,17 @@ async function sendWelcomeEmail(to, name) {
   }
 }
 
-module.exports = { sendPasswordReset, sendWelcomeEmail };
+// Generic sender used by the dashboard digest engine. Falls back to a console
+// log when SMTP isn't configured (dev), so scheduling logic still works.
+async function sendMail({ to, subject, html, text }) {
+  const transporter = getTransporter();
+  const recipients = Array.isArray(to) ? to.join(', ') : to;
+  if (!transporter) {
+    console.log(`\n📧 [sendMail:no-smtp] to=${recipients} subject="${subject}"`);
+    return { skipped: true };
+  }
+  await transporter.sendMail({ from: fromAddress(), to: recipients, subject, html, text: text || '' });
+  return { sent: true };
+}
+
+module.exports = { sendPasswordReset, sendWelcomeEmail, sendMail };

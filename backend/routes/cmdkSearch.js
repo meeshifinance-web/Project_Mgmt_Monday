@@ -28,8 +28,10 @@ const { requireAuth } = require('../middleware/auth');
 
 function parseOwners(val) {
   if (!val) return [];
-  try { const p = JSON.parse(val); return Array.isArray(p) ? p : p ? [String(p)] : []; }
-  catch { return val.trim() ? [val.trim()] : []; }
+  let arr;
+  try { arr = JSON.parse(val); } catch { return String(val).trim() ? [String(val).trim()] : []; }
+  if (!Array.isArray(arr)) arr = arr ? [arr] : [];
+  return arr.map(e => (e && typeof e === 'object') ? (e.name || '') : String(e)).filter(Boolean);
 }
 
 router.get('/', requireAuth, async (req, res) => {
