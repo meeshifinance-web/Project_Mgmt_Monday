@@ -79,7 +79,10 @@ async function lookupStatusColor(boardId, statusValue) {
  * @param {object} opts.actor            — { id, name } (the user who assigned)
  */
 async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }) {
-  if (String(process.env.NOTIFY_ON_ASSIGN || 'true').toLowerCase() === 'false') return;
+  if (String(process.env.NOTIFY_ON_ASSIGN || 'true').toLowerCase() === 'false') {
+    console.log(`[AssignEmail] skipped — NOTIFY_ON_ASSIGN is off (item ${itemId})`);
+    return;
+  }
 
   const transporter = getTransporter();
   if (!transporter) {
@@ -89,7 +92,10 @@ async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }
 
   const oldKeys = new Set(parseOwnerEntries(oldValue).map(ownerKey));
   const added = parseOwnerEntries(newValue).filter(e => !oldKeys.has(ownerKey(e)));
-  if (!added.length) return;
+  if (!added.length) {
+    console.log(`[AssignEmail] skipped — no newly-added owner on item ${itemId} (assignee was already on the item, or the person column was cleared)`);
+    return;
+  }
 
   try {
     // Resolve newly-added owners to users — by stable id when present, else by
@@ -103,7 +109,14 @@ async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }
       [addedIds, addedNames]
     );
     const recipients = userRes.rows;
-    if (!recipients.length) return;
+    if (!recipients.length) {
+      // The assignee(s) didn't resolve to an emailable user. Spell out who was
+      // attempted so the cause is obvious: free-typed name, inactive user, or
+      // a user with no email on file.
+      const attempted = added.map(e => e.name || `id:${e.id}`).join(', ');
+      console.log(`[AssignEmail] skipped — newly-added owner(s) [${attempted}] did not match any active user with an email on file (item ${itemId}). Check the user exists, is active, and has an email.`);
+      return;
+    }
 
     // Fetch item + board + group context
     const ctxRes = await pool.query(
