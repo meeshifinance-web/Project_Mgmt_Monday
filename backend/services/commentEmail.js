@@ -59,7 +59,8 @@ async function notifyCommentRecipients(opts) {
     return;
   }
 
-  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const fromAddr = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const from = process.env.EMAIL_FROM_NAME ? `${process.env.EMAIL_FROM_NAME} <${fromAddr}>` : fromAddr;
   const appUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
   const itemUrl = `${appUrl}/board/${boardId}?item=${itemId}`;
   const breadcrumbHtml = [boardName, groupName].filter(Boolean).map(escapeHtml).join(' &nbsp;&rsaquo;&nbsp; ');

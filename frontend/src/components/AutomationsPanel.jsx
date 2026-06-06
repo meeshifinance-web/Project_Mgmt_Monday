@@ -98,6 +98,96 @@ const PRIORITY_LABELS = ['Critical', 'High', 'Medium', 'Low'];
 // ColumnCell.jsx so the automation form shows the same values as the board.
 const DEFAULT_STATUS_LABELS = ['Not Started', 'In Progress', 'Done', 'Stuck'];
 
+// ── Monday-style inline "fill in the blank" tokens ─────────────────────────────
+const TONES = {
+  trigger: { rgb: '155,114,245', solid: '#7c4dd0', solidDark: '#c4a7ff' },
+  cond:    { rgb: '253,171,61',  solid: '#b3690a', solidDark: '#ffc566' },
+  action:  { rgb: '0,200,117',   solid: '#037f4c', solidDark: '#5fe0a8' },
+};
+
+// Connecting word — the static parts of the sentence between the blanks.
+function W({ children }) {
+  return <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-secondary, #555)' }}>{children}</span>;
+}
+
+// An inline dropdown styled as a colored token. Reads as part of the sentence.
+function Blank({ value, onChange, options, placeholder = 'something', tone = 'trigger', isDark, minWidth = 92, title }) {
+  const t = TONES[tone] || TONES.trigger;
+  const filled = value !== '' && value != null;
+  const solid = isDark ? t.solidDark : t.solid;
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', verticalAlign: 'middle' }} title={title}>
+      <select
+        value={filled ? String(value) : ''}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
+          minWidth, maxWidth: 260, padding: '4px 24px 4px 11px',
+          borderRadius: 8, border: `1.5px solid rgba(${t.rgb}, ${filled ? 0.55 : 0.4})`,
+          borderBottom: `2.5px solid rgba(${t.rgb}, ${filled ? 0.85 : 0.45})`,
+          background: filled ? `rgba(${t.rgb}, ${isDark ? 0.24 : 0.13})` : (isDark ? 'rgba(255,255,255,0.05)' : '#fff'),
+          color: filled ? solid : 'var(--text-muted, #9aa0ab)',
+          fontSize: 15, fontWeight: 700, cursor: 'pointer', lineHeight: 1.3,
+          fontStyle: filled ? 'normal' : 'italic',
+        }}
+      >
+        <option value="" disabled hidden>{placeholder}</option>
+        {options.map(o => <option key={o.value} value={o.value} style={{ fontStyle: 'normal' }}>{o.label}</option>)}
+      </select>
+      <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', fontSize: 9, color: filled ? solid : '#9aa0ab' }}>▾</span>
+    </span>
+  );
+}
+
+// Free-text inline token (notify message, custom value).
+function TextBlank({ value, onChange, placeholder = 'type here', tone = 'action', isDark, width = 180 }) {
+  const t = TONES[tone] || TONES.action;
+  const filled = !!(value && String(value).length);
+  const solid = isDark ? t.solidDark : t.solid;
+  return (
+    <input
+      value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      style={{
+        width, padding: '4px 11px', borderRadius: 8, verticalAlign: 'middle',
+        border: `1.5px solid rgba(${t.rgb}, ${filled ? 0.55 : 0.4})`,
+        borderBottom: `2.5px solid rgba(${t.rgb}, ${filled ? 0.85 : 0.45})`,
+        background: filled ? `rgba(${t.rgb}, ${isDark ? 0.18 : 0.11})` : (isDark ? 'rgba(255,255,255,0.05)' : '#fff'),
+        color: filled ? solid : undefined, fontSize: 15, fontWeight: 700, boxSizing: 'border-box',
+      }}
+    />
+  );
+}
+
+const toOpts = (labels) => labels.map(l => ({ value: l, label: l }));
+
+// Build member options, disambiguating duplicate display names by appending the
+// email — this is what prevents the "two people called Anupam" mix-up.
+function memberOpts(members) {
+  const nameCounts = {};
+  members.forEach(m => { nameCounts[m.name] = (nameCounts[m.name] || 0) + 1; });
+  return members.map(m => ({
+    value: String(m.id),
+    label: nameCounts[m.name] > 1 && m.email ? `${m.name} · ${m.email}` : m.name,
+  }));
+}
+
+// Recipe templates shown in the gallery (the entry point).
+const TEMPLATES = [
+  { id: 'notify_status',    icon: '🔔', title: 'Notify when a status changes', sentence: 'When a status changes to something, notify the team', trigger_type: 'status_change', action: 'notify' },
+  { id: 'move_status',      icon: '➡️', title: 'Move item when status changes', sentence: 'When a status changes to something, move the item to a group', trigger_type: 'status_change', action: 'move_to_group' },
+  { id: 'assign_status',    icon: '👤', title: 'Assign a person on status',     sentence: 'When a status changes to something, assign a person', trigger_type: 'status_change', action: 'assign_person' },
+  { id: 'email_status',     icon: '✉️', title: 'Send an email on status',       sentence: 'When a status changes to something, send an email', trigger_type: 'status_change', action: 'send_email' },
+  { id: 'setstatus_status', icon: '🔁', title: 'Set another status',            sentence: 'When a status changes, set another status to something', trigger_type: 'status_change', action: 'set_status' },
+  { id: 'duedate_status',   icon: '📅', title: 'Set a due date on status',      sentence: 'When a status changes, set a due date', trigger_type: 'status_change', action: 'set_due_date' },
+  { id: 'assign_create',    icon: '🆕', title: 'Assign when item is created',   sentence: 'When an item is created, assign a person', trigger_type: 'item_created', action: 'assign_person' },
+  { id: 'status_create',    icon: '🟢', title: 'Set status on new item',        sentence: 'When an item is created, set a status to something', trigger_type: 'item_created', action: 'set_status' },
+  { id: 'notify_date',      icon: '⏰', title: 'Notify when a date arrives',    sentence: 'When a date arrives, notify the team', trigger_type: 'date_arrives', action: 'notify' },
+];
+
+function templateRecipe(t) {
+  return { name: '', trigger_type: t.trigger_type, trigger_config: {}, conditions: [], actions: [{ type: t.action, config: {} }] };
+}
+
 function parseArr(v) {
   if (Array.isArray(v)) return v;
   if (typeof v === 'string') { try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; } }
@@ -514,9 +604,10 @@ function ActionBlock({ action, index, total, availableActions, columns, groups, 
 }
 
 // ── Automation form ───────────────────────────────────────────────────────────
-function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, initial }) {
+function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, initial, isEdit }) {
   const { resolvedTheme } = useThemeContext();
   const isDark = resolvedTheme === 'dark';
+  const toast = useToast();
   const [name,          setName]          = useState(initial?.name || '');
   const [triggerType,   setTriggerType]   = useState(initial?.trigger_type || 'status_change');
   const [triggerConfig, setTriggerConfig] = useState(initial?.trigger_config || {});
@@ -569,9 +660,15 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (triggerType === 'status_change' && (!triggerConfig.column_id || !triggerConfig.to_value)) {
+      toast('Pick a status column and the value it changes to', 'error'); return;
+    }
+    if (triggerType === 'date_arrives' && !triggerConfig.column_id) {
+      toast('Pick a date column', 'error'); return;
+    }
     const cleanConditions = conditions.filter(c => c.column_id && c.operator);
     const cleanActions = actions.filter(a => a && a.type);
-    if (!cleanActions.length) return;
+    if (!cleanActions.length) { toast('Add at least one action', 'error'); return; }
     onSave({
       name: name.trim() || buildAutoName(),
       trigger_type: triggerType,
@@ -584,238 +681,225 @@ function AutomationForm({ boardId, columns, groups, members, onSave, onCancel, i
     });
   };
 
-  // Theme-aware section styling so the WHEN / ONLY IF / THEN blocks stay clearly
-  // visible in both light and dark themes (faint tints were invisible on dark).
-  const sectionCfg = {
-    when: { rgb: '155,114,245', head: isDark ? '#c4a7ff' : '#7c4dd0', btn: '#9b72f5' },
-    if:   { rgb: '253,171,61',  head: isDark ? '#ffc566' : '#b3690a', btn: '#f0a516' },
-    then: { rgb: '0,200,117',   head: isDark ? '#5fe0a8' : '#037f4c', btn: '#00c875' },
+  // ── Option lists for the inline sentence tokens ──
+  const groupOpts     = groups.map(g => ({ value: String(g.id), label: g.name }));
+  const statusColOpts = statusCols.map(c => ({ value: String(c.id), label: c.title }));
+  const dateColOpts   = dateCols.map(c => ({ value: String(c.id), label: c.title }));
+  const personCols    = columns.filter(c => c.type === 'person');
+  const personColOpts = personCols.map(c => ({ value: String(c.id), label: c.title }));
+  const allColOpts    = columns.map(c => ({ value: String(c.id), label: c.title }));
+  const memOpts       = memberOpts(members);
+  const opOpts        = CONDITION_OPERATORS.map(o => ({ value: o.value, label: o.label }));
+  const verbOpts      = availableActions.map(a => ({ value: a.value, label: a.label }));
+  const triggerTypeOpts = [
+    { value: 'status_change', label: 'a status changes' },
+    { value: 'item_created',  label: 'an item is created' },
+    { value: 'date_arrives',  label: 'a date arrives' },
+  ];
+
+  const WEEKDAYS = [
+    { value: '1', label: 'Monday' }, { value: '2', label: 'Tuesday' }, { value: '3', label: 'Wednesday' },
+    { value: '4', label: 'Thursday' }, { value: '5', label: 'Friday' }, { value: '6', label: 'Saturday' }, { value: '0', label: 'Sunday' },
+  ];
+  const WEEKS = [{ value: '1', label: 'next week' }, { value: '2', label: 'in 2 weeks' }, { value: '3', label: 'in 3 weeks' }, { value: '4', label: 'in 4 weeks' }];
+  const DATE_TIMINGS = [
+    { value: 'on',    label: 'on the date',         apply: { mode: 'on', offset_days: 0 } },
+    { value: 'd1',    label: '1 day before',        apply: { mode: 'on', offset_days: 1 } },
+    { value: 'd2',    label: '2 days before',       apply: { mode: 'on', offset_days: 2 } },
+    { value: 'd3',    label: '3 days before',       apply: { mode: 'on', offset_days: 3 } },
+    { value: 'w1',    label: '1 week before',       apply: { mode: 'on', offset_days: 7 } },
+    { value: 'after', label: 'after it has passed', apply: { mode: 'after', min_days_past: 0 } },
+  ];
+  const timingValue = triggerConfig.mode === 'after'
+    ? 'after'
+    : ({ 0: 'on', 1: 'd1', 2: 'd2', 3: 'd3', 7: 'w1' }[parseInt(triggerConfig.offset_days, 10) || 0] || 'on');
+  const applyTiming = (v) => {
+    const tm = DATE_TIMINGS.find(t => t.value === v) || DATE_TIMINGS[0];
+    setTriggerConfig(c => ({ column_id: c.column_id, ...tm.apply }));
   };
-  const box = (c) => ({
-    background: `rgba(${c.rgb}, ${isDark ? 0.15 : 0.09})`,
-    border: `1.5px solid rgba(${c.rgb}, ${isDark ? 0.55 : 0.42})`,
-    borderRadius: 12, padding: '15px 16px', marginBottom: 12,
+
+  // Values offered for a condition: real member names for person columns (so you
+  // pick the exact account), otherwise the column's preset labels.
+  const condValueOpts = (col) => {
+    if (!col) return [];
+    if (col.type === 'person') {
+      const seen = new Set(); const out = [];
+      members.forEach(m => { if (!seen.has(m.name)) { seen.add(m.name); out.push({ value: m.name, label: m.name }); } });
+      return out;
+    }
+    return toOpts(colOptionLabels(col));
+  };
+
+  const removeChip = (onClick) => (
+    <button type="button" onClick={onClick} title="Remove"
+      style={{ border: 'none', background: 'none', color: '#e2445c', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 2px', verticalAlign: 'middle' }}>×</button>
+  );
+  const linkBtn = (rgb) => ({
+    border: `1.5px dashed rgba(${rgb},0.6)`, background: `rgba(${rgb},0.08)`, color: `rgb(${rgb})`,
+    borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: '6px 13px',
   });
-  const sectionHead = (c) => ({ fontSize: 13.5, fontWeight: 800, color: c.head, letterSpacing: 0.3, margin: 0, display: 'flex', alignItems: 'center', gap: 6 });
-  const addBtn = (c) => ({ border: 'none', color: '#fff', background: c.btn, borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '6px 13px', boxShadow: `0 3px 10px rgba(${c.rgb}, 0.4)`, whiteSpace: 'nowrap' });
 
   return (
-    <div className="automation-form-card" style={{ background: 'var(--bg-primary, #f7f8fc)', border: '1.5px solid var(--border-color, #d0d0d0)', borderRadius: 12, padding: 20, marginBottom: 14 }}>
-      <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary, #323338)', marginBottom: 16 }}>
-        {initial ? 'Edit Automation' : 'New Automation'}
+    <div className="automation-form-card" style={{ background: isDark ? 'var(--bg-primary, #1e1e28)' : '#ffffff', border: `1.5px solid ${isDark ? 'var(--border-color, #3a3a48)' : '#e8e8ee'}`, borderRadius: 14, padding: 22, marginBottom: 14, boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+        <span style={{ fontSize: 20 }}>⚡</span>
+        <p style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary, #323338)', margin: 0 }}>
+          {isEdit ? 'Edit automation' : 'New automation'}
+        </p>
+      </div>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+        Read it like a sentence — just fill in the highlighted blanks.
       </p>
 
-      {/* WHEN */}
-      <div style={box(sectionCfg.when)}>
-        <p style={{ ...sectionHead(sectionCfg.when), marginBottom: 10 }}>⚡ WHEN <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>· the trigger</span></p>
-        <select value={triggerType} onChange={e => handleTriggerChange(e.target.value)} style={sel}>
-          {TRIGGERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
+      {/* The recipe sentence */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 12,
+        lineHeight: 2, background: 'var(--card-bg, #fff)', border: '1px solid var(--border-color, #e6e6e6)',
+        borderRadius: 12, padding: '18px',
+      }}>
+        {/* WHEN — trigger */}
+        <W>When</W>
+        <Blank tone="trigger" isDark minWidth={150} options={triggerTypeOpts} value={triggerType}
+          onChange={handleTriggerChange} />
 
         {triggerType === 'status_change' && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <div style={{ flex: 1 }}>
-              <p style={{ ...label, marginTop: 0 }}>Column</p>
-              <select value={triggerConfig.column_id || ''} onChange={e => setTC({ column_id: e.target.value, to_value: '' })} style={sel}>
-                <option value="">Select status column…</option>
-                {statusCols.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ ...label, marginTop: 0 }}>Changes to</p>
-              {trigStatusCol && trigStatusLabels.length === 0 ? (
-                <input value={triggerConfig.to_value || ''} onChange={e => setTC({ to_value: e.target.value })}
-                  placeholder="Type a status value…" style={inp} />
-              ) : (
-                <select value={triggerConfig.to_value || ''} onChange={e => setTC({ to_value: e.target.value })} style={sel} disabled={!trigStatusCol}>
-                  <option value="">Select value…</option>
-                  {trigStatusLabels.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-              )}
-            </div>
-          </div>
+          <>
+            <W>in</W>
+            <Blank tone="trigger" isDark options={statusColOpts} value={triggerConfig.column_id} placeholder="a status column"
+              onChange={v => setTC({ column_id: v, to_value: '' })} />
+            <W>to</W>
+            {trigStatusCol && trigStatusLabels.length === 0
+              ? <TextBlank tone="trigger" isDark value={triggerConfig.to_value} placeholder="a value" onChange={v => setTC({ to_value: v })} />
+              : <Blank tone="trigger" isDark options={toOpts(trigStatusLabels)} value={triggerConfig.to_value} placeholder="a value"
+                  onChange={v => setTC({ to_value: v })} />}
+          </>
         )}
-        {triggerType === 'status_change' && trigStatusCol && trigStatusLabels.length === 0 && (
-          <p style={{ fontSize: 11, color: '#b3690a', margin: '6px 2px 0', lineHeight: 1.5 }}>
-            ⚠️ This status column has no preset labels. Type the exact value, or add labels in the column's settings.
-          </p>
-        )}
-
         {triggerType === 'date_arrives' && (
-          <div style={{ marginTop: 8 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1.4 }}>
-                <p style={label}>Date column</p>
-                <select value={triggerConfig.column_id || ''} onChange={e => setTC({ column_id: e.target.value })} style={sel}>
-                  <option value="">Select date column…</option>
-                  {dateCols.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={label}>Direction</p>
-                <select
-                  value={triggerConfig.mode === 'after' ? 'after' : 'on'}
-                  onChange={e => {
-                    if (e.target.value === 'after') {
-                      setTC({ mode: 'after', offset_days: undefined, min_days_past: 0 });
-                    } else {
-                      setTC({ mode: 'on', offset_days: 0, min_days_past: undefined });
-                    }
-                  }}
-                  style={sel}
-                >
-                  <option value="on">📅 Before / on the date</option>
-                  <option value="after">⏰ After the date has passed</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Days input — single number that means different things per mode.
-                For "on" mode: 0 = today, 1+ = N days before the date.
-                For "after" mode: 0 = any time past, 1+ = at least N days past. */}
-            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Fire when item is</span>
-              <input
-                type="number"
-                min="0"
-                value={
-                  triggerConfig.mode === 'after'
-                    ? (triggerConfig.min_days_past ?? 0)
-                    : (triggerConfig.offset_days ?? 0)
-                }
-                onChange={e => {
-                  const n = Math.max(0, parseInt(e.target.value, 10) || 0);
-                  if (triggerConfig.mode === 'after') setTC({ min_days_past: n });
-                  else                                 setTC({ offset_days: n });
-                }}
-                style={{ ...inp, width: 80 }}
-              />
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                {triggerConfig.mode === 'after'
-                  ? <>day(s) past the date <span style={{ color: 'var(--text-muted)' }}>(0 = any past date)</span></>
-                  : <>day(s) before the date <span style={{ color: 'var(--text-muted)' }}>(0 = on the date)</span></>
-                }
-              </span>
-            </div>
-
-            {triggerConfig.mode === 'after' && (
-              <div style={{ marginTop: 8, fontSize: 11, color: '#7a5a00', background: '#fff8e1', borderRadius: 6, padding: '7px 10px', lineHeight: 1.55 }}>
-                {parseInt(triggerConfig.min_days_past, 10) > 0
-                  ? <>⏰ Fires once per item when it crosses the threshold. Tip: build escalation tiers by stacking rules at 10 / 20 / 30 / 50 days, each setting a more urgent status.</>
-                  : <>⏰ Fires once per item when its date is in the past. Pair with a "Set status to Overdue" action for automatic SLA tracking.</>
-                }
-              </div>
-            )}
-          </div>
+          <>
+            <W>in</W>
+            <Blank tone="trigger" isDark options={dateColOpts} value={triggerConfig.column_id} placeholder="a date column"
+              onChange={v => setTC({ column_id: v })} />
+            <Blank tone="trigger" isDark minWidth={130} options={DATE_TIMINGS.map(t => ({ value: t.value, label: t.label }))}
+              value={timingValue} onChange={applyTiming} />
+          </>
         )}
 
+        {/* ONLY IF — conditions */}
+        {conditions.length > 0 && <W>only if</W>}
+        {conditions.map((c, i) => {
+          const col = columns.find(x => String(x.id) === String(c.column_id));
+          const vOpts = condValueOpts(col);
+          const needsValue = !NO_VALUE_OPS.has(c.operator);
+          return (
+            <React.Fragment key={i}>
+              {i > 0 && <W>and</W>}
+              <Blank tone="cond" isDark options={allColOpts} value={c.column_id} placeholder="a column"
+                onChange={v => updateCondition(i, { ...c, column_id: v, value: '' })} />
+              <Blank tone="cond" isDark minWidth={78} options={opOpts} value={c.operator}
+                onChange={v => updateCondition(i, { ...c, operator: v })} />
+              {needsValue && (vOpts.length
+                ? <Blank tone="cond" isDark options={vOpts} value={c.value} placeholder="a value"
+                    onChange={v => updateCondition(i, { ...c, value: v })} />
+                : <TextBlank tone="cond" isDark value={c.value} placeholder="a value"
+                    onChange={v => updateCondition(i, { ...c, value: v })} />)}
+              {removeChip(() => removeCondition(i))}
+            </React.Fragment>
+          );
+        })}
+
+        {/* THEN — actions */}
+        {actions.map((a, i) => {
+          const cfg = a.config || {};
+          const set = patch => updateAction(i, { ...a, config: { ...cfg, ...patch } });
+          const scol = statusCols.find(c => String(c.id) === String(cfg.column_id));
+          const slabels = colOptionLabels(scol);
+          return (
+            <React.Fragment key={`a${i}`}>
+              <W>{i === 0 ? ', then' : 'and then'}</W>
+              <Blank tone="action" isDark minWidth={150} options={verbOpts} value={a.type}
+                onChange={v => updateAction(i, { type: v, config: {} })} />
+              {a.type === 'move_to_group' && (
+                <Blank tone="action" isDark options={groupOpts} value={cfg.target_group_id} placeholder="a group"
+                  onChange={v => set({ target_group_id: v })} />
+              )}
+              {a.type === 'set_status' && (
+                <>
+                  <Blank tone="action" isDark options={statusColOpts} value={cfg.column_id} placeholder="a status column"
+                    onChange={v => set({ column_id: v, value: '' })} />
+                  <W>to</W>
+                  {cfg.column_id && (slabels.length === 0
+                    ? <TextBlank tone="action" isDark value={cfg.value} placeholder="a value" onChange={v => set({ value: v })} />
+                    : <Blank tone="action" isDark options={toOpts(slabels)} value={cfg.value} placeholder="a value"
+                        onChange={v => set({ value: v })} />)}
+                </>
+              )}
+              {a.type === 'assign_person' && (
+                <>
+                  <Blank tone="action" isDark options={memOpts} value={cfg.user_id != null ? String(cfg.user_id) : ''} placeholder="a person"
+                    onChange={v => { const m = members.find(x => String(x.id) === v); set({ user_id: m ? m.id : null, user_name: m ? m.name : '' }); }} />
+                  <W>in</W>
+                  <Blank tone="action" isDark options={personColOpts} value={cfg.column_id} placeholder="owner column"
+                    onChange={v => set({ column_id: v })} />
+                </>
+              )}
+              {a.type === 'set_due_date' && (
+                <>
+                  <Blank tone="action" isDark options={dateColOpts} value={cfg.column_id} placeholder="a date column"
+                    onChange={v => set({ column_id: v })} />
+                  <W>to</W>
+                  <Blank tone="action" isDark options={WEEKDAYS} value={cfg.weekday ?? ''} placeholder="a weekday"
+                    onChange={v => set({ weekday: v })} />
+                  <Blank tone="action" isDark minWidth={110} options={WEEKS} value={String(cfg.weeks_ahead || 1)}
+                    onChange={v => set({ weeks_ahead: parseInt(v, 10) })} />
+                </>
+              )}
+              {a.type === 'notify' && (
+                <>
+                  <W>with message</W>
+                  <TextBlank tone="action" isDark width={220} value={cfg.message} placeholder="e.g. Item is now Done!"
+                    onChange={v => set({ message: v })} />
+                </>
+              )}
+              {actions.length > 1 && removeChip(() => removeAction(i))}
+            </React.Fragment>
+          );
+        })}
       </div>
 
-      {/* ONLY IF — optional conditions (all must match) */}
-      <div style={box(sectionCfg.if)}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-          <p style={sectionHead(sectionCfg.if)}>🔎 ONLY IF <span style={{ textTransform: 'none', fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', letterSpacing: 0 }}>· all must match</span></p>
-          <button type="button" onClick={addCondition} style={addBtn(sectionCfg.if)}>+ Condition</button>
-        </div>
-        {conditions.length === 0 ? (
-          <div style={{
-            fontSize: 13, color: isDark ? '#e7c79a' : '#8a6a2a', lineHeight: 1.5,
-            background: isDark ? 'rgba(253,171,61,0.10)' : 'rgba(253,171,61,0.07)',
-            border: `1px dashed rgba(253,171,61,${isDark ? 0.5 : 0.4})`, borderRadius: 9, padding: '10px 13px',
-          }}>
-            <strong>Optional.</strong> With no conditions the actions run every time the trigger fires. Add one to run them only when it matches — e.g. <em>“Department is HR”</em>.
-          </div>
-        ) : (
-          conditions.map((c, i) => (
-            <ConditionRow key={i} condition={c} columns={columns}
-              onChange={next => updateCondition(i, next)} onRemove={() => removeCondition(i)} />
-          ))
-        )}
+      {/* Inline add links */}
+      <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+        <button type="button" onClick={addCondition} style={linkBtn('253,171,61')}>+ add condition</button>
+        <button type="button" onClick={addAction} style={linkBtn('0,200,117')}>+ add action</button>
       </div>
 
-      {/* THEN — one or more actions, run in order */}
-      <div style={box(sectionCfg.then)}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-          <p style={sectionHead(sectionCfg.then)}>✅ THEN <span style={{ textTransform: 'none', fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', letterSpacing: 0 }}>· run in order</span></p>
-          <button type="button" onClick={addAction} style={addBtn(sectionCfg.then)}>+ Action</button>
+      {triggerType === 'status_change' && trigStatusCol && trigStatusLabels.length === 0 && (
+        <p style={{ fontSize: 11.5, color: '#b3690a', margin: '10px 2px 0', lineHeight: 1.5 }}>
+          ⚠️ This status column has no preset labels. Type the exact value, or add labels in the column's settings.
+        </p>
+      )}
+
+      {/* Heavier config: email details rendered under the sentence */}
+      {actions.map((a, i) => a.type === 'send_email' ? (
+        <div key={`em${i}`} style={{ marginTop: 14, border: '1px solid rgba(0,200,117,0.4)', borderRadius: 10, padding: 14, background: 'rgba(0,200,117,0.05)' }}>
+          <p style={{ fontSize: 12, fontWeight: 800, color: isDark ? '#5fe0a8' : '#037f4c', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            ✉️ Email details {actions.length > 1 ? `(action ${i + 1})` : ''}
+          </p>
+          <ActionConfigFields type="send_email" cfg={a.config || {}} columns={columns} groups={groups} members={members}
+            setCfg={patch => updateAction(i, { ...a, config: { ...(a.config || {}), ...patch } })} />
         </div>
-        {actions.map((a, i) => (
-          <ActionBlock key={i} action={a} index={i} total={actions.length}
-            availableActions={availableActions} columns={columns} groups={groups} members={members}
-            onChange={next => updateAction(i, next)} onRemove={() => removeAction(i)} />
-        ))}
-      </div>
+      ) : null)}
 
       {/* Name + buttons */}
-      <div style={{ marginBottom: 10 }}>
-        <p style={label}>Automation name (optional)</p>
+      <div style={{ marginTop: 16, marginBottom: 12 }}>
+        <p style={label}>Name (optional)</p>
         <input value={name} onChange={e => setName(e.target.value)} placeholder={buildAutoName()} style={inp} />
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={onCancel} style={{ padding: '7px 16px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: 'var(--text-secondary)', background: 'var(--bg-primary)' }}>Cancel</button>
-        <button type="button" onClick={handleSubmit} style={{ padding: '7px 16px', background: '#9b72f5', color: '#fff', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Save</button>
-      </div>
-    </div>
-  );
-}
-
-// ── Board email settings section ──────────────────────────────────────────────
-function BoardEmailSettings({ emailFrom, onChange }) {
-  const [draft, setDraft]   = useState(emailFrom || '');
-  const [saving, setSaving] = useState(false);
-  const toast = useToast();
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onChange(draft.trim() || null);
-      toast('Board sender email saved', 'success');
-    } catch {
-      toast('Failed to save sender email', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="automation-email-settings" style={{ background: 'var(--bg-primary, #f7f8fc)', border: '1.5px solid var(--border-color, #e0e0e0)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <span style={{ fontSize: 16 }}>✉️</span>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary, #323338)' }}>Sender email for this board</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary, #888)', marginTop: 1 }}>
-            Choose which address this board's automated emails come from.
-          </div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input value={draft} onChange={e => setDraft(e.target.value)}
-          placeholder="Leave blank to use the default — recommended"
-          style={{ ...inp, flex: 1 }} type="email" />
-        <button onClick={handleSave} disabled={saving} style={{
-          padding: '7px 16px', background: '#9b72f5', color: '#fff',
-          borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          opacity: saving ? 0.6 : 1, whiteSpace: 'nowrap',
-        }}>
-          {saving ? 'Saving…' : 'Save'}
+        <button type="button" onClick={onCancel} style={{ padding: '9px 18px', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 14, cursor: 'pointer', color: 'var(--text-secondary)', background: 'var(--bg-primary)', fontWeight: 600 }}>Cancel</button>
+        <button type="button" onClick={handleSubmit} style={{ padding: '9px 22px', background: 'linear-gradient(135deg,#9b72f5,#7f55d6)', color: '#fff', borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: 'pointer', border: 'none', boxShadow: '0 6px 16px rgba(127,85,214,0.3)' }}>
+          {isEdit ? 'Save changes' : 'Create automation'}
         </button>
       </div>
-
-      {/* Friendly guidance — one concise line so admins don't paste a random
-          address that O365 will silently reject. */}
-      <div style={{
-        marginTop: 10, padding: '9px 12px', borderRadius: 8,
-        background: 'rgba(253, 186, 116, 0.10)', border: '1px solid rgba(253, 186, 116, 0.24)',
-        fontSize: 12, color: 'var(--text-primary, #7a5a00)', lineHeight: 1.5,
-      }}>
-        💡 <strong>Leave blank unless you need a custom address.</strong> The system default delivers replies automatically and avoids spam.
-      </div>
-
-      {draft.trim() && (
-        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
-          This board will send from: <strong>{draft.trim()}</strong>
-        </div>
-      )}
     </div>
   );
 }
@@ -1069,7 +1153,8 @@ export default function AutomationsPanel({
   onClose, onCountChange,
 }) {
   const [automations, setAutomations] = useState([]);
-  const [showForm,    setShowForm]    = useState(false);
+  const [view,        setView]        = useState('list'); // 'list' | 'gallery' | 'builder'
+  const [builderInit, setBuilderInit] = useState(null);
   const [editingId,   setEditingId]   = useState(null);
   const [members,     setMembers]     = useState([]);
   const [activeTab,   setActiveTab]   = useState('rules');
@@ -1095,7 +1180,7 @@ export default function AutomationsPanel({
     try {
       const r = await createAutomation({ ...data, board_id: boardId });
       updateList([r.data, ...automations]);
-      setShowForm(false);
+      setView('list');
       toast('Automation created', 'success');
     } catch { toast('Failed to create automation', 'error'); }
   };
@@ -1153,14 +1238,14 @@ export default function AutomationsPanel({
     tabInactiveColor: '#c9bff0',
     tabShadow: '0 4px 14px rgba(0,0,0,0.35)',
   } : {
-    band: 'linear-gradient(120deg, #efe9ff 0%, #f3eefe 55%, #fbf1f6 100%)',
-    border: 'rgba(123,84,214,0.14)',
-    title: '#3a2b63', subtitle: '#6b5e90',
-    closeBg: 'rgba(123,84,214,0.12)', closeColor: '#7f55d6',
-    track: 'rgba(123,84,214,0.10)',
+    band: '#ffffff',
+    border: '#ececf0',
+    title: '#1f2330', subtitle: '#6b7280',
+    closeBg: '#f3f4f6', closeColor: '#6b7280',
+    track: '#f4f4f7',
     tabActiveBg: '#ffffff', tabActiveColor: '#7f55d6',
-    tabInactiveColor: '#5a4a8f',
-    tabShadow: '0 4px 14px rgba(80,50,150,0.18)',
+    tabInactiveColor: '#6b7280',
+    tabShadow: '0 2px 8px rgba(0,0,0,0.10)',
   };
 
   // Tab bar styles — segmented control. Active = solid pill; inactive =
@@ -1186,7 +1271,9 @@ export default function AutomationsPanel({
         boxShadow: '0 24px 80px rgba(40,20,90,0.32)', display: 'flex', flexDirection: 'column',
         animation: 'autoPanelPop 0.3s cubic-bezier(.2,.7,.3,1) both',
       }}>
-        <style>{`@keyframes autoPanelPop { from { opacity: 0; transform: scale(.96) translateY(10px); } to { opacity: 1; transform: none; } }`}</style>
+        <style>{`@keyframes autoPanelPop { from { opacity: 0; transform: scale(.96) translateY(10px); } to { opacity: 1; transform: none; } }
+          .auto-tpl-card { transition: border-color .15s, box-shadow .15s, transform .15s; }
+          .auto-tpl-card:hover { border-color: #9b72f5 !important; box-shadow: 0 8px 20px rgba(127,85,214,0.18); transform: translateY(-2px); }`}</style>
 
         {/* Header — theme-aware band */}
         <div style={{ flexShrink: 0, background: hdr.band, borderBottom: `1px solid ${hdr.border}`, padding: '22px 28px' }}>
@@ -1226,100 +1313,138 @@ export default function AutomationsPanel({
           {/* ── Rules tab ─────────────────────────────────────────────── */}
           {activeTab === 'rules' && (
             <>
-              {onBoardEmailFromChange && (
-                <BoardEmailSettings emailFrom={boardEmailFrom} onChange={onBoardEmailFromChange} />
-              )}
-
-              {/* ✨ AI: describe a rule in plain English */}
-              <div style={{ border: '1.5px solid rgba(155,114,245,0.4)', borderRadius: 14, padding: 16, marginBottom: 16, background: 'rgba(155,114,245,0.06)' }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#9b72f5', marginBottom: 10 }}>✨ Describe a rule</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input
-                    value={aiPrompt}
-                    onChange={e => setAiPrompt(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); generateRule(); } }}
-                    placeholder='e.g. "when status changes to Done, notify the owner"'
-                    style={{ flex: 1, boxSizing: 'border-box', border: '1px solid var(--border-color)', borderRadius: 7, padding: '8px 10px', outline: 'none', fontSize: 13, background: 'var(--input-bg, #fff)', color: 'var(--text-primary)' }}
-                  />
-                  <button onClick={generateRule} disabled={aiBusy}
-                    style={{ padding: '0 14px', borderRadius: 7, border: 'none', background: 'linear-gradient(90deg,#9b72f5,#b86cff)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: aiBusy ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
-                    {aiBusy ? '…' : 'Generate'}
+              {/* ── LIST VIEW ─────────────────────────────────────────── */}
+              {view === 'list' && (
+                <>
+                  <button
+                    onClick={() => { setBuilderInit(null); setEditingId(null); setView('gallery'); }}
+                    style={{ width: '100%', padding: '14px', background: 'linear-gradient(135deg, #9b72f5, #7f55d6)', color: '#fff', borderRadius: 12, fontWeight: 800, marginBottom: 18, fontSize: 15.5, cursor: 'pointer', border: 'none', boxShadow: '0 8px 22px rgba(127,85,214,0.34)' }}
+                  >
+                    + Add automation
                   </button>
-                </div>
-                {aiErr && <div style={{ fontSize: 11, color: '#e2445c', marginTop: 6 }}>⚠ {aiErr}</div>}
-                {aiPreview && (
-                  <div style={{ marginTop: 8, background: 'var(--bg-secondary, #f5f6f8)', borderRadius: 8, padding: '9px 11px' }}>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-primary)', lineHeight: 1.5 }}>✓ {aiPreview.explanation}</div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
-                      <button onClick={confirmRule} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#00c875', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Create this rule</button>
-                      <button onClick={() => setAiPreview(null)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Discard</button>
+
+                  {sendEmailRules.length > 0 && (
+                    <div style={{ background: 'rgba(0,200,117,0.15)', border: '1px solid #b7e4cd', borderRadius: 8, padding: '9px 13px', marginBottom: 12, fontSize: 12.5, color: '#037f4c' }}>
+                      ✉️ <strong>{sendEmailRules.length} send-email automation{sendEmailRules.length > 1 ? 's' : ''}</strong> active.
                     </div>
+                  )}
+
+                  {automations.length === 0 ? (
+                    <EmptyState
+                      icon="⚡"
+                      title="Automate the boring parts"
+                      description="Auto-assign owners, set due dates, send emails, and more — all triggered by status changes, item creation, or dates."
+                      primaryAction={{ label: '+ Create your first automation', onClick: () => { setBuilderInit(null); setView('gallery'); } }}
+                    />
+                  ) : (
+                    automations.map(auto => (
+                      editingId === auto.id ? (
+                        <AutomationForm
+                          key={auto.id} isEdit boardId={boardId} columns={columns} groups={groups} members={members} initial={auto}
+                          onSave={(data) => handleUpdate(auto.id, data)}
+                          onCancel={() => setEditingId(null)}
+                        />
+                      ) : (
+                        <div key={auto.id} style={{
+                          border: `1.5px solid ${auto.enabled ? 'rgba(155,114,245,0.28)' : 'var(--border-color, #f0f0f0)'}`,
+                          borderRadius: 14, padding: '16px 18px', marginBottom: 12,
+                          background: auto.enabled ? 'var(--bg-primary, #fff)' : 'rgba(255,255,255,0.04)',
+                          boxShadow: auto.enabled ? '0 4px 18px rgba(80,50,150,0.07)' : 'none',
+                          opacity: auto.enabled ? 1 : 0.72,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: auto.enabled ? 'var(--text-primary, #323338)' : 'var(--text-muted, #aaa)' }}>{auto.name}</div>
+                              <Summary auto={auto} columns={columns} groups={groups} />
+                            </div>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13,
+                                background: auto.enabled ? 'rgba(0,200,117,0.12)' : 'var(--bg-secondary, #f0f0f0)', borderRadius: 8, padding: '5px 10px' }}>
+                                <input type="checkbox" checked={auto.enabled} onChange={() => handleToggle(auto)} style={{ accentColor: '#00c875', cursor: 'pointer', width: 15, height: 15 }} />
+                                <span style={{ color: auto.enabled ? '#037f4c' : '#aaa', fontWeight: 700 }}>{auto.enabled ? 'On' : 'Off'}</span>
+                              </label>
+                              <button onClick={() => { setEditingId(auto.id); }} style={{ color: '#9b72f5', fontSize: 13, fontWeight: 700, border: 'none', background: 'none', cursor: 'pointer' }}>Edit</button>
+                              <button onClick={() => handleDelete(auto.id)} style={{ color: '#e2445c', fontSize: 13, fontWeight: 700, border: 'none', background: 'none', cursor: 'pointer' }}>Delete</button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    ))
+                  )}
+                </>
+              )}
+
+              {/* ── GALLERY VIEW ──────────────────────────────────────── */}
+              {view === 'gallery' && (
+                <>
+                  <button onClick={() => setView('list')}
+                    style={{ background: 'none', border: 'none', color: '#9b72f5', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', padding: '4px 0', marginBottom: 14 }}>
+                    ← Back
+                  </button>
+
+                  {/* ✨ AI: describe a rule in plain English */}
+                  <div style={{ border: '1.5px solid rgba(155,114,245,0.4)', borderRadius: 14, padding: 16, marginBottom: 20, background: 'rgba(155,114,245,0.06)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#9b72f5', marginBottom: 10 }}>✨ Describe it in plain English</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        value={aiPrompt}
+                        onChange={e => setAiPrompt(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); generateRule(); } }}
+                        placeholder='e.g. "when status changes to Done, notify the owner"'
+                        style={{ flex: 1, boxSizing: 'border-box', border: '1px solid var(--border-color)', borderRadius: 7, padding: '10px 12px', outline: 'none', fontSize: 14, background: 'var(--input-bg, #fff)', color: 'var(--text-primary)' }}
+                      />
+                      <button onClick={generateRule} disabled={aiBusy}
+                        style={{ padding: '0 18px', borderRadius: 7, border: 'none', background: 'linear-gradient(90deg,#9b72f5,#b86cff)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: aiBusy ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                        {aiBusy ? '…' : 'Generate'}
+                      </button>
+                    </div>
+                    {aiErr && <div style={{ fontSize: 11.5, color: '#e2445c', marginTop: 6 }}>⚠ {aiErr}</div>}
+                    {aiPreview && (
+                      <div style={{ marginTop: 10, background: 'var(--bg-secondary, #f5f6f8)', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>✓ {aiPreview.explanation}</div>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
+                          <button onClick={confirmRule} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', background: '#00c875', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Create this rule</button>
+                          <button onClick={() => setAiPreview(null)} style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12.5, cursor: 'pointer' }}>Discard</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              <button
-                onClick={() => { setShowForm(true); setEditingId(null); }}
-                style={{ width: '100%', padding: '13px', background: 'linear-gradient(135deg, #9b72f5, #7f55d6)', color: '#fff', borderRadius: 12, fontWeight: 800, marginBottom: 18, fontSize: 15.5, cursor: 'pointer', border: 'none', boxShadow: '0 8px 22px rgba(127,85,214,0.34)' }}
-              >
-                + Add Automation
-              </button>
-
-              {sendEmailRules.length > 0 && (
-                <div style={{ background: 'rgba(0,200,117,0.15)', border: '1px solid #b7e4cd', borderRadius: 8, padding: '9px 13px', marginBottom: 12, fontSize: 12.5, color: '#037f4c' }}>
-                  ✉️ <strong>{sendEmailRules.length} send-email automation{sendEmailRules.length > 1 ? 's' : ''}</strong> active.
-                </div>
+                  <p style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 12px' }}>Pick a template</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(238px, 1fr))', gap: 12 }}>
+                    {TEMPLATES.map(t => (
+                      <button key={t.id} className="auto-tpl-card"
+                        onClick={() => { setBuilderInit(templateRecipe(t)); setView('builder'); }}
+                        style={{ textAlign: 'left', cursor: 'pointer', border: '1.5px solid var(--border-color,#e6e6e6)', borderRadius: 12, padding: '15px 15px', background: 'var(--card-bg,#fff)', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ fontSize: 22 }}>{t.icon}</div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)', marginTop: 8 }}>{t.title}</div>
+                        <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 5, lineHeight: 1.5 }}>{t.sentence}</div>
+                      </button>
+                    ))}
+                    <button className="auto-tpl-card"
+                      onClick={() => { setBuilderInit(null); setView('builder'); }}
+                      style={{ textAlign: 'left', cursor: 'pointer', border: '1.5px dashed var(--border-color,#cfcfcf)', borderRadius: 12, padding: '15px 15px', background: 'transparent', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ fontSize: 22 }}>✏️</div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-primary)', marginTop: 8 }}>Start from scratch</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 5, lineHeight: 1.5 }}>Build a custom rule step by step</div>
+                    </button>
+                  </div>
+                </>
               )}
 
-              {showForm && (
-                <AutomationForm
-                  boardId={boardId} columns={columns} groups={groups} members={members}
-                  onSave={handleCreate} onCancel={() => setShowForm(false)}
-                />
-              )}
-
-              {automations.length === 0 && !showForm && (
-                <EmptyState
-                  icon="⚡"
-                  title="Automate the boring parts"
-                  description="Auto-assign owners, set due dates, send emails, and more — all triggered by status changes, item creation, or incoming email."
-                  primaryAction={{ label: '+ Create your first automation', onClick: () => setShowForm(true) }}
-                />
-              )}
-
-              {automations.map(auto => (
-                editingId === auto.id ? (
+              {/* ── BUILDER VIEW ──────────────────────────────────────── */}
+              {view === 'builder' && (
+                <>
+                  <button onClick={() => setView('gallery')}
+                    style={{ background: 'none', border: 'none', color: '#9b72f5', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', padding: '4px 0', marginBottom: 14 }}>
+                    ← Back to templates
+                  </button>
                   <AutomationForm
-                    key={auto.id} boardId={boardId} columns={columns} groups={groups} members={members} initial={auto}
-                    onSave={(data) => handleUpdate(auto.id, data)}
-                    onCancel={() => setEditingId(null)}
+                    boardId={boardId} columns={columns} groups={groups} members={members} initial={builderInit}
+                    onSave={handleCreate} onCancel={() => setView('gallery')}
                   />
-                ) : (
-                  <div key={auto.id} style={{
-                    border: `1.5px solid ${auto.enabled ? 'rgba(155,114,245,0.28)' : 'var(--border-color, #f0f0f0)'}`,
-                    borderRadius: 14, padding: '16px 18px', marginBottom: 12,
-                    background: auto.enabled ? 'var(--bg-primary, #fff)' : 'rgba(255,255,255,0.04)',
-                    boxShadow: auto.enabled ? '0 4px 18px rgba(80,50,150,0.07)' : 'none',
-                    opacity: auto.enabled ? 1 : 0.72,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 800, fontSize: 15, color: auto.enabled ? 'var(--text-primary, #323338)' : 'var(--text-muted, #aaa)' }}>{auto.name}</div>
-                        <Summary auto={auto} columns={columns} groups={groups} />
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13,
-                          background: auto.enabled ? 'rgba(0,200,117,0.12)' : 'var(--bg-secondary, #f0f0f0)', borderRadius: 8, padding: '5px 10px' }}>
-                          <input type="checkbox" checked={auto.enabled} onChange={() => handleToggle(auto)} style={{ accentColor: '#00c875', cursor: 'pointer', width: 15, height: 15 }} />
-                          <span style={{ color: auto.enabled ? '#037f4c' : '#aaa', fontWeight: 700 }}>{auto.enabled ? 'On' : 'Off'}</span>
-                        </label>
-                        <button onClick={() => { setEditingId(auto.id); setShowForm(false); }} style={{ color: '#9b72f5', fontSize: 13, fontWeight: 700, border: 'none', background: 'none', cursor: 'pointer' }}>Edit</button>
-                        <button onClick={() => handleDelete(auto.id)} style={{ color: '#e2445c', fontSize: 13, fontWeight: 700, border: 'none', background: 'none', cursor: 'pointer' }}>Delete</button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              ))}
+                </>
+              )}
             </>
           )}
 

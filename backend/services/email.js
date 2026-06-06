@@ -33,7 +33,10 @@ function getTransporter() {
 }
 
 function fromAddress() {
-  return process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const addr = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const name = process.env.EMAIL_FROM_NAME;
+  // "SIMPLIX <simplix@simplixart.com>" when a display name is configured.
+  return name ? `${name} <${addr}>` : addr;
 }
 
 function appUrl() {

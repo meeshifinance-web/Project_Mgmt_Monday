@@ -603,6 +603,12 @@ router.post('/public/forms/:slug/submit', formSubmitLimiter, async (req, res) =>
     const titleByCol = {};
     activeFields.forEach(f => { titleByCol[String(f.column_id)] = f.column_title || f.label || `col #${f.column_id}`; });
     const formActor = `Form: ${form.title || 'Untitled'}`;
+    // Map column id → type so we can detect person-column assignments and email
+    // the new owner (form submissions previously skipped assignment emails).
+    const colTypeRes = await client.query('SELECT id, type FROM columns WHERE board_id=$1', [form.board_id]);
+    const colTypeById = {};
+    for (const c of colTypeRes.rows) colTypeById[String(c.id)] = c.type;
+    const formAssignments = [];
     for (const [colKey, value] of Object.entries(submittedFields)) {
       if (colKey === '_name') continue;
       if (!allowedColIds.has(colKey)) continue;
@@ -615,6 +621,7 @@ router.post('/public/forms/:slug/submit', formSubmitLimiter, async (req, res) =>
         [item.id, colId, String(value)]
       );
       setColIds.add(colId);
+      if (colTypeById[String(colId)] === 'person') formAssignments.push(String(value));
       responseSnapshot[colKey] = value;
       // Log the form-driven value so it shows in the item's history (previously
       // only the item-created event was recorded for form submissions).
@@ -674,6 +681,13 @@ router.post('/public/forms/:slug/submit', formSubmitLimiter, async (req, res) =>
     // Automation side-effects (send_email, assignment notifications) now that
     // the submission is durable.
     runDeferred(deferredEffects);
+
+    // Email anyone the form directly assigned via a person field. New item, so
+    // every owner is "newly added" (oldValue ''). Fire-and-forget.
+    for (const assignedValue of formAssignments) {
+      notifyNewAssignees({ oldValue: '', newValue: assignedValue, itemId: item.id, boardId: form.board_id, actor: { id: null, name: formActor } })
+        .catch(err => console.error('[Forms] assignment email error:', err.message));
+    }
     setImmediate(() => sendConfirmation({ form, itemName, fields: activeFields, submittedFields })
       .catch(err => console.error('[Forms] confirmation email error:', err.message)));
     setImmediate(() => notifySubmission({ form, itemId: item.id, itemName })

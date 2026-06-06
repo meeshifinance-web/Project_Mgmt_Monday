@@ -5781,20 +5781,24 @@ export default function Board({ board, onBoardChange, openItemId, onOpenItemDone
   );
 }
 
+// Lazy components MUST be created once at module scope. Creating them inside the
+// render body makes a new component type every render, so React remounts the
+// panel on every parent re-render — causing constant flicker + re-fetches.
+const FormsPanelLazy = lazy(() => import('./FormsPanel'));
+const AutomationsPanelLazy = lazy(() => import('./AutomationsPanel'));
+
 function FormsLazy(props) {
-  const FormsPanel = lazy(() => import('./FormsPanel'));
   return (
     <Suspense fallback={null}>
-      <FormsPanel {...props} />
+      <FormsPanelLazy {...props} />
     </Suspense>
   );
 }
 
 function AutomationsLazy(props) {
-  const AutomationsPanel = lazy(() => import('./AutomationsPanel'));
   return (
     <Suspense fallback={null}>
-      <AutomationsPanel {...props} />
+      <AutomationsPanelLazy {...props} />
     </Suspense>
   );
 }

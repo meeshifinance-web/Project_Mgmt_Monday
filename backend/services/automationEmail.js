@@ -199,8 +199,10 @@ async function sendAutomationEmail({ boardId, itemId, to, toType, toColumnId, su
     const resolvedSubject = resolvePlaceholders(subject, ctx);
     const resolvedBody    = resolvePlaceholders(body, ctx);
 
-    // 4. Determine "from" address
-    const from = board.email_from || process.env.EMAIL_FROM || process.env.EMAIL_USER;
+    // 4. Determine "from" address — prefix the configured display name
+    //    (EMAIL_FROM_NAME) so recipients see e.g. "SIMPLIX <simplix@…>".
+    const fromAddr = board.email_from || process.env.EMAIL_FROM || process.env.EMAIL_USER;
+    const from = process.env.EMAIL_FROM_NAME ? `${process.env.EMAIL_FROM_NAME} <${fromAddr}>` : fromAddr;
 
     // 5. Send
     const port = parseInt(process.env.EMAIL_PORT) || 587;

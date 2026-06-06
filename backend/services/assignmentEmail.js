@@ -132,7 +132,8 @@ async function notifyNewAssignees({ oldValue, newValue, itemId, boardId, actor }
 
     const appUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
     const itemUrl = `${appUrl}/board/${boardId}?item=${itemId}`;
-    const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+    const fromAddr = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+    const from = process.env.EMAIL_FROM_NAME ? `${process.env.EMAIL_FROM_NAME} <${fromAddr}>` : fromAddr;
     const actorName = actor?.name || 'Someone on your team';
     const itemName = ctx.item_name || '(Untitled task)';
     const boardName = ctx.board_name || '';
