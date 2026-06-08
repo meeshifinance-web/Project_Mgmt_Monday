@@ -36,6 +36,7 @@ export default defineConfig({
     strictPort: true,  // fail loudly if 5173 is taken — never fall back to 5174+
     proxy: {
       '/api': 'http://localhost:3001',
+      '/mcp': 'http://localhost:3001', // MCP server — keep same-origin in dev too
     },
   },
 });

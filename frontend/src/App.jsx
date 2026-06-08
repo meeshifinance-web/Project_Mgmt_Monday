@@ -1626,6 +1626,26 @@ function MainApp() {
             </button>
           </div>
         )}
+        {/* Non-admin users an admin has granted MCP access get the API Keys / MCP entry too */}
+        {!isAdmin && currentUser?.mcp_enabled && (
+          <div style={{ padding: isNavCollapsed ? '8px 0' : '8px 16px', borderTop: '1px solid var(--sidebar-border)', display: 'flex', flexDirection: 'column', alignItems: isNavCollapsed ? 'center' : 'flex-start', gap: 2 }}>
+            <button
+              onClick={() => setShowApiKeys(true)}
+              title="API Keys & MCP"
+              style={{
+                textAlign: isNavCollapsed ? 'center' : 'left',
+                padding: isNavCollapsed ? '7px 0' : '7px 4px',
+                fontSize: 12, color: 'var(--sidebar-text-muted)',
+                display: 'flex', alignItems: 'center', gap: isNavCollapsed ? 0 : 6,
+                width: '100%',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--sidebar-text)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--sidebar-text-muted)'}
+            >
+              🔑{!isNavCollapsed && ' API Keys'}
+            </button>
+          </div>
+        )}
         {!isNavCollapsed && (
           <div style={{ padding: '10px 16px', borderTop: '1px solid var(--sidebar-border)', fontSize: 11, fontWeight: 500, color: 'var(--sidebar-text-muted)', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif", letterSpacing: '0.02em' }}>
             © Simplix 2024

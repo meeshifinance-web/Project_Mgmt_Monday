@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 
-const canWrite = [requireAuth, requireRole('admin', 'manager')];
+const canWrite = [requireAuth, requireScope('write'), requireRole('admin', 'manager')];
 
 // Normalise the incoming recipe into the multi-condition / multi-action shape,
 // while keeping the legacy single action_type/action_config columns mirrored

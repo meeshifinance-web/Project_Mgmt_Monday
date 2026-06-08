@@ -47,13 +47,38 @@ export function AuthProvider({ children }) {
     setUser(prev => ({ ...prev, ...updates }));
   }, []);
 
+  // Silently re-fetch the current profile so admin-side changes (role,
+  // is_active, mcp_enabled) propagate without the user reloading the app.
+  const refreshUser = useCallback(() => {
+    api.get('/auth/me').then(r => setUser(r.data)).catch(() => {});
+  }, []);
+
+  // Keep the profile fresh: on tab focus / becoming visible, and on a short
+  // interval. This makes e.g. an admin disabling a user's MCP access reflect in
+  // that user's UI within seconds (or instantly when they return to the tab),
+  // rather than only on a manual refresh. (Server-side access is already
+  // enforced live on every request — this just keeps the UI in sync.)
+  useEffect(() => {
+    if (!user?.id) return;
+    const onFocus = () => refreshUser();
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshUser(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    const interval = setInterval(refreshUser, 30000); // every 30s
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(interval);
+    };
+  }, [user?.id, refreshUser]);
+
   const isAdmin    = user?.role === 'admin';
   const isManager  = user?.role === 'admin'   || user?.role === 'manager';
   const canEdit    = user?.role === 'admin'   || user?.role === 'manager' || user?.role === 'member';
   const isReadOnly = user?.role === 'user';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, isAdmin, isManager, canEdit, isReadOnly }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, refreshUser, isAdmin, isManager, canEdit, isReadOnly }}>
       {children}
     </AuthContext.Provider>
   );

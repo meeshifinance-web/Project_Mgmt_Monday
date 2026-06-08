@@ -326,7 +326,7 @@ router.post('/:id/copy', requireAuth, requireScope('write'), async (req, res) =>
 });
 
 // ── PATCH /:id/move — drag between groups / reorder ──────────────────────────
-router.patch('/:id/move', requireAuth, async (req, res) => {
+router.patch('/:id/move', requireAuth, requireScope('write'), async (req, res) => {
   if (READ_ONLY_ROLES.includes(req.user.role))
     return res.status(403).json({ error: 'Read-only access — you cannot move items' });
   const { group_id, position } = req.body;

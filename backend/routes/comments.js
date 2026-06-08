@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 const { notifyCommentRecipients } = require('../services/commentEmail');
 
 // Helper: create notifications for an array of user IDs
@@ -48,7 +49,7 @@ router.get('/item/:itemId', requireAuth, async (req, res) => {
 });
 
 // POST a new comment (supports parent_id for replies, and mentions array)
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, requireScope('write'), async (req, res) => {
   const { item_id, board_id, body, parent_id, mentions = [] } = req.body;
   if (!body?.trim()) return res.status(400).json({ error: 'Comment body required' });
   const COMMENT_MAX = 5000;

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 const { sendAutomationEmail } = require('../services/automationEmail');
 const { notifyNewAssignees } = require('../services/assignmentEmail');
 const { runDateCascade } = require('../services/dateCascadeEngine');
@@ -65,7 +66,7 @@ async function logActivity(client, data) {
   } catch(_) {}
 }
 
-router.post('/upsert', requireAuth, async (req, res) => {
+router.post('/upsert', requireAuth, requireScope('write'), async (req, res) => {
   // Read-only users normally can't edit, but they MAY self-assign — add/remove
   // only themselves on a person column. Enforced precisely below once we know
   // the column type and the before/after owner ids.
@@ -339,7 +340,7 @@ router.post('/upsert', requireAuth, async (req, res) => {
 // single edits — running them N times here could create a stampede).
 const BULK_LIMIT = 100;
 
-router.post('/bulk-upsert', requireAuth, async (req, res) => {
+router.post('/bulk-upsert', requireAuth, requireScope('write'), async (req, res) => {
   if (req.user.role === 'user')
     return res.status(403).json({ error: 'Read-only access — you cannot edit values' });
 

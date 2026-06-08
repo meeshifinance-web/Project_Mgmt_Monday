@@ -18,7 +18,8 @@ async function requireApiKey(req, res, next) {
 
   try {
     const result = await pool.query(
-      `SELECT ak.*, u.id AS uid, u.name, u.email, u.role, u.is_active AS user_active
+      `SELECT ak.*, u.id AS uid, u.name, u.email, u.role, u.is_active AS user_active,
+              COALESCE(u.mcp_enabled, false) AS mcp_enabled
        FROM api_keys ak
        JOIN users u ON u.id = ak.user_id
        WHERE ak.key_prefix = $1
@@ -42,6 +43,7 @@ async function requireApiKey(req, res, next) {
       name:  key.name,
       email: key.email,
       role:  key.role,
+      mcp_enabled: key.mcp_enabled,
     };
     req.apiKey = {
       id:        key.id,

@@ -90,6 +90,19 @@ app.use('/api/connections', require('./routes/connections'));
 app.use('/api/time', require('./routes/time'));
 app.use('/api/ai', require('./routes/ai'));
 
+// ── MCP OAuth 2.1 provider ────────────────────────────────────────────────────
+// Serves discovery metadata (/.well-known/*), dynamic client registration, and
+// the authorize/token endpoints so AI clients can connect with a browser
+// approval (monday.com-style) instead of a pasted token. Mounted at root.
+app.use('/', require('./mcp/oauth').router);
+
+// ── MCP server (Model Context Protocol) ──────────────────────────────────────
+// Streamable-HTTP endpoint that lets AI clients operate Simplix via the user's
+// API key OR an OAuth access token. Mounted outside /api so it isn't subject to
+// the /api rate limiter; it has its own per-key limiter + concurrency cap. All
+// data access still flows through the REST API (and every permission check).
+app.use('/mcp', require('./mcp/server'));
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 // ── Global error handler ──────────────────────────────────────────────────────
@@ -356,6 +369,61 @@ async function start() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_api_keys_user   ON api_keys(user_id)`);
     console.log('✅ api_keys table ready');
+
+    // Per-user MCP access flag — admins control which members may generate API
+    // keys / use the MCP server. Admins are always allowed (enforced in code),
+    // and are backfilled to true so the user-management table reflects that.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS mcp_enabled BOOLEAN DEFAULT false`);
+    await pool.query(`UPDATE users SET mcp_enabled = true WHERE role = 'admin' AND (mcp_enabled IS NULL OR mcp_enabled = false)`);
+    console.log('✅ users.mcp_enabled ready');
+
+    // ── OAuth 2.1 provider for MCP (monday-style "Connect" flow) ───────────────
+    // Lets AI clients connect with a browser approval instead of pasting a token:
+    //   oauth_clients  — dynamically-registered MCP clients (RFC 7591)
+    //   oauth_codes    — short-lived authorization codes (PKCE-bound, single use)
+    //   oauth_tokens   — issued access + refresh tokens (stored hashed)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS oauth_clients (
+        client_id     TEXT PRIMARY KEY,
+        client_name   TEXT,
+        redirect_uris JSONB NOT NULL DEFAULT '[]',
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS oauth_codes (
+        code_hash      TEXT PRIMARY KEY,
+        client_id      TEXT NOT NULL,
+        user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        redirect_uri   TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        scope          TEXT,
+        resource       TEXT,
+        expires_at     TIMESTAMPTZ NOT NULL,
+        created_at     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS oauth_tokens (
+        id                 SERIAL PRIMARY KEY,
+        access_token_hash  TEXT NOT NULL UNIQUE,
+        refresh_token_hash TEXT UNIQUE,
+        client_id          TEXT NOT NULL,
+        user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        scope              TEXT,
+        resource           TEXT,
+        expires_at         TIMESTAMPTZ NOT NULL,
+        refresh_expires_at TIMESTAMPTZ,
+        revoked            BOOLEAN DEFAULT false,
+        created_at         TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_oauth_tokens_access  ON oauth_tokens(access_token_hash)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_oauth_tokens_refresh ON oauth_tokens(refresh_token_hash)`);
+    // Housekeeping: drop expired codes and long-dead tokens on startup.
+    await pool.query(`DELETE FROM oauth_codes  WHERE expires_at < NOW()`);
+    await pool.query(`DELETE FROM oauth_tokens WHERE COALESCE(refresh_expires_at, expires_at) < NOW() - INTERVAL '7 days'`);
+    console.log('✅ OAuth (MCP) tables ready');
 
     // Board views (saved filter sets per board)
     await pool.query(`

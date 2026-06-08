@@ -2,18 +2,15 @@ const express = require('express');
 const router  = express.Router();
 const crypto  = require('crypto');
 const pool    = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireMcpAccess } = require('../middleware/auth');
 
-// ── Admin-only guard ──────────────────────────────────────────────────────────
-function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Only admins can manage API keys' });
-  }
-  next();
-}
+// API keys (used for both REST integrations and MCP) may be managed by admins
+// or any user an admin has granted MCP access to. Each user only ever sees and
+// manages their OWN keys (every query below is scoped by user_id).
+const requireKeyAccess = requireMcpAccess;
 
 // ── GET /api/keys — list all keys owned by the current admin ─────────────────
-router.get('/', requireAuth, requireAdmin, async (req, res) => {
+router.get('/', requireAuth, requireKeyAccess, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, name, key_prefix, scope, board_ids,
@@ -31,7 +28,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ── POST /api/keys — generate a new API key ───────────────────────────────────
-router.post('/', requireAuth, requireAdmin, async (req, res) => {
+router.post('/', requireAuth, requireKeyAccess, async (req, res) => {
   const { name, scope, board_ids } = req.body;
 
   if (!name || !name.trim()) {
@@ -77,7 +74,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ── DELETE /api/keys/:id — revoke (soft-delete) ───────────────────────────────
-router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireKeyAccess, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `UPDATE api_keys SET is_active = false
@@ -96,7 +93,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ── PUT /api/keys/:id/rename — rename a key ───────────────────────────────────
-router.put('/:id/rename', requireAuth, requireAdmin, async (req, res) => {
+router.put('/:id/rename', requireAuth, requireKeyAccess, async (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) {
     return res.status(400).json({ error: 'Name is required' });

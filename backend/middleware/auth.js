@@ -80,4 +80,27 @@ async function canAccessBoard(boardId, user, dbPool) {
   return result.rows.length > 0;
 }
 
-module.exports = { requireAuth, requireRole, canAccessBoard };
+// Gate for API-key generation and MCP usage. Admins are always allowed; every
+// other user must have been granted MCP access by an admin (users.mcp_enabled).
+// Works for both auth paths: the API-key path already attaches mcp_enabled to
+// req.user; the JWT path doesn't, so we look it up.
+async function requireMcpAccess(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  if (req.user.role === 'admin') return next();
+  try {
+    let enabled = req.user.mcp_enabled;
+    if (enabled === undefined) {
+      const { rows } = await pool.query('SELECT mcp_enabled FROM users WHERE id=$1', [req.user.id]);
+      enabled = rows[0]?.mcp_enabled === true;
+    }
+    if (enabled === true) return next();
+    return res.status(403).json({
+      error: 'MCP access is disabled for your account. Ask an admin to enable it for you in User Management.',
+    });
+  } catch (err) {
+    console.error('requireMcpAccess error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+module.exports = { requireAuth, requireRole, canAccessBoard, requireMcpAccess };

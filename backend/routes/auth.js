@@ -220,7 +220,7 @@ router.get('/microsoft/callback', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id,email,name,role,avatar_url,mfa_enabled,created_at,last_login,microsoft_id IS NOT NULL AS is_sso FROM users WHERE id=$1',
+      'SELECT id,email,name,role,avatar_url,mfa_enabled,created_at,last_login,COALESCE(mcp_enabled,false) AS mcp_enabled,microsoft_id IS NOT NULL AS is_sso FROM users WHERE id=$1',
       [req.user.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
@@ -455,6 +455,7 @@ router.get('/users', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id,email,name,role,avatar_url,mfa_enabled,is_active,created_at,last_login,
+              COALESCE(mcp_enabled,false) AS mcp_enabled,
               microsoft_id IS NOT NULL AS is_sso
        FROM users ORDER BY created_at DESC`
     );
@@ -503,6 +504,28 @@ router.put('/users/:id/active', requireAuth, requireRole('admin'), async (req, r
   } catch (err) {
     console.error(err);
 
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── PUT /auth/users/:id/mcp (admin only) — grant/revoke MCP access ────────────
+router.put('/users/:id/mcp', requireAuth, requireRole('admin'), async (req, res) => {
+  const { mcp_enabled } = req.body;
+  if (typeof mcp_enabled !== 'boolean')
+    return res.status(400).json({ error: 'mcp_enabled (boolean) is required' });
+  try {
+    const target = await pool.query('SELECT role FROM users WHERE id=$1', [req.params.id]);
+    if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
+    if (target.rows[0].role === 'admin')
+      return res.status(400).json({ error: 'Admins always have MCP access — nothing to change.' });
+
+    const { rows } = await pool.query(
+      'UPDATE users SET mcp_enabled=$1 WHERE id=$2 RETURNING id,email,name,role,mcp_enabled',
+      [mcp_enabled, req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

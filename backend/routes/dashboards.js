@@ -2,8 +2,9 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 
-const canWrite = [requireAuth, requireRole('admin', 'manager')];
+const canWrite = [requireAuth, requireScope('write'), requireRole('admin', 'manager')];
 
 // ── Access helpers ────────────────────────────────────────────────────────────
 // A dashboard is visible to: its creator, anyone it's shared with, and admins.

@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { requireScope } = require('../middleware/apiAuth');
 
 // GET /api/trash/board/:boardId  — list non-expired trash items for a board
 router.get('/board/:boardId', requireAuth, async (req, res) => {
   try {
+    if (!(await canAccessBoard(req.params.boardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
     const { rows } = await pool.query(
       `SELECT *,
               CEIL(EXTRACT(EPOCH FROM (deleted_at + INTERVAL '15 days' - NOW())) / 86400) AS days_left
@@ -23,7 +26,7 @@ router.get('/board/:boardId', requireAuth, async (req, res) => {
 });
 
 // POST /api/trash/:id/restore  — restore an item from trash
-router.post('/:id/restore', requireAuth, async (req, res) => {
+router.post('/:id/restore', requireAuth, requireScope('write'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -33,6 +36,10 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
     if (!trashed) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Trash item not found' });
+    }
+    if (!(await canAccessBoard(trashed.board_id, req.user, pool))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     // Resolve target group — fall back to first group in board if original is gone
@@ -101,8 +108,10 @@ router.post('/:id/restore', requireAuth, async (req, res) => {
 
 // DELETE /api/trash/board/:boardId/empty  — permanently delete ALL trash for a board
 // (must come before /:id to avoid Express matching "board" as an id)
-router.delete('/board/:boardId/empty', requireAuth, async (req, res) => {
+router.delete('/board/:boardId/empty', requireAuth, requireScope('full'), async (req, res) => {
   try {
+    if (!(await canAccessBoard(req.params.boardId, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
     await pool.query('DELETE FROM trash_items WHERE board_id=$1', [req.params.boardId]);
     res.json({ success: true });
   } catch (err) {
@@ -112,8 +121,12 @@ router.delete('/board/:boardId/empty', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/trash/:id  — permanently delete one trash item
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, requireScope('full'), async (req, res) => {
   try {
+    const { rows } = await pool.query('SELECT board_id FROM trash_items WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Trash item not found' });
+    if (!(await canAccessBoard(rows[0].board_id, req.user, pool)))
+      return res.status(403).json({ error: 'Access denied' });
     await pool.query('DELETE FROM trash_items WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {

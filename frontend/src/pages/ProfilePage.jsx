@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import {
   updateMe, changePassword,
-  getUsers, adminCreateUser, adminResetPassword, updateUserRole, setUserActive, deleteUser,
+  getUsers, adminCreateUser, adminResetPassword, updateUserRole, setUserActive, setUserMcp, deleteUser,
 } from '../api';
 import { toISODate } from '../utils/dateFormat';
 
@@ -215,6 +215,16 @@ export default function ProfilePage() {
       toast(`User ${r.data.is_active ? 'activated' : 'deactivated'}`, 'success');
     } catch (err) {
       toast(err.response?.data?.error || 'Failed', 'error');
+    }
+  };
+
+  const handleToggleMcp = async (u) => {
+    try {
+      const r = await setUserMcp(u.id, !u.mcp_enabled);
+      setUsers(us => us.map(x => x.id === u.id ? { ...x, mcp_enabled: r.data.mcp_enabled } : x));
+      toast(`MCP access ${r.data.mcp_enabled ? 'enabled' : 'disabled'} for ${r.data.name}`, 'success');
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to update MCP access', 'error');
     }
   };
 
@@ -625,12 +635,13 @@ export default function ProfilePage() {
                             <th style={thStyle} onClick={() => toggleSort('created_at')}>Created <SortIcon col="created_at" /></th>
                             <th style={thStyle} onClick={() => toggleSort('last_login')}>Last Login <SortIcon col="last_login" /></th>
                             <th style={thStyle} onClick={() => toggleSort('status')}>Status <SortIcon col="status" /></th>
+                            <th style={{ ...thStyle, cursor: 'default' }} title="Allow this user to generate API keys and use the MCP server (AI assistants)">MCP</th>
                             <th style={{ ...thStyle, cursor: 'default' }}>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {visible.length === 0 && (
-                            <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted,#aaa)', fontSize: 13 }}>No users match the current filters</td></tr>
+                            <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted,#aaa)', fontSize: 13 }}>No users match the current filters</td></tr>
                           )}
                           {visible.map(u => (
                             <tr key={u.id} className="pf-row" style={{ borderBottom: '1px solid var(--border-color,#f0f0f0)' }}
@@ -675,6 +686,19 @@ export default function ProfilePage() {
                                     color: u.is_active ? '#22c55e' : '#e2445c', border: 'none',
                                   }}>{u.is_active ? '● Active' : '○ Inactive'}</button>
                                 ) : <span style={{ fontSize: 11, color: 'var(--text-secondary,#888)' }}>Active (you)</span>}
+                              </td>
+                              <td style={tdStyle}>
+                                {u.role === 'admin' ? (
+                                  <span title="Admins always have MCP access" style={{ fontSize: 11, color: 'var(--text-secondary,#888)' }}>Always</span>
+                                ) : (
+                                  <button onClick={() => handleToggleMcp(u)}
+                                    title={u.mcp_enabled ? 'MCP enabled — click to revoke' : 'MCP disabled — click to grant'}
+                                    style={{
+                                      fontSize: 11, fontWeight: 600, borderRadius: 10, padding: '3px 10px', cursor: 'pointer',
+                                      background: u.mcp_enabled ? 'rgba(155,114,245,0.18)' : 'var(--hover-bg,#f0f0f0)',
+                                      color: u.mcp_enabled ? '#9b72f5' : 'var(--text-secondary,#888)', border: 'none',
+                                    }}>{u.mcp_enabled ? '🤖 Enabled' : '○ Disabled'}</button>
+                                )}
                               </td>
                               <td style={tdStyle}>
                                 {u.id !== user?.id && (

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getApiKeys, generateApiKey, revokeApiKey, renameApiKey } from '../api';
-import { toISODate } from '../utils/dateFormat';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -14,13 +13,6 @@ function timeAgo(ts) {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   return `${d}d ago`;
-}
-
-function fmtNum(n) {
-  if (!n) return '0';
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000)    return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
 }
 
 const SCOPE_STYLE = {
@@ -154,30 +146,36 @@ function GenerateModal({ boards, onClose, onGenerated }) {
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Board Access</div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 6 }}
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 8 }}
                 onClick={() => setForm(f => ({ ...f, allBoards: true, board_ids: [] }))}>
                 <div style={{
-                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0, marginTop: 1,
                   border: `2px solid ${form.allBoards ? '#9b72f5' : '#c5c7d4'}`,
                   background: form.allBoards ? '#9b72f5' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {form.allBoards && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
                 </div>
-                <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>All boards</span>
+                <div>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>All boards I can access</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>Your current and future board memberships (plus org-wide boards)</div>
+                </div>
               </label>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}
                 onClick={() => setForm(f => ({ ...f, allBoards: false }))}>
                 <div style={{
-                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0, marginTop: 1,
                   border: `2px solid ${!form.allBoards ? '#9b72f5' : '#c5c7d4'}`,
                   background: !form.allBoards ? '#9b72f5' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {!form.allBoards && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
                 </div>
-                <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>Specific boards only</span>
+                <div>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Specific boards only</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>Limit this key to a subset of the boards you can access</div>
+                </div>
               </label>
 
               {!form.allBoards && (
@@ -233,12 +231,122 @@ function GenerateModal({ boards, onClose, onGenerated }) {
   );
 }
 
+// ── MCP (Model Context Protocol) connection helpers ───────────────────────────
+// The same wb_live_ key drives both the REST API and the MCP server. The MCP
+// endpoint is served at <origin>/mcp; we build a ready-to-paste client config.
+
+function mcpEndpoint() {
+  return `${window.location.origin}/mcp`;
+}
+
+function mcpConfigJson(key) {
+  return JSON.stringify({
+    mcpServers: {
+      simplix: {
+        type: 'http',
+        url: mcpEndpoint(),
+        headers: { Authorization: `Bearer ${key}` },
+      },
+    },
+  }, null, 2);
+}
+
+// Dark code block with a built-in copy button (reused for MCP + reveal snippets).
+function CodeBlock({ code, maxHeight }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => navigator.clipboard.writeText(code).then(() => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  });
+  return (
+    <div style={{ position: 'relative', background: '#1e1e2e', borderRadius: 8, overflow: 'hidden' }}>
+      <pre style={{ margin: 0, padding: '14px 16px', fontSize: 11.5, fontFamily: 'monospace', color: '#cdd6f4', overflowX: 'auto', lineHeight: 1.7, maxHeight: maxHeight || 'none' }}>
+        {code}
+      </pre>
+      <button
+        onClick={copy}
+        style={{
+          position: 'absolute', top: 8, right: 10, fontSize: 11, padding: '3px 10px',
+          borderRadius: 5, background: copied ? '#00c875' : 'rgba(255,255,255,0.15)',
+          color: '#fff', border: 'none', cursor: 'pointer', transition: 'background 0.2s',
+        }}
+      >
+        {copied ? '✓ Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
+// Hero card — the primary, one-step way to connect an AI assistant (no key).
+function ConnectCard() {
+  const [copied, setCopied] = useState(false);
+  const url = mcpEndpoint();
+  const copy = () => navigator.clipboard.writeText(url).then(() => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  });
+  return (
+    <div style={{
+      borderRadius: 14, padding: '20px 22px', marginBottom: 26,
+      background: 'linear-gradient(135deg, rgba(155,114,245,0.13), rgba(155,114,245,0.03))',
+      border: '1px solid rgba(155,114,245,0.28)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        <span style={{ fontSize: 20 }}>🤖</span>
+        <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>Connect an AI assistant</div>
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 14, maxWidth: 560 }}>
+        Use Simplix from Claude, ChatGPT, Cursor and more. Add this URL in your assistant's connectors, then sign in — no key to copy.
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', minWidth: 0,
+          background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 9,
+          padding: '10px 14px', fontFamily: 'monospace', fontSize: 13, color: 'var(--text-primary)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{url}</div>
+        <button onClick={copy} style={{
+          flexShrink: 0, padding: '0 18px', borderRadius: 9, fontWeight: 700, fontSize: 13,
+          border: 'none', background: copied ? '#00c875' : '#9b72f5', color: '#fff', cursor: 'pointer', transition: 'background .2s',
+        }}>{copied ? '✓ Copied' : 'Copy URL'}</button>
+      </div>
+    </div>
+  );
+}
+
+// Collapsible developer section — API-key config + REST, hidden by default.
+function AdvancedKeyDocs() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 26, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12.5, fontWeight: 600, padding: 0 }}
+      >
+        <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
+        For developers — connect with an API key
+      </button>
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 8 }}>
+            For config-file clients or scripts: generate a key above, then use it as a bearer token (MCP config):
+          </div>
+          <CodeBlock code={mcpConfigJson('YOUR_KEY')} />
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '14px 0 8px' }}>
+            Or call the REST API directly:
+          </div>
+          <CodeBlock code={`curl ${window.location.origin}/api/boards \\\n  -H "X-API-Key: YOUR_KEY"`} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Key reveal modal (shown ONCE after generation) ────────────────────────────
 
 function KeyRevealModal({ keyData, boards, onClose }) {
   const [copied, setCopied]       = useState(false);
   const [canClose, setCanClose]   = useState(false);
-  const [showExample, setShowExample] = useState(false);
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -316,21 +424,15 @@ function KeyRevealModal({ keyData, boards, onClose }) {
             ))}
           </div>
 
-          {/* Usage example (collapsible) */}
-          <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden' }}>
-            <button
-              onClick={() => setShowExample(v => !v)}
-              style={{ width: '100%', padding: '10px 14px', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-secondary)', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}
-            >
-              How to use this key
-              <span style={{ fontSize: 10 }}>{showExample ? '▲' : '▼'}</span>
-            </button>
-            {showExample && (
-              <pre style={{ margin: 0, padding: '12px 14px', fontSize: 11, fontFamily: 'monospace', background: '#1e1e2e', color: '#cdd6f4', overflowX: 'auto', lineHeight: 1.6 }}>
-{`curl https://api.simplix.app/api/boards \\
-  -H "X-API-Key: ${keyData.raw_key}"`}
-              </pre>
-            )}
+          {/* MCP connection snippet — ready to paste into an AI client */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+              🤖 Use with an AI assistant
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.5 }}>
+              Paste this into a config-file client (Claude Desktop, Cursor) to use this key:
+            </div>
+            <CodeBlock code={mcpConfigJson(keyData.raw_key)} />
           </div>
         </div>
 
@@ -349,88 +451,6 @@ function KeyRevealModal({ keyData, boards, onClose }) {
             {canClose ? "I've saved my key — Close" : 'Please copy the key first…'}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Usage examples accordion ──────────────────────────────────────────────────
-
-const EXAMPLES = [
-  {
-    title: 'Read all boards',
-    code: `curl https://api.simplix.app/api/boards \\
-  -H "X-API-Key: YOUR_KEY"`,
-  },
-  {
-    title: 'Get board items',
-    code: `curl https://api.simplix.app/api/boards/5 \\
-  -H "X-API-Key: YOUR_KEY"`,
-  },
-  {
-    title: 'Create an item',
-    code: `curl -X POST https://api.simplix.app/api/items \\
-  -H "X-API-Key: YOUR_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"group_id":12,"name":"New Task"}'`,
-  },
-  {
-    title: 'Update a column value',
-    code: `curl -X POST https://api.simplix.app/api/column-values/upsert \\
-  -H "X-API-Key: YOUR_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"item_id":123,"column_id":45,"value":"Done"}'`,
-  },
-];
-
-function UsageExamples() {
-  const [open, setOpen] = useState(null);
-  const [copied, setCopied] = useState(null);
-
-  const copyCode = (i, code) => {
-    navigator.clipboard.writeText(code).then(() => {
-      setCopied(i);
-      setTimeout(() => setCopied(null), 1800);
-    });
-  };
-
-  return (
-    <div style={{ marginTop: 28 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>Usage Examples</div>
-      <div style={{ border: '1px solid var(--border-color)', borderRadius: 10, overflow: 'hidden' }}>
-        {EXAMPLES.map((ex, i) => (
-          <div key={i} style={{ borderBottom: i < EXAMPLES.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
-            <button
-              onClick={() => setOpen(open === i ? null : i)}
-              style={{
-                width: '100%', padding: '11px 16px', textAlign: 'left', display: 'flex',
-                alignItems: 'center', justifyContent: 'space-between',
-                background: open === i ? 'var(--hover-bg)' : 'var(--bg-secondary)',
-                fontSize: 13, color: 'var(--text-primary)', fontWeight: 500,
-              }}
-            >
-              {ex.title}
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{open === i ? '▲' : '▼'}</span>
-            </button>
-            {open === i && (
-              <div style={{ position: 'relative', background: '#1e1e2e' }}>
-                <pre style={{ margin: 0, padding: '14px 16px', fontSize: 11.5, fontFamily: 'monospace', color: '#cdd6f4', overflowX: 'auto', lineHeight: 1.7 }}>
-                  {ex.code}
-                </pre>
-                <button
-                  onClick={() => copyCode(i, ex.code)}
-                  style={{
-                    position: 'absolute', top: 8, right: 10, fontSize: 11, padding: '3px 10px',
-                    borderRadius: 5, background: copied === i ? '#00c875' : 'rgba(255,255,255,0.15)',
-                    color: '#fff', border: 'none', cursor: 'pointer', transition: 'background 0.2s',
-                  }}
-                >
-                  {copied === i ? '✓ Copied' : 'Copy'}
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -513,16 +533,9 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
     }
   };
 
-  const colStyle = (w) => ({
-    padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)',
-    fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4,
-    borderBottom: '2px solid var(--border-color)', whiteSpace: 'nowrap', width: w,
-  });
-
-  const cellStyle = {
-    padding: '11px 12px', fontSize: 13, color: 'var(--text-primary)',
-    borderBottom: '1px solid var(--border-color)', verticalAlign: 'middle',
-  };
+  const boardsLabel = (k) => !k.board_ids?.length
+    ? 'All boards'
+    : `${k.board_ids.length} board${k.board_ids.length !== 1 ? 's' : ''}`;
 
   return (
     <>
@@ -546,7 +559,7 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
               🔑 API Keys
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, maxWidth: 520 }}>
-              Generate API keys to access Workboard data programmatically from external tools like Power BI, Zapier, or custom scripts.
+              Connect an AI assistant, or generate keys for scripts and integrations.
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 16 }}>
@@ -562,112 +575,91 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
 
         {/* Body */}
         <div style={{ flex: 1, padding: '24px 28px', overflowY: 'auto' }}>
+
+          {/* Hero — connect an AI assistant */}
+          <ConnectCard />
+
+          {/* Keys section */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+              Your API keys{keys.length ? ` (${keys.length})` : ''}
+            </div>
+          </div>
+
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>Loading keys…</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
           ) : keys.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-secondary)' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>🔑</div>
-              <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6 }}>No API keys yet</div>
-              <div style={{ fontSize: 13, marginBottom: 20 }}>Generate your first key to get started.</div>
+            <div style={{
+              textAlign: 'center', padding: '32px 24px', color: 'var(--text-secondary)',
+              border: '1px dashed var(--border-color)', borderRadius: 12,
+            }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🔑</div>
+              <div style={{ fontSize: 13, marginBottom: 16 }}>No API keys yet — you only need one for scripts or config-file clients.</div>
               <button
                 onClick={() => setShowGenerate(true)}
-                style={{ padding: '9px 22px', borderRadius: 6, fontWeight: 700, fontSize: 13, border: 'none', background: '#9b72f5', color: '#fff', cursor: 'pointer' }}
+                style={{ padding: '9px 20px', borderRadius: 8, fontWeight: 700, fontSize: 13, border: 'none', background: '#9b72f5', color: '#fff', cursor: 'pointer' }}
               >
-                Generate First Key
+                Generate a key
               </button>
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-secondary)' }}>
-                    <th style={colStyle('auto')}>Name / Prefix</th>
-                    <th style={colStyle(80)}>Scope</th>
-                    <th style={colStyle(100)}>Boards</th>
-                    <th style={colStyle(90)}>Last Used</th>
-                    <th style={colStyle(80)}>Requests</th>
-                    <th style={colStyle(90)}>Created</th>
-                    <th style={{ ...colStyle(90), textAlign: 'right' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {keys.map((k) => (
-                    <tr key={k.id}
-                      style={{ transition: 'background 0.1s' }}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {keys.map((k) => (
+                <div
+                  key={k.id}
+                  className="ak-key-card"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '13px 16px', borderRadius: 11,
+                    border: '1px solid var(--border-color)', background: 'var(--bg-primary)',
+                    transition: 'border-color .15s, box-shadow .15s',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      {renamingId === k.id ? (
+                        <RenameInput
+                          initialValue={k.name}
+                          onSave={(name) => handleRename(k.id, name)}
+                          onCancel={() => setRenamingId(null)}
+                        />
+                      ) : (
+                        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</span>
+                      )}
+                      <ScopeBadge scope={k.scope} />
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: 'monospace' }}>{k.key_prefix}…</span>
+                      <span style={{ opacity: 0.5 }}>·</span>
+                      <span>{boardsLabel(k)}</span>
+                      <span style={{ opacity: 0.5 }}>·</span>
+                      <span>{k.last_used_at ? `used ${timeAgo(k.last_used_at)}` : 'never used'}</span>
+                    </div>
+                  </div>
+                  <div className="ak-key-actions" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <button
+                      onClick={() => setRenamingId(k.id)}
+                      title="Rename"
+                      style={{ fontSize: 14, color: 'var(--text-secondary)', padding: '5px 7px', borderRadius: 6, cursor: 'pointer', background: 'none', border: 'none' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      {/* Name + prefix */}
-                      <td style={cellStyle}>
-                        {renamingId === k.id ? (
-                          <RenameInput
-                            initialValue={k.name}
-                            onSave={(name) => handleRename(k.id, name)}
-                            onCancel={() => setRenamingId(null)}
-                          />
-                        ) : (
-                          <div>
-                            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{k.name}</div>
-                            <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)' }}>{k.key_prefix}…</div>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Scope */}
-                      <td style={cellStyle}><ScopeBadge scope={k.scope} /></td>
-
-                      {/* Boards */}
-                      <td style={cellStyle}>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {!k.board_ids?.length ? 'All boards' : `${k.board_ids.length} board${k.board_ids.length !== 1 ? 's' : ''}`}
-                        </span>
-                      </td>
-
-                      {/* Last used */}
-                      <td style={cellStyle}>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{timeAgo(k.last_used_at)}</span>
-                      </td>
-
-                      {/* Request count */}
-                      <td style={cellStyle}>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{fmtNum(k.request_count)}</span>
-                      </td>
-
-                      {/* Created */}
-                      <td style={cellStyle}>
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {toISODate(k.created_at)}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td style={{ ...cellStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <button
-                          onClick={() => setRenamingId(k.id)}
-                          title="Rename"
-                          style={{ fontSize: 14, color: 'var(--text-secondary)', padding: '3px 6px', borderRadius: 4, marginRight: 4 }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--hover-bg)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >✏️</button>
-                        <button
-                          onClick={() => handleRevoke(k.id)}
-                          disabled={revoking === k.id}
-                          title="Revoke"
-                          style={{ fontSize: 14, color: '#e2445c', padding: '3px 6px', borderRadius: 4 }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#fff5f7'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >
-                          {revoking === k.id ? '…' : '🗑'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    >✏️</button>
+                    <button
+                      onClick={() => handleRevoke(k.id)}
+                      disabled={revoking === k.id}
+                      title="Revoke"
+                      style={{ fontSize: 14, color: '#e2445c', padding: '5px 7px', borderRadius: 6, cursor: 'pointer', background: 'none', border: 'none' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#fff5f7'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >{revoking === k.id ? '…' : '🗑'}</button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          <UsageExamples />
+          {/* Developer / API-key docs — collapsed */}
+          <AdvancedKeyDocs />
         </div>
       </div>
 
@@ -691,6 +683,7 @@ export default function ApiKeysPanel({ boards = [], onClose }) {
 
       <style>{`
         @keyframes akSpin { to { transform: rotate(360deg); } }
+        .ak-key-card:hover { border-color: rgba(155,114,245,0.5); box-shadow: 0 2px 10px rgba(155,114,245,0.08); }
       `}</style>
     </>
   );

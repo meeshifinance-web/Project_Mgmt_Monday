@@ -146,6 +146,7 @@ export const adminCreateUser = (data) => api.post('/auth/admin/create-user', dat
 export const adminResetPassword = (id, password) => api.put(`/auth/admin/users/${id}/reset-password`, { password });
 export const updateUserRole = (id, role) => api.put(`/auth/users/${id}/role`, { role });
 export const setUserActive = (id, is_active) => api.put(`/auth/users/${id}/active`, { is_active });
+export const setUserMcp = (id, mcp_enabled) => api.put(`/auth/users/${id}/mcp`, { mcp_enabled });
 export const deleteUser = (id) => api.delete(`/auth/users/${id}`);
 export const getActivityLogs = (boardId, params) => api.get(`/activity-logs/board/${boardId}`, { params });
 export const getItemActivityLogs = (itemId) => api.get(`/activity-logs/item/${itemId}`);
