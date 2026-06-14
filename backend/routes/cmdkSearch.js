@@ -24,7 +24,7 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, isSuperAdmin, isAdminOrAbove } = require('../middleware/auth');
 
 function parseOwners(val) {
   if (!val) return [];
@@ -40,12 +40,13 @@ router.get('/', requireAuth, async (req, res) => {
 
   const userId   = req.user.id;
   const userName = req.user.name;
-  const isAdmin  = req.user.role === 'admin';
+  const isSuper      = isSuperAdmin(req.user);    // sees every board
+  const seesAllItems = isAdminOrAbove(req.user);  // bypasses per-item owner filter
   const term     = `%${q.toLowerCase()}%`;
 
   try {
     // ── Boards the user can access (carry visibility flags for filtering items) ──
-    const boardsQuery = isAdmin
+    const boardsQuery = isSuper
       ? `SELECT b.id, b.name, b.enforce_owner_visibility, true AS is_board_owner,
                 f.name AS folder_name
            FROM boards b
@@ -56,11 +57,12 @@ router.get('/', requireAuth, async (req, res) => {
                 COALESCE(bm.is_owner, false) AS is_board_owner,
                 f.name AS folder_name
            FROM boards b
-           JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
+           LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
            LEFT JOIN board_folders f ON f.id = b.folder_id
           WHERE (b.is_deleted IS NULL OR b.is_deleted = false)
+            AND (b.visibility = 'org_wide' OR b.created_by = $1 OR bm.user_id IS NOT NULL)
           ORDER BY b.name`;
-    const boardsRes = await pool.query(boardsQuery, isAdmin ? [] : [userId]);
+    const boardsRes = await pool.query(boardsQuery, isSuper ? [] : [userId]);
 
     const accessibleBoardIds = boardsRes.rows.map(b => b.id);
     const boardMeta = Object.fromEntries(boardsRes.rows.map(b => [b.id, b]));
@@ -90,7 +92,7 @@ router.get('/', requireAuth, async (req, res) => {
       // is a no-op; only enforced boards need the per-item owner check.
       const enforcedBoardIds = itemsRes.rows
         .map(r => r.board_id)
-        .filter(id => boardMeta[id]?.enforce_owner_visibility && !boardMeta[id]?.is_board_owner && !isAdmin);
+        .filter(id => boardMeta[id]?.enforce_owner_visibility && !boardMeta[id]?.is_board_owner && !seesAllItems);
 
       let valuesByItem = {};
       let ownerColsByBoard = {};
@@ -127,8 +129,8 @@ router.get('/', requireAuth, async (req, res) => {
         const meta = boardMeta[row.board_id];
         if (!meta) return false;
         const bypass = meta.enforce_owner_visibility
-          ? (isAdmin || meta.is_board_owner)
-          : (isAdmin || req.user.role === 'manager');
+          ? (seesAllItems || meta.is_board_owner)
+          : (seesAllItems || req.user.role === 'manager');
         if (bypass) return true;
         const ownerCols = ownerColsByBoard[row.board_id] || [];
         if (!ownerCols.length) return true;

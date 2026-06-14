@@ -19,9 +19,20 @@ const express = require('express');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 const pool = require('../db');
 
 const router = express.Router();
+
+// Real Simplix logo embedded as a data URI so the sign-in page shows the actual
+// brand logo with no extra route or static-path dependency. Falls back to a CSS
+// wordmark if the file can't be read.
+let LOGO_DATA_URI = null;
+try {
+  const logoPath = path.join(__dirname, '..', '..', 'frontend', 'public', 'logo.png');
+  LOGO_DATA_URI = 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64');
+} catch (_) { /* fall back to CSS wordmark */ }
 
 // ── Lifetimes ──────────────────────────────────────────────────────────────────
 const CODE_TTL_SEC = 120;            // authorization code: 2 minutes
@@ -143,44 +154,87 @@ async function validateAuthorizeParams(q) {
 function loginPage(params, errorMsg) {
   const hidden = ['client_id', 'redirect_uri', 'code_challenge', 'code_challenge_method', 'state', 'scope', 'resource', 'response_type']
     .map(k => `<input type="hidden" name="${k}" value="${escapeHtml(params[k] || '')}">`).join('\n');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Connect to Simplix</title><style>
-*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:#f5f6f8;display:flex;align-items:center;justify-content:center;min-height:100vh}
-.card{background:#fff;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.12);width:100%;max-width:380px;padding:30px 28px}
-.logo{font-weight:800;font-size:22px;color:#1f2d3d;margin-bottom:4px}.logo span{color:#9b72f5}
-.sub{font-size:13px;color:#676879;margin-bottom:20px;line-height:1.5}
-label{display:block;font-size:12px;font-weight:600;color:#676879;margin:14px 0 6px}
-input[type=email],input[type=password],input[type=text]{width:100%;padding:10px 12px;border:1.5px solid #e0e2e8;border-radius:8px;font-size:14px;outline:none}
-input:focus{border-color:#9b72f5}
-.pw-wrap{position:relative}
-.pw-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9b72f5;font-size:12px;font-weight:700;cursor:pointer;padding:4px 6px;width:auto;margin:0}
-.pw-wrap input{padding-right:62px}
-button{width:100%;margin-top:22px;padding:11px;border:none;border-radius:8px;background:#9b72f5;color:#fff;font-weight:700;font-size:14px;cursor:pointer}
-button:hover{background:#8a5ee8}.err{background:#fff5f7;border:1px solid #f5c0ca;color:#c0334d;font-size:13px;padding:9px 12px;border-radius:8px;margin-bottom:8px}
-.foot{font-size:11px;color:#9296a3;margin-top:16px;text-align:center;line-height:1.5}
-</style></head><body><div class="card">
-<div class="logo">Simpli<span>x</span></div>
-<div class="sub">An AI assistant wants to connect to your Simplix account. Sign in to authorize access to <strong>your</strong> boards and items.</div>
-${errorMsg ? `<div class="err">${escapeHtml(errorMsg)}</div>` : ''}
-<form method="POST" action="/oauth/authorize">
-${hidden}
-<label>Email</label><input type="email" name="email" required autofocus autocomplete="username">
-<label>Password</label>
-<div class="pw-wrap">
-<input id="pw" type="password" name="password" required autocomplete="current-password">
-<button type="button" class="pw-toggle" id="pwToggle">Show</button>
-</div>
-<button type="submit">Authorize &amp; Connect</button>
-</form>
-<div class="foot">The assistant will act with your permissions only. You can revoke access anytime in Simplix settings.</div>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in to Simplix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--p:#9b72f5;--ink:#1f2d3d;--mut:#5b6472}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:'Figtree',system-ui,Arial,sans-serif;color:var(--ink);
+  display:flex;align-items:center;justify-content:center;padding:20px;position:relative;overflow:hidden;
+  background:linear-gradient(165deg,#f6f4fd 0%,#faf2f6 52%,#fdf1ec 100%)}
+body::before{content:"";position:absolute;top:-32%;left:50%;width:780px;height:780px;transform:translateX(-50%);
+  background:radial-gradient(circle,rgba(155,114,245,.28),transparent 62%);pointer-events:none}
+body::after{content:"";position:absolute;bottom:-28%;right:-12%;width:560px;height:560px;
+  background:radial-gradient(circle,rgba(255,143,171,.22),transparent 65%);pointer-events:none}
+.card{position:relative;z-index:1;width:100%;max-width:660px;padding:40px 56px;
+  background:rgba(255,255,255,.86);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(155,114,245,.14);border-radius:26px;box-shadow:0 24px 70px rgba(155,114,245,.18);
+  animation:rise .5s cubic-bezier(.22,1,.36,1)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
+.logo{display:block;margin:0 auto 12px;height:48px;width:auto;max-width:70%}
+.mark{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:800;font-size:17px;box-shadow:0 6px 16px rgba(155,114,245,.4);
+  background:linear-gradient(135deg,#9b72f5,#c17ae0 45%,#ff8fab 80%,#ffb38a)}
+.word{font-weight:800;font-size:24px;letter-spacing:-.01em}
+.word b{background:linear-gradient(120deg,#9b72f5,#ff8fab);-webkit-background-clip:text;background-clip:text;color:transparent}
+.badge{display:flex;align-items:center;gap:6px;width:fit-content;margin:0 auto 11px;font-size:12px;font-weight:700;
+  letter-spacing:.05em;color:var(--p);background:rgba(155,114,245,.1);border:1px solid rgba(155,114,245,.2);padding:5px 13px;border-radius:999px}
+.h{font-size:23px;font-weight:700;text-align:center;margin:0 0 6px}
+.sub{font-size:15px;color:var(--mut);text-align:center;line-height:1.5;margin:0 0 26px;max-width:480px;margin-left:auto;margin-right:auto}
+.sub b{color:var(--ink)}
+.fields{display:flex;gap:14px}
+.fields > div{flex:1}
+label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin:0 0 6px}
+input[type=email],input[type=password],input[type=text]{width:100%;padding:14px 16px;border:1.5px solid #e7e3f3;
+  border-radius:12px;font-size:16px;font-family:inherit;outline:none;background:#fff;transition:border-color .15s,box-shadow .15s}
+input::placeholder{color:#b6b3c6}
+input:focus{border-color:var(--p);box-shadow:0 0 0 4px rgba(155,114,245,.12)}
+.pw-wrap{position:relative}.pw-wrap input{padding-right:70px}
+.pw-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--p);
+  font-size:13px;font-weight:700;cursor:pointer;padding:6px 9px;width:auto;margin:0;font-family:inherit}
+.btn{width:100%;margin-top:28px;padding:16px;border:none;border-radius:12px;color:#fff;font-weight:700;font-size:16.5px;
+  font-family:inherit;cursor:pointer;background:linear-gradient(120deg,#9b72f5,#ff8fab);
+  box-shadow:0 12px 26px rgba(155,114,245,.32);transition:transform .12s,box-shadow .2s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 16px 34px rgba(155,114,245,.42)}
+.btn:active{transform:translateY(0)}
+.err{background:#fff5f7;border:1px solid #f5c0ca;color:#c0334d;font-size:13.5px;padding:11px 14px;border-radius:11px;margin-bottom:6px}
+.foot{font-size:13px;color:#9296a3;margin-top:24px;text-align:center;line-height:1.6}
+.foot a{color:var(--p);text-decoration:none;font-weight:600}
+@media (max-width:600px){.card{padding:30px 26px}.fields{flex-direction:column;gap:0}.fields > div:last-child{margin-top:14px}}
+</style></head><body>
+<div class="card">
+  ${LOGO_DATA_URI
+    ? `<img class="logo" src="${LOGO_DATA_URI}" alt="Simplix">`
+    : `<div class="brand"><div class="mark">S</div><div class="word">simpli<b>x</b></div></div>`}
+  <div class="badge">&#128274; SECURE SIGN-IN</div>
+  <div class="h">Connect your AI assistant</div>
+  <div class="sub">An AI assistant wants to work with your Simplix account. Sign in to authorize access to <b>only the boards and items you can see</b>.</div>
+  ${errorMsg ? `<div class="err">${escapeHtml(errorMsg)}</div>` : ''}
+  <form method="POST" action="/oauth/authorize">
+    ${hidden}
+    <div class="fields">
+      <div>
+        <label>Email</label>
+        <input type="email" name="email" required autofocus autocomplete="username" placeholder="you@company.com">
+      </div>
+      <div>
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input id="pw" type="password" name="password" required autocomplete="current-password" placeholder="Your password">
+          <button type="button" class="pw-toggle" id="pwToggle">Show</button>
+        </div>
+      </div>
+    </div>
+    <button type="submit" class="btn">Authorize &amp; Connect &rarr;</button>
+  </form>
+  <div class="foot">Acts with your permissions only &mdash; revoke anytime in settings.<br><a href="https://simplixart.com">simplixart.com</a> &middot; Work, simplified.</div>
 </div>
 <script>
-(function(){
-  var b=document.getElementById('pwToggle'), p=document.getElementById('pw');
-  if(b&&p){ b.addEventListener('click',function(){
-    var show=p.type==='password'; p.type=show?'text':'password'; b.textContent=show?'Hide':'Show';
-  }); }
-})();
+(function(){var b=document.getElementById('pwToggle'),p=document.getElementById('pw');
+if(b&&p){b.addEventListener('click',function(){var s=p.type==='password';p.type=s?'text':'password';b.textContent=s?'Hide':'Show';});}})();
 </script>
 </body></html>`;
 }
@@ -192,7 +246,10 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp
 // for the authorize pages so the OAuth redirect is allowed.
 function authPageCsp(res) {
   res.set('Content-Security-Policy',
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action *");
+    "default-src 'self'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com data:; " +
+    "script-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action *");
 }
 
 // GET — show the login/consent page (after validating the request).
@@ -227,7 +284,7 @@ router.post('/oauth/authorize', authorizeLimiter, async (req, res) => {
   if (!okPw) return bad();
   if (!user.is_active) return res.status(403).set('Content-Type', 'text/html').send(loginPage(p, 'Your account is disabled.'));
   // Enforce the same admin-controlled MCP gate as everywhere else.
-  if (user.role !== 'admin' && user.mcp_enabled !== true)
+  if (user.role !== 'admin' && user.role !== 'superadmin' && user.mcp_enabled !== true)
     return res.status(403).set('Content-Type', 'text/html').send(loginPage(p, 'MCP access is disabled for your account. Ask an admin to enable it in User Management.'));
 
   // Issue a single-use, PKCE-bound authorization code.

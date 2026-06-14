@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth, requireRole, canAccessBoard } = require('../middleware/auth');
+const { requireAuth, requireRole, canAccessBoard, isSuperAdmin, isAdminOrAbove } = require('../middleware/auth');
 const { requireScope } = require('../middleware/apiAuth');
 
 const canWrite = [requireAuth, requireScope('write'), requireRole('admin', 'manager')];
@@ -65,8 +65,9 @@ router.get('/', requireAuth, async (req, res) => {
          LEFT JOIN board_favorites bf
            ON bf.board_id = b.id AND bf.user_id = $2
        WHERE (b.is_deleted IS NULL OR b.is_deleted = false)
-         AND ($1 = 'admin'
+         AND ($1 = 'superadmin'
           OR b.visibility = 'org_wide'
+          OR b.created_by = $2
           OR EXISTS (
             SELECT 1 FROM board_members bm
             WHERE bm.board_id = b.id AND bm.user_id = $2
@@ -237,9 +238,9 @@ router.get('/:id', requireAuth, async (req, res) => {
         [id, req.user.id]
       );
       const isBoardOwner = ownerRes.rows.length > 0;
-      bypassFilter = req.user.role === 'admin' || isBoardOwner;
+      bypassFilter = isAdminOrAbove(req.user) || isBoardOwner;
     } else {
-      bypassFilter = req.user.role === 'admin' || req.user.role === 'manager';
+      bypassFilter = isAdminOrAbove(req.user) || req.user.role === 'manager';
     }
 
     if (!bypassFilter) {
@@ -491,11 +492,12 @@ router.patch('/:id/email-settings', ...canWrite, async (req, res) => {
 });
 
 // ── DELETE board — soft-delete (moves to global trash, 15-day retention) ──────
-// Admins can delete any board; managers can only delete boards they created.
+// Superadmin can delete any board; admins and managers can only delete boards
+// they created.
 router.delete('/:id', requireAuth, requireScope('full'), requireRole('admin', 'manager'), async (req, res) => {
   try {
-    const isAdmin = req.user.role === 'admin';
-    const whereClause = isAdmin
+    const isSuper = isSuperAdmin(req.user);
+    const whereClause = isSuper
       ? 'id = $3 AND (is_deleted IS NULL OR is_deleted = false)'
       : 'id = $3 AND (is_deleted IS NULL OR is_deleted = false) AND created_by = $1';
 
@@ -508,8 +510,8 @@ router.delete('/:id', requireAuth, requireScope('full'), requireRole('admin', 'm
       [req.user.id, req.user.name, req.params.id]
     );
     if (!rows.length) {
-      // Distinguish between board not found vs. manager not owning it
-      if (!isAdmin) {
+      // Distinguish between board not found vs. not owning it
+      if (!isSuper) {
         const { rows: exists } = await pool.query(
           'SELECT id FROM boards WHERE id=$1 AND (is_deleted IS NULL OR is_deleted = false)',
           [req.params.id]

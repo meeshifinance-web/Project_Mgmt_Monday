@@ -49,14 +49,18 @@ router.get('/audit', requireAuth, requireRole('admin'), async (req, res) => {
     const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
     const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
     // Count: plain table, no prefix.
+    // Hidden accounts (e.g. the superadmin) never appear in the audit feed.
+    const HIDE = 'user_id NOT IN (SELECT id FROM users WHERE is_hidden = true)';
     const countParams = [];
     const countWhere = buildFilters(req.query, countParams, { withBoard: true });
+    countWhere.push(HIDE);
     const countWhereSql = countWhere.length ? `WHERE ${countWhere.join(' AND ')}` : '';
     const total = (await pool.query(`SELECT COUNT(*)::int AS n FROM activity_logs ${countWhereSql}`, countParams)).rows[0].n;
 
     // Page: joined to boards, "a." prefix.
     const pageParams = [];
     const pageWhere = buildFilters(req.query, pageParams, { withBoard: true, prefix: 'a.' });
+    pageWhere.push(`a.${HIDE}`);
     const pageWhereSql = pageWhere.length ? `WHERE ${pageWhere.join(' AND ')}` : '';
     pageParams.push(limit); const limIdx = pageParams.length;
     pageParams.push(offset); const offIdx = pageParams.length;
@@ -80,7 +84,9 @@ router.get('/audit/meta', requireAuth, requireRole('admin'), async (req, res) =>
     const actions = (await pool.query(`SELECT DISTINCT action FROM activity_logs WHERE action IS NOT NULL ORDER BY action`)).rows.map(r => r.action);
     const users = (await pool.query(
       `SELECT user_id, MAX(user_name) AS user_name, COUNT(*)::int AS count
-         FROM activity_logs WHERE user_id IS NOT NULL
+         FROM activity_logs
+        WHERE user_id IS NOT NULL
+          AND user_id NOT IN (SELECT id FROM users WHERE is_hidden = true)
         GROUP BY user_id ORDER BY count DESC LIMIT 100`
     )).rows;
     res.json({ actions, users });

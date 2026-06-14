@@ -11,13 +11,13 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, isSuperAdmin } = require('../middleware/auth');
 
 // GET /api/my-work
 router.get('/', requireAuth, async (req, res) => {
   const userId   = req.user.id;
   const userName = req.user.name;
-  const isAdmin  = req.user.role === 'admin';
+  const isAdmin  = isSuperAdmin(req.user); // only superadmin sees across all boards
 
   if (!userName) return res.json({ items: [] });
 
@@ -26,7 +26,8 @@ router.get('/', requireAuth, async (req, res) => {
     const boardClause = isAdmin
       ? `b.is_deleted IS NOT TRUE`
       : `b.is_deleted IS NOT TRUE AND (
-           b.visibility = 'org'
+           b.visibility = 'org_wide'
+           OR b.created_by = $1
            OR EXISTS (
              SELECT 1 FROM board_members bm
              WHERE bm.board_id = b.id AND bm.user_id = $1

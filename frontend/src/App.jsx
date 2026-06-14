@@ -368,7 +368,7 @@ function MainApp() {
     return next;
   });
   const newBoardFormRef = useRef(null);
-  const { user: currentUser, isManager, isAdmin } = useAuth();
+  const { user: currentUser, isManager, isAdmin, isSuperAdmin } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const { boardId: urlBoardId } = useParams();
@@ -1366,7 +1366,7 @@ function MainApp() {
           {!isNavCollapsed && (
             <div style={{ padding: '10px 18px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
               <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {isAdmin ? 'All Boards' : 'Boards'}
+                {isSuperAdmin ? 'All Boards' : 'Boards'}
               </span>
               {isAdmin && (
                 <span style={{ fontSize: 10, background: 'rgba(253,171,61,0.15)', color: '#fdab3d', borderRadius: 4, padding: '1px 5px', fontWeight: 700, letterSpacing: 0.3 }}>

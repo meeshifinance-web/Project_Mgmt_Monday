@@ -272,7 +272,7 @@ function ActivityEntry({ log }) {
 function CommentEntry({ comment, replies = [], members, currentUserId, currentUserRole, onDelete, onReply, item, boardId }) {
   const [hovered, setHovered] = useState(false);
   const [showReply, setShowReply] = useState(false);
-  const canDelete = comment.user_id === currentUserId || currentUserRole === 'admin';
+  const canDelete = comment.user_id === currentUserId || currentUserRole === 'admin' || currentUserRole === 'superadmin';
 
   return (
     <div style={{ borderBottom: '1px solid #f5f6f8' }}>
@@ -346,7 +346,7 @@ function CommentEntry({ comment, replies = [], members, currentUserId, currentUs
 
 function ReplyEntry({ reply, currentUserId, currentUserRole, onDelete }) {
   const [hovered, setHovered] = useState(false);
-  const canDelete = reply.user_id === currentUserId || currentUserRole === 'admin';
+  const canDelete = reply.user_id === currentUserId || currentUserRole === 'admin' || currentUserRole === 'superadmin';
   return (
     <div
       onMouseEnter={() => setHovered(true)}

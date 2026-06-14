@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, isSuperAdmin } = require('../middleware/auth');
 
 const canWrite = [requireAuth, requireRole('admin', 'manager')];
 
@@ -32,7 +32,7 @@ async function folderDepth(client, folderId) {
 router.get('/', requireAuth, async (req, res) => {
   try {
     let rows;
-    if (req.user.role === 'admin') {
+    if (isSuperAdmin(req.user)) {
       ({ rows } = await pool.query(
         'SELECT * FROM board_folders WHERE (is_deleted IS NULL OR is_deleted = false) ORDER BY position, name'
       ));

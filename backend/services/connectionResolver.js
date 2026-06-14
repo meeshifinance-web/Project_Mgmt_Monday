@@ -94,7 +94,7 @@ async function resolveConnections(pool, board, user) {
   if (user && linkedIds.length) {
     const boardIds = [...new Set(Object.values(linkedItems).map(li => li.board_id))];
     let accessible;
-    if (user.role === 'admin') {
+    if (user.role === 'superadmin') {
       accessible = new Set(boardIds);
     } else {
       const r = await pool.query(
@@ -102,6 +102,7 @@ async function resolveConnections(pool, board, user) {
           WHERE b.id = ANY($1)
             AND (b.is_deleted IS NULL OR b.is_deleted = false)
             AND ( b.visibility = 'org_wide'
+               OR b.created_by = $2
                OR EXISTS (SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.user_id = $2) )`,
         [boardIds, user.id]
       );

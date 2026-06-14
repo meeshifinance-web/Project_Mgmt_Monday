@@ -46,9 +46,16 @@ async function requireAuth(req, res, next) {
   }
 }
 
+// Role helpers. The superadmin sits above every other role: it satisfies any
+// role requirement and is granted every capability an admin has (and more).
+function isSuperAdmin(user) { return user?.role === 'superadmin'; }
+function isAdminOrAbove(user) { return user?.role === 'admin' || user?.role === 'superadmin'; }
+
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    // Superadmin implicitly passes every role gate.
+    if (req.user.role === 'superadmin') return next();
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ error: `Access denied. Required role: ${roles.join(' or ')}` });
     }
@@ -58,20 +65,25 @@ function requireRole(...roles) {
 
 // Shared board-access check used by all resource routes.
 // Access is granted when ANY of these hold:
-//   • the user is a system admin, OR
+//   • the user is a superadmin (unrestricted), OR
 //   • the board is org-wide ("public") — every authenticated user can see it, OR
-//   • the user is a member of the board.
+//   • the user is a member of the board, OR
+//   • the user created the board.
+// Note: plain admins are NO LONGER granted blanket access — they see only public
+// boards, boards they created, and boards they were added to. Only superadmin has
+// the org-wide bypass.
 // org-wide visibility is what the "Make Public" toggle sets; without consulting
 // it here, public boards stayed members-only (the visibility flag was ignored).
 // Pass `pool` explicitly so the function stays dependency-free and testable.
 async function canAccessBoard(boardId, user, dbPool) {
   if (!boardId) return false;
-  if (user.role === 'admin') return true;
+  if (isSuperAdmin(user)) return true;
   const result = await dbPool.query(
     `SELECT 1 FROM boards b
       WHERE b.id = $1
         AND (b.is_deleted IS NULL OR b.is_deleted = false)
         AND ( b.visibility = 'org_wide'
+           OR b.created_by = $2
            OR EXISTS (SELECT 1 FROM board_members bm
                        WHERE bm.board_id = b.id AND bm.user_id = $2) )
       LIMIT 1`,
@@ -86,7 +98,7 @@ async function canAccessBoard(boardId, user, dbPool) {
 // req.user; the JWT path doesn't, so we look it up.
 async function requireMcpAccess(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-  if (req.user.role === 'admin') return next();
+  if (isAdminOrAbove(req.user)) return next();
   try {
     let enabled = req.user.mcp_enabled;
     if (enabled === undefined) {
@@ -103,4 +115,4 @@ async function requireMcpAccess(req, res, next) {
   }
 }
 
-module.exports = { requireAuth, requireRole, canAccessBoard, requireMcpAccess };
+module.exports = { requireAuth, requireRole, canAccessBoard, requireMcpAccess, isSuperAdmin, isAdminOrAbove };

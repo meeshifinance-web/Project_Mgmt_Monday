@@ -72,13 +72,16 @@ export function AuthProvider({ children }) {
     };
   }, [user?.id, refreshUser]);
 
-  const isAdmin    = user?.role === 'admin';
-  const isManager  = user?.role === 'admin'   || user?.role === 'manager';
-  const canEdit    = user?.role === 'admin'   || user?.role === 'manager' || user?.role === 'member';
+  // Superadmin sits above admin: it inherits every admin capability/UI surface,
+  // so isAdmin is true for it too. isSuperAdmin distinguishes the "sees all" tier.
+  const isSuperAdmin = user?.role === 'superadmin';
+  const isAdmin    = user?.role === 'admin'   || isSuperAdmin;
+  const isManager  = isAdmin                  || user?.role === 'manager';
+  const canEdit    = isAdmin                  || user?.role === 'manager' || user?.role === 'member';
   const isReadOnly = user?.role === 'user';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, refreshUser, isAdmin, isManager, canEdit, isReadOnly }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, refreshUser, isAdmin, isSuperAdmin, isManager, canEdit, isReadOnly }}>
       {children}
     </AuthContext.Provider>
   );

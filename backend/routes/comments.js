@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { requireAuth, canAccessBoard, isAdminOrAbove } = require('../middleware/auth');
 const { requireScope } = require('../middleware/apiAuth');
 const { notifyCommentRecipients } = require('../services/commentEmail');
 
@@ -179,7 +179,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM comments WHERE id=$1', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+    if (rows[0].user_id !== req.user.id && !isAdminOrAbove(req.user)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
     await pool.query('DELETE FROM comments WHERE id=$1 OR parent_id=$1', [req.params.id]);

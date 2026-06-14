@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth, requireRole, isAdminOrAbove } = require('../middleware/auth');
 const { requireScope } = require('../middleware/apiAuth');
 
 const canWrite = [requireAuth, requireScope('write'), requireRole('admin', 'manager')];
@@ -10,7 +10,7 @@ const canWrite = [requireAuth, requireScope('write'), requireRole('admin', 'mana
 // A dashboard is visible to: its creator, anyone it's shared with, and admins.
 // Only the creator (or an admin) may edit/share/delete it.
 async function userCanView(dashboardId, user) {
-  if (user.role === 'admin') {
+  if (isAdminOrAbove(user)) {
     const { rows } = await pool.query('SELECT 1 FROM dashboards WHERE id=$1', [dashboardId]);
     return rows.length > 0;
   }
@@ -24,7 +24,7 @@ async function userCanView(dashboardId, user) {
   return rows.length > 0;
 }
 async function userCanManage(dashboardId, user) {
-  if (user.role === 'admin') {
+  if (isAdminOrAbove(user)) {
     const { rows } = await pool.query('SELECT 1 FROM dashboards WHERE id=$1', [dashboardId]);
     return rows.length > 0;
   }
@@ -48,7 +48,7 @@ async function requireManage(req, res, next) {
 // ── GET /api/dashboards — list dashboards the user is allowed to see ───────────
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = isAdminOrAbove(req.user);
     // Non-admins only see dashboards they own or that are shared with them.
     const visWhere = isAdmin ? '' :
       `WHERE d.created_by = $1
@@ -109,7 +109,7 @@ router.put('/:id', ...canWrite, async (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
   try {
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = isAdminOrAbove(req.user);
     const whereExtra = isAdmin ? '' : 'AND created_by = $3';
     const params = isAdmin ? [name.trim(), req.params.id] : [name.trim(), req.params.id, req.user.id];
     const { rows } = await pool.query(
@@ -127,7 +127,7 @@ router.put('/:id', ...canWrite, async (req, res) => {
 // ── DELETE /api/dashboards/:id ────────────────────────────────────────────────
 router.delete('/:id', ...canWrite, async (req, res) => {
   try {
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = isAdminOrAbove(req.user);
     const whereExtra = isAdmin ? '' : 'AND created_by = $2';
     const params = isAdmin ? [req.params.id] : [req.params.id, req.user.id];
     const { rows } = await pool.query(

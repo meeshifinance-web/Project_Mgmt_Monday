@@ -275,7 +275,7 @@ function registerTools(server, ctx, options = {}) {
     annotations: { readOnlyHint: true },
   }, async ({ query }) => {
     const q = (query || '').trim();
-    if (ctx.user.role === 'admin' && !q) {
+    if ((ctx.user.role === 'admin' || ctx.user.role === 'superadmin') && !q) {
       const users = await callApi(ctx.auth, 'get', '/auth/users');
       return ok({ count: users.length, users: users.slice(0, 100).map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role })) });
     }

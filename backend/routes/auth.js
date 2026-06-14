@@ -436,6 +436,7 @@ router.get('/users/search', requireAuth, async (req, res) => {
       `SELECT id, name, email, avatar_url, role
        FROM users
        WHERE is_active = true
+         AND COALESCE(is_hidden, false) = false
          AND (name ILIKE $1 OR email ILIKE $1)
        ORDER BY name
        LIMIT 10`,
@@ -457,7 +458,9 @@ router.get('/users', requireAuth, requireRole('admin'), async (req, res) => {
       `SELECT id,email,name,role,avatar_url,mfa_enabled,is_active,created_at,last_login,
               COALESCE(mcp_enabled,false) AS mcp_enabled,
               microsoft_id IS NOT NULL AS is_sso
-       FROM users ORDER BY created_at DESC`
+       FROM users
+       WHERE COALESCE(is_hidden, false) = false
+       ORDER BY created_at DESC`
     );
     res.json(rows);
   } catch (err) {
@@ -477,7 +480,9 @@ router.put('/users/:id/role', requireAuth, requireRole('admin'), async (req, res
 
   try {
     const { rows } = await pool.query(
-      'UPDATE users SET role=$1 WHERE id=$2 RETURNING id,email,name,role,is_active',
+      `UPDATE users SET role=$1
+        WHERE id=$2 AND COALESCE(is_hidden,false) = false
+        RETURNING id,email,name,role,is_active`,
       [role, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
@@ -497,9 +502,12 @@ router.put('/users/:id/active', requireAuth, requireRole('admin'), async (req, r
 
   try {
     const { rows } = await pool.query(
-      'UPDATE users SET is_active=$1 WHERE id=$2 RETURNING id,email,name,role,is_active',
+      `UPDATE users SET is_active=$1
+        WHERE id=$2 AND COALESCE(is_hidden,false) = false
+        RETURNING id,email,name,role,is_active`,
       [is_active, req.params.id]
     );
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -514,9 +522,9 @@ router.put('/users/:id/mcp', requireAuth, requireRole('admin'), async (req, res)
   if (typeof mcp_enabled !== 'boolean')
     return res.status(400).json({ error: 'mcp_enabled (boolean) is required' });
   try {
-    const target = await pool.query('SELECT role FROM users WHERE id=$1', [req.params.id]);
-    if (!target.rows.length) return res.status(404).json({ error: 'User not found' });
-    if (target.rows[0].role === 'admin')
+    const target = await pool.query('SELECT role, COALESCE(is_hidden,false) AS is_hidden FROM users WHERE id=$1', [req.params.id]);
+    if (!target.rows.length || target.rows[0].is_hidden) return res.status(404).json({ error: 'User not found' });
+    if (target.rows[0].role === 'admin' || target.rows[0].role === 'superadmin')
       return res.status(400).json({ error: 'Admins always have MCP access — nothing to change.' });
 
     const { rows } = await pool.query(
@@ -539,7 +547,7 @@ router.put('/admin/users/:id/reset-password', requireAuth, requireRole('admin'),
     return res.status(400).json({ error: 'Use the Security tab to change your own password' });
 
   try {
-    const { rows } = await pool.query('SELECT id FROM users WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT id FROM users WHERE id=$1 AND COALESCE(is_hidden,false) = false', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'User not found' });
 
     const hash = await bcrypt.hash(password, 12);
@@ -563,7 +571,8 @@ router.delete('/users/:id', requireAuth, requireRole('admin'), async (req, res) 
   if (parseInt(req.params.id) === req.user.id)
     return res.status(400).json({ error: 'Cannot delete yourself' });
   try {
-    await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM users WHERE id=$1 AND COALESCE(is_hidden,false) = false RETURNING id', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'User not found' });
     res.json({ success: true });
   } catch (err) {
     console.error(err);

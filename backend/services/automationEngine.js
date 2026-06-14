@@ -253,10 +253,12 @@ async function executeActions(db, { actions, auto, itemId, boardId, itemName, ac
       }
 
     } else if (type === 'set_due_date') {
-      const { column_id: targetColId, weekday, weeks_ahead } = cfg;
-      if (!targetColId || weekday === undefined || weekday === '' || weekday === null) continue;
+      const { column_id: targetColId, weekday, weeks_ahead, days_ahead } = cfg;
+      const hasDaysAhead = days_ahead !== undefined && days_ahead !== '' && days_ahead !== null;
+      const hasWeekday = weekday !== undefined && weekday !== '' && weekday !== null;
+      if (!targetColId || (!hasDaysAhead && !hasWeekday)) continue;
       try {
-        const dateStr = computeRelativeDate({ weekday, weeks_ahead });
+        const dateStr = computeRelativeDate({ weekday, weeks_ahead, days_ahead });
         await db.query(
           `INSERT INTO column_values (item_id, column_id, value) VALUES ($1,$2,$3)
            ON CONFLICT (item_id, column_id) DO UPDATE SET value=EXCLUDED.value`,

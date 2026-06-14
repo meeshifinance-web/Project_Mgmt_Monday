@@ -24,15 +24,29 @@
  *          can switch to a fixed IST anchor by adding +05:30 here.
  */
 
-function computeRelativeDate({ weekday, weeks_ahead = 1, today = new Date() } = {}) {
+function computeRelativeDate({ weekday, weeks_ahead = 1, days_ahead, today = new Date() } = {}) {
+  // Strip time so we operate on calendar days.
+  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  // days_ahead path: a fixed offset from today (0 = today, 1 = tomorrow, …).
+  // Takes precedence over the weekday spec when provided. This is what powers
+  // "set due date to tomorrow" style automations.
+  if (days_ahead !== undefined && days_ahead !== null && days_ahead !== '') {
+    const da = Number(days_ahead);
+    if (!Number.isInteger(da) || da < 0) {
+      throw new Error(`days_ahead must be a non-negative integer, got ${days_ahead}`);
+    }
+    const t = new Date(base);
+    t.setDate(base.getDate() + da);
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+  }
+
   const wd = Number(weekday);
   const wa = Math.max(1, Number(weeks_ahead) || 1);
   if (!Number.isInteger(wd) || wd < 0 || wd > 6) {
     throw new Error(`weekday must be 0..6, got ${weekday}`);
   }
 
-  // Strip time so we operate on calendar days.
-  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const dow  = base.getDay();
 
   // Days until the next occurrence of `weekday` (1..7, never 0 — "today" is

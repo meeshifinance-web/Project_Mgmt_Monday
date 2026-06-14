@@ -4,7 +4,7 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
-const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { requireAuth, canAccessBoard, isSuperAdmin } = require('../middleware/auth');
 const pool = require('../db');
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
@@ -88,7 +88,7 @@ async function boardsForFile(filename) {
 }
 
 async function canAccessFile(filename, user) {
-  if (user.role === 'admin') return true;
+  if (isSuperAdmin(user)) return true;
   const boardIds = await boardsForFile(filename);
   if (boardIds.length === 0) return true; // unreferenced upload (random name, brief window)
   for (const boardId of boardIds) {

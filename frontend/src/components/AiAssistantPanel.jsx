@@ -5,10 +5,11 @@ import { useToast } from './Toast';
 // Ask-your-workspace + AI status digests. Deterministic, links to the items.
 
 const SUGGESTIONS = [
-  "What's blocked and who owns it?",
-  'What is overdue?',
+  "What's overdue and assigned to me?",
   'What is due this week?',
-  'Which items are unassigned?',
+  'Unassigned high-priority items',
+  "What's blocked?",
+  'What is due in the next 3 days?',
 ];
 
 export default function AiAssistantPanel({ boards = [], onClose, onOpenBoard }) {

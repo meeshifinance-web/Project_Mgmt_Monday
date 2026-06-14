@@ -304,7 +304,7 @@ export default function LoginPage() {
 
         .spx-card-sub {
           font-size: 14.5px;
-          color: #8e8ea8 !important;
+          color: #6b6b85 !important;
           font-weight: 700;
           margin: 0 0 30px 0;
           letter-spacing: -0.01em;
@@ -402,7 +402,7 @@ export default function LoginPage() {
 
         .spx-hint {
           font-size: 12px;
-          color: #a09ab8;
+          color: #6b6688;
           margin-top: -14px;
           margin-bottom: 20px;
           line-height: 1.5;
@@ -462,10 +462,10 @@ export default function LoginPage() {
         .spx-footer {
           text-align: center;
           font-size: 14px;
-          color: #8e8ea8;
+          color: #6b6b85;
         }
         .spx-footer a {
-          color: #2f7ee8;
+          color: #1f6ad0;
           font-weight: 500;
           text-decoration: none;
         }
@@ -494,12 +494,12 @@ export default function LoginPage() {
           margin-top: -10px;
           margin-bottom: 22px;
           font-size: 13px;
-          color: #b48aff;
+          color: #7a52e0;
           text-decoration: none;
           font-family: 'DM Sans', sans-serif;
           transition: color 0.15s;
         }
-        .spx-forgot:hover { color: #9166e0; text-decoration: underline; }
+        .spx-forgot:hover { color: #6a45c8; text-decoration: underline; }
 
         /* Spinner */
         @keyframes spxSpin { to { transform: rotate(360deg); } }

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth, canAccessBoard } = require('../middleware/auth');
+const { requireAuth, canAccessBoard, isAdminOrAbove } = require('../middleware/auth');
 const { recomputeTotal, stopUserRunningTimers } = require('../services/timeTracking');
 
 const READ_ONLY_ROLES = ['user'];
@@ -254,7 +254,7 @@ router.get('/timesheet', requireAuth, async (req, res) => {
 // ── PUT /user/:id/billing — set a user's rate + capacity (admin, or self) ─────
 router.put('/user/:id/billing', requireAuth, async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
-  if (req.user.role !== 'admin' && req.user.id !== targetId)
+  if (!isAdminOrAbove(req.user) && req.user.id !== targetId)
     return res.status(403).json({ error: 'Only admins can edit other users’ billing' });
   const { hourly_rate, weekly_capacity } = req.body;
   try {

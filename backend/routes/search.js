@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, isSuperAdmin, isAdminOrAbove } = require('../middleware/auth');
 
 // Parse multi-owner value — handles JSON array or legacy single-name string.
 function parseOwners(val) {
@@ -22,13 +22,14 @@ router.get('/', requireAuth, async (req, res) => {
 
   const userId   = req.user.id;
   const userName = req.user.name;
-  const isAdmin  = req.user.role === 'admin';
+  const isSuper       = isSuperAdmin(req.user);     // sees every board
+  const seesAllItems  = isAdminOrAbove(req.user);   // bypasses per-item owner filter
   const term = `%${q.trim().toLowerCase()}%`;
 
   try {
     // Carry through enforce_owner_visibility and the user's per-board is_owner
     // flag so we can re-apply the same filter logic the board GET endpoint uses.
-    const boardsQuery = isAdmin
+    const boardsQuery = isSuper
       ? `SELECT b.id, b.name, b.enforce_owner_visibility, true AS is_board_owner
          FROM boards b WHERE b.deleted_at IS NULL ORDER BY b.name`
       : `SELECT b.id, b.name, b.enforce_owner_visibility,
@@ -36,9 +37,9 @@ router.get('/', requireAuth, async (req, res) => {
          FROM boards b
          LEFT JOIN board_members bm ON bm.board_id = b.id AND bm.user_id = $1
          WHERE b.deleted_at IS NULL
-           AND (b.visibility = 'org_wide' OR bm.user_id IS NOT NULL)
+           AND (b.visibility = 'org_wide' OR b.created_by = $1 OR bm.user_id IS NOT NULL)
          ORDER BY b.name`;
-    const boardsRes = await pool.query(boardsQuery, isAdmin ? [] : [userId]);
+    const boardsRes = await pool.query(boardsQuery, isSuper ? [] : [userId]);
     const boardIds = boardsRes.rows.map(r => r.id);
     if (!boardIds.length) return res.json([]);
 
@@ -97,8 +98,8 @@ router.get('/', requireAuth, async (req, res) => {
       const meta = boardMeta[row.board_id];
       if (!meta) return false;
       const bypass = meta.enforce_owner_visibility
-        ? (isAdmin || meta.is_board_owner)
-        : (isAdmin || req.user.role === 'manager');
+        ? (seesAllItems || meta.is_board_owner)
+        : (seesAllItems || req.user.role === 'manager');
       if (bypass) return true;
       const ownerCols = ownerColsByBoard[row.board_id] || [];
       if (!ownerCols.length) return true;
